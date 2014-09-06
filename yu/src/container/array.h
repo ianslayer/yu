@@ -1,6 +1,7 @@
 #ifndef YU_ARRAY_H
 #define YU_ARRAY_H
 #include "type.h"
+#include "../core/bit.h"
 #include <assert.h>
 
 namespace yu
@@ -193,8 +194,8 @@ void Array<T>::PopBack()
 template <class T>
 void Array<T>::Erase(T* pAt)
 {
-	assert(pAt >= pArray && pAt < pArray + size() );
-	int numToCopy = ( pArray + size() - 1 - pAt ) / sizeof(T);
+	assert(pAt >= pArray && pAt < pArray + Size() );
+	int numToCopy = ( pArray + Size() - 1 - pAt ) / sizeof(T);
 	if(numToCopy != 0)
 	{
 		T* pCopy = pAt + 1;
@@ -215,7 +216,7 @@ void Array<T>::EraseSwapBack(T* pAt)
 {
 	assert(mSize > 0);
 	*pAt = *(pArray + mSize - 1);
-	pop_back();
+	PopBack();
 }
 
 template <class T>

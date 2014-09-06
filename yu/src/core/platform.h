@@ -56,6 +56,7 @@
 #endif
 
 
+//int type
 namespace yu
 {
 	typedef unsigned char u8;
