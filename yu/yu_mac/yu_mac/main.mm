@@ -7,6 +7,7 @@
 //
 
 #import <Cocoa/Cocoa.h>
+#include "../../src/container/array.h"
 
 int main(int argc, const char * argv[])
 {

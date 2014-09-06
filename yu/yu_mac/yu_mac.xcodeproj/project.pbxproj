@@ -9,7 +9,7 @@
 /* Begin PBXBuildFile section */
 		B21323FE19BAD289009D0681 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B21323FD19BAD289009D0681 /* Cocoa.framework */; };
 		B213240819BAD289009D0681 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = B213240619BAD289009D0681 /* InfoPlist.strings */; };
-		B213240A19BAD289009D0681 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = B213240919BAD289009D0681 /* main.m */; };
+		B213240A19BAD289009D0681 /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = B213240919BAD289009D0681 /* main.mm */; };
 		B213240E19BAD289009D0681 /* Credits.rtf in Resources */ = {isa = PBXBuildFile; fileRef = B213240C19BAD289009D0681 /* Credits.rtf */; };
 		B213241119BAD289009D0681 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = B213241019BAD289009D0681 /* AppDelegate.m */; };
 		B213241419BAD289009D0681 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = B213241219BAD289009D0681 /* MainMenu.xib */; };
@@ -18,6 +18,7 @@
 		B213241E19BAD289009D0681 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B21323FD19BAD289009D0681 /* Cocoa.framework */; };
 		B213242619BAD289009D0681 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = B213242419BAD289009D0681 /* InfoPlist.strings */; };
 		B213242819BAD289009D0681 /* yu_macTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B213242719BAD289009D0681 /* yu_macTests.m */; };
+		B213243C19BAD42B009D0681 /* system.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B213243B19BAD42B009D0681 /* system.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -38,7 +39,7 @@
 		B213240219BAD289009D0681 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		B213240519BAD289009D0681 /* yu_mac-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "yu_mac-Info.plist"; sourceTree = "<group>"; };
 		B213240719BAD289009D0681 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
-		B213240919BAD289009D0681 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		B213240919BAD289009D0681 /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
 		B213240B19BAD289009D0681 /* yu_mac-Prefix.pch */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "yu_mac-Prefix.pch"; sourceTree = "<group>"; };
 		B213240D19BAD289009D0681 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.rtf; name = en; path = en.lproj/Credits.rtf; sourceTree = "<group>"; };
 		B213240F19BAD289009D0681 /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
@@ -50,6 +51,14 @@
 		B213242319BAD289009D0681 /* yu_macTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "yu_macTests-Info.plist"; sourceTree = "<group>"; };
 		B213242519BAD289009D0681 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		B213242719BAD289009D0681 /* yu_macTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = yu_macTests.m; sourceTree = "<group>"; };
+		B213243319BAD42B009D0681 /* array.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = array.h; sourceTree = "<group>"; };
+		B213243419BAD42B009D0681 /* hash.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = hash.h; sourceTree = "<group>"; };
+		B213243519BAD42B009D0681 /* type.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = type.h; sourceTree = "<group>"; };
+		B213243719BAD42B009D0681 /* allocator.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = allocator.h; sourceTree = "<group>"; };
+		B213243819BAD42B009D0681 /* bit.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = bit.h; sourceTree = "<group>"; };
+		B213243919BAD42B009D0681 /* platform.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = platform.h; sourceTree = "<group>"; };
+		B213243A19BAD42B009D0681 /* refcount.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = refcount.h; sourceTree = "<group>"; };
+		B213243B19BAD42B009D0681 /* system.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = system.cpp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -76,6 +85,7 @@
 		B21323F119BAD289009D0681 = {
 			isa = PBXGroup;
 			children = (
+				B213243119BAD40D009D0681 /* src */,
 				B213240319BAD289009D0681 /* yu_mac */,
 				B213242119BAD289009D0681 /* yu_macTests */,
 				B21323FC19BAD289009D0681 /* Frameworks */,
@@ -129,7 +139,7 @@
 			children = (
 				B213240519BAD289009D0681 /* yu_mac-Info.plist */,
 				B213240619BAD289009D0681 /* InfoPlist.strings */,
-				B213240919BAD289009D0681 /* main.m */,
+				B213240919BAD289009D0681 /* main.mm */,
 				B213240B19BAD289009D0681 /* yu_mac-Prefix.pch */,
 				B213240C19BAD289009D0681 /* Credits.rtf */,
 			);
@@ -152,6 +162,39 @@
 				B213242419BAD289009D0681 /* InfoPlist.strings */,
 			);
 			name = "Supporting Files";
+			sourceTree = "<group>";
+		};
+		B213243119BAD40D009D0681 /* src */ = {
+			isa = PBXGroup;
+			children = (
+				B213243219BAD42B009D0681 /* container */,
+				B213243619BAD42B009D0681 /* core */,
+			);
+			name = src;
+			sourceTree = "<group>";
+		};
+		B213243219BAD42B009D0681 /* container */ = {
+			isa = PBXGroup;
+			children = (
+				B213243319BAD42B009D0681 /* array.h */,
+				B213243419BAD42B009D0681 /* hash.h */,
+				B213243519BAD42B009D0681 /* type.h */,
+			);
+			name = container;
+			path = ../src/container;
+			sourceTree = "<group>";
+		};
+		B213243619BAD42B009D0681 /* core */ = {
+			isa = PBXGroup;
+			children = (
+				B213243719BAD42B009D0681 /* allocator.h */,
+				B213243819BAD42B009D0681 /* bit.h */,
+				B213243919BAD42B009D0681 /* platform.h */,
+				B213243A19BAD42B009D0681 /* refcount.h */,
+				B213243B19BAD42B009D0681 /* system.cpp */,
+			);
+			name = core;
+			path = ../src/core;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -253,7 +296,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				B213241119BAD289009D0681 /* AppDelegate.m in Sources */,
-				B213240A19BAD289009D0681 /* main.m in Sources */,
+				B213240A19BAD289009D0681 /* main.mm in Sources */,
+				B213243C19BAD42B009D0681 /* system.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
