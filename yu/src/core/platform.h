@@ -68,6 +68,9 @@ namespace yu
 	typedef short i16;
 	typedef int i32;
 	typedef long long int i64;
+
+	typedef float f32;
+	typedef double f64;
 }
 
 #endif

@@ -1,6 +1,7 @@
 #ifndef YU_CONTAINER_TYPE_H
 #define YU_CONTAINER_TYPE_H
 
+#include "platform.h"
 #include <string.h>
 
 namespace yu
@@ -13,17 +14,17 @@ namespace yu
 	{
 		void construct(T* ptr)
 		{
-			return ptr;
+		
 		}
 
 		void construct(T* ptr, size_t num)
 		{
-			return ptr;
+			
 		}
 
 		void destruct(T* ptr)
 		{
-			
+
 		}
 
 		void destruct(T* ptr, size_t num)
@@ -37,7 +38,7 @@ namespace yu
 	{
 		void construct(T* ptr)
 		{
-			return new(ptr) T;
+			new(ptr) T;
 		}
 
 		void construct(T* ptr, size_t num)
@@ -53,7 +54,7 @@ namespace yu
 			ptr->~T();
 		}
 
-		void destruct(T* ptr)
+		void destruct(T* ptr, size_t num)
 		{
 			for(size_t i = 0; i < num; i++)
 			{
@@ -137,7 +138,6 @@ namespace yu
 		is_pod<T> type;
 		type.destruct(p, num);
 	}
-
 
 	//-------------------------------------copy  stuff------------------------------------------------------
 

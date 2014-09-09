@@ -22,12 +22,24 @@
     <Filter Include="Source Files\core">
       <UniqueIdentifier>{ae4b8a6c-534a-4f30-a2ff-a5c2d5b2296b}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\renderer">
+      <UniqueIdentifier>{c780c412-8c8c-4c22-9b50-0bbb52c4dac5}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\core\system.cpp">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\allocator.cpp">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\crc32.cpp">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\timer.cpp">
       <Filter>Source Files\core</Filter>
     </ClCompile>
   </ItemGroup>
@@ -38,9 +50,6 @@
     <ClInclude Include="src\container\array.h">
       <Filter>Source Files\container</Filter>
     </ClInclude>
-    <ClInclude Include="src\container\type.h">
-      <Filter>Source Files\container</Filter>
-    </ClInclude>
     <ClInclude Include="src\container\hash.h">
       <Filter>Source Files\container</Filter>
     </ClInclude>
@@ -48,6 +57,27 @@
       <Filter>Source Files\core</Filter>
     </ClInclude>
     <ClInclude Include="src\core\allocator.h">
+      <Filter>Source Files\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\bit.h">
+      <Filter>Source Files\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\container\type.h">
+      <Filter>Source Files\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\system.h">
+      <Filter>Source Files\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\crc32.h">
+      <Filter>Source Files\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\string.h">
+      <Filter>Source Files\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\container\dequeue.h">
+      <Filter>Source Files\container</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\timer.h">
       <Filter>Source Files\core</Filter>
     </ClInclude>
   </ItemGroup>

@@ -1,7 +1,8 @@
 #ifndef YU_ARRAY_H
 #define YU_ARRAY_H
-#include "type.h"
+#include "../core/type.h"
 #include "../core/bit.h"
+#include "../core/allocator.h"
 #include <assert.h>
 
 namespace yu
@@ -14,11 +15,11 @@ static const int DEFAULT_CAPACITY = 16;
 static const int DEFAULT_GRANULARITY = 16; //we assume granularity is multiple of power of 2
 
 public:
-   explicit		    Array ();
-   explicit		    Array (int capacity);
-   explicit		    Array (int size, int capacity, const T* pData);
-				    Array (const Array& rhs);
-				    ~Array();
+	Array (Allocator* _allocator = gDefaultAllocator);
+	Array (int capacity, Allocator* _allocator = gDefaultAllocator);
+	Array (int capacity, const T* pData, int size, Allocator* _allocator = gDefaultAllocator);
+	Array (const Array& rhs, Allocator* _allocator = gDefaultAllocator);
+	~Array();
 
    void			    PushBack(const T& val);
    int			    Append(const T& val);
@@ -67,24 +68,25 @@ private:
    void             EnsureCapacity(int newSize);
 
    T*               pArray;
+   Allocator*		allocator;
    int              mCapacity;
    int              mSize;
    int              mGranularity;
 };
 
 template<class T> 
-Array<T>::Array() : pArray(0), mCapacity(0), mSize(0), mGranularity(Array::DEFAULT_GRANULARITY)
+Array<T>::Array(Allocator* _allocator) : pArray(0), mCapacity(0), mSize(0), mGranularity(Array::DEFAULT_GRANULARITY), allocator(_allocator)
 {
 
 }
 
 template<class T>
-Array<T>::Array(int capacity) : mSize(0), mGranularity(Array::DEFAULT_GRANULARITY)
+Array<T>::Array(int capacity, Allocator* _allocator) : pArray(0), mCapacity(0), mSize(0), mGranularity(Array::DEFAULT_GRANULARITY), allocator(_allocator)
 {
 	if(capacity > 0)
 	{
 		mCapacity = (capacity + (DEFAULT_GRANULARITY - 1)) & (-DEFAULT_GRANULARITY);
-		pArray = new T[mCapacity];
+		pArray = (T*) allocator->Alloc(sizeof(T) * mCapacity);//new T[mCapacity];
 	}
 	else
 	{
@@ -96,25 +98,24 @@ Array<T>::Array(int capacity) : mSize(0), mGranularity(Array::DEFAULT_GRANULARIT
 
 
 template<class T>
-Array<T>::Array(int size, int capacity, const T* pData) : mGranularity(Array::DEFAULT_GRANULARITY)
+Array<T>::Array(int capacity, const T* pData, int size, Allocator* _allocator) : pArray(0), mCapacity(0), mSize(0), mGranularity(Array::DEFAULT_GRANULARITY), mGranularity(Array::DEFAULT_GRANULARITY), allocator(_allocator)
 {
 	assert(capacity >= size);
 
 	mCapacity = (capacity + (mGranularity - 1)) & (-mGranularity);
-	pArray = new T[mCapacity];
+	pArray = (T*) allocator->Alloc(sizeof(T) * mCapacity); //new T[mCapacity];
+	Construct(pArray, size);
 	copy_n(pData, size, pArray);
 	mSize = size;
 
 }
 
 template<class T>
-Array<T>::Array(const Array<T> &rhs)
+Array<T>::Array(const Array<T> &rhs, Allocator* _allocator) : pArray(0), mCapacity(rhs.mCapacity), mSize(rhs.mSize), mGranularity(rhs.mGranularity), allocator(_allocator)
 {
-	Clear();
-	mGranularity = rhs.mGranularity;
-	EnsureCapacity(rhs.size());
-	mSize = rhs.mSize;
-	copy_n(rhs.begin(), rhs.size(), pArray);
+	pArray = (T*) allocator->Alloc(sizeof(T) * mCapacity);
+	Construct(pArray, mSize);
+	copy_n(rhs.Begin(), rhs.Size(), pArray);
 }
 
 template<class T>
@@ -125,7 +126,7 @@ Array<T>& Array<T>::operator=(const Array<T>& rhs)
 	
 	Clear();
 	mGranularity = rhs.mGranularity;
-	EnsureCapacity(rhs.size());
+	EnsureCapacity(rhs.Size());
 	mSize = rhs.mSize;
 	copy_n(rhs.begin(), rhs.size(), pArray);
 
@@ -140,20 +141,35 @@ Array<T>::~Array()
 }
 
 template<class T>
-void Array<T>::EnsureCapacity(int newCapacity)
+void Array<T>::EnsureCapacity(int newSize)
 {
-	if(newCapacity > mCapacity)
+	if(newSize > mCapacity)
 	{
-		mCapacity = newCapacity;
+		assert(newSize >= mSize);
+		int numCtor = newSize - mSize;
+
+		mCapacity = newSize;
 		mCapacity = (mCapacity + (mGranularity - 1)) & (-mGranularity);
+		
 		if(!pArray)
 		{
-			pArray = new T[mCapacity];
+			assert(mSize == 0);
+			pArray = (T*) allocator->Alloc(sizeof(T) * mCapacity ) ;//new T[mCapacity];
 		}
-		T* temp = new T[mCapacity];
-		copy_n(pArray, (size_t) mSize, temp);
-		delete[] pArray;
-		pArray = temp;
+		else
+		{
+			T* growArray = (T*) allocator->Realloc(pArray, sizeof(T) * mCapacity);
+
+			if(growArray != pArray)
+			{
+				Construct(growArray, mSize);
+				copy_n(pArray, (size_t) mSize, growArray);
+				delete[] pArray;
+				pArray = growArray;
+			}
+		}
+
+		Construct(pArray + mSize, numCtor);
 	}
 }
 
