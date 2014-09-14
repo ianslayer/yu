@@ -7,7 +7,7 @@ namespace yu
 class Allocator
 {
 public:
-	virtual ~Allocator() = 0 {}
+	virtual ~Allocator() = 0;
 	virtual void*	Alloc(size_t size) = 0;
 	virtual void*	Realloc(void* oldPtr, size_t newSize) = 0;
 	virtual void	Free(void* ptr) = 0;

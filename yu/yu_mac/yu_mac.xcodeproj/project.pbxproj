@@ -19,6 +19,10 @@
 		B213242619BAD289009D0681 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = B213242419BAD289009D0681 /* InfoPlist.strings */; };
 		B213242819BAD289009D0681 /* yu_macTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B213242719BAD289009D0681 /* yu_macTests.m */; };
 		B213243C19BAD42B009D0681 /* system.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B213243B19BAD42B009D0681 /* system.cpp */; };
+		B213245019C0160F009D0681 /* allocator.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B213244819C0160F009D0681 /* allocator.cpp */; };
+		B213245119C01610009D0681 /* crc32.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B213244919C0160F009D0681 /* crc32.cpp */; };
+		B213245219C01610009D0681 /* timer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B213244D19C0160F009D0681 /* timer.cpp */; };
+		B215236919C48899003A0E97 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B215236819C48899003A0E97 /* IOKit.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -59,6 +63,17 @@
 		B213243919BAD42B009D0681 /* platform.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = platform.h; sourceTree = "<group>"; };
 		B213243A19BAD42B009D0681 /* refcount.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = refcount.h; sourceTree = "<group>"; };
 		B213243B19BAD42B009D0681 /* system.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = system.cpp; sourceTree = "<group>"; };
+		B213244819C0160F009D0681 /* allocator.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = allocator.cpp; sourceTree = "<group>"; };
+		B213244919C0160F009D0681 /* crc32.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = crc32.cpp; sourceTree = "<group>"; };
+		B213244A19C0160F009D0681 /* crc32.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = crc32.h; sourceTree = "<group>"; };
+		B213244B19C0160F009D0681 /* string.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = string.h; sourceTree = "<group>"; };
+		B213244C19C0160F009D0681 /* system.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = system.h; sourceTree = "<group>"; };
+		B213244D19C0160F009D0681 /* timer.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = timer.cpp; sourceTree = "<group>"; };
+		B213244E19C0160F009D0681 /* timer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = timer.h; sourceTree = "<group>"; };
+		B213244F19C0160F009D0681 /* type.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = type.h; sourceTree = "<group>"; };
+		B213245319C0161C009D0681 /* dequeue.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = dequeue.h; sourceTree = "<group>"; };
+		B215236519C2FA63003A0E97 /* thread.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = thread.h; sourceTree = "<group>"; };
+		B215236819C48899003A0E97 /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -66,6 +81,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B215236919C48899003A0E97 /* IOKit.framework in Frameworks */,
 				B21323FE19BAD289009D0681 /* Cocoa.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -105,6 +121,7 @@
 		B21323FC19BAD289009D0681 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				B215236819C48899003A0E97 /* IOKit.framework */,
 				B21323FD19BAD289009D0681 /* Cocoa.framework */,
 				B213241C19BAD289009D0681 /* XCTest.framework */,
 				B21323FF19BAD289009D0681 /* Other Frameworks */,
@@ -176,6 +193,7 @@
 		B213243219BAD42B009D0681 /* container */ = {
 			isa = PBXGroup;
 			children = (
+				B213245319C0161C009D0681 /* dequeue.h */,
 				B213243319BAD42B009D0681 /* array.h */,
 				B213243419BAD42B009D0681 /* hash.h */,
 				B213243519BAD42B009D0681 /* type.h */,
@@ -188,10 +206,19 @@
 			isa = PBXGroup;
 			children = (
 				B213243719BAD42B009D0681 /* allocator.h */,
+				B213244819C0160F009D0681 /* allocator.cpp */,
+				B213244919C0160F009D0681 /* crc32.cpp */,
+				B213244A19C0160F009D0681 /* crc32.h */,
+				B213244B19C0160F009D0681 /* string.h */,
+				B213244C19C0160F009D0681 /* system.h */,
+				B213243B19BAD42B009D0681 /* system.cpp */,
+				B213244E19C0160F009D0681 /* timer.h */,
+				B213244D19C0160F009D0681 /* timer.cpp */,
+				B213244F19C0160F009D0681 /* type.h */,
 				B213243819BAD42B009D0681 /* bit.h */,
 				B213243919BAD42B009D0681 /* platform.h */,
 				B213243A19BAD42B009D0681 /* refcount.h */,
-				B213243B19BAD42B009D0681 /* system.cpp */,
+				B215236519C2FA63003A0E97 /* thread.h */,
 			);
 			name = core;
 			path = ../src/core;
@@ -298,6 +325,9 @@
 				B213241119BAD289009D0681 /* AppDelegate.m in Sources */,
 				B213240A19BAD289009D0681 /* main.mm in Sources */,
 				B213243C19BAD42B009D0681 /* system.cpp in Sources */,
+				B213245119C01610009D0681 /* crc32.cpp in Sources */,
+				B213245019C0160F009D0681 /* allocator.cpp in Sources */,
+				B213245219C01610009D0681 /* timer.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -432,6 +462,10 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "yu_mac/yu_mac-Prefix.pch";
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include,
+				);
 				INFOPLIST_FILE = "yu_mac/yu_mac-Info.plist";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				WRAPPER_EXTENSION = app;
@@ -445,6 +479,10 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "yu_mac/yu_mac-Prefix.pch";
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include,
+				);
 				INFOPLIST_FILE = "yu_mac/yu_mac-Info.plist";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				WRAPPER_EXTENSION = app;
@@ -510,6 +548,7 @@
 				B213242D19BAD289009D0681 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 		B213242E19BAD289009D0681 /* Build configuration list for PBXNativeTarget "yu_macTests" */ = {
 			isa = XCConfigurationList;
@@ -518,6 +557,7 @@
 				B213243019BAD289009D0681 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};

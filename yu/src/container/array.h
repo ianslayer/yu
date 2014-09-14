@@ -98,7 +98,7 @@ Array<T>::Array(int capacity, Allocator* _allocator) : pArray(0), mCapacity(0), 
 
 
 template<class T>
-Array<T>::Array(int capacity, const T* pData, int size, Allocator* _allocator) : pArray(0), mCapacity(0), mSize(0), mGranularity(Array::DEFAULT_GRANULARITY), mGranularity(Array::DEFAULT_GRANULARITY), allocator(_allocator)
+Array<T>::Array(int capacity, const T* pData, int size, Allocator* _allocator) : pArray(0), mCapacity(0), mSize(0), mGranularity(Array::DEFAULT_GRANULARITY), allocator(_allocator)
 {
 	assert(capacity >= size);
 
@@ -143,10 +143,11 @@ Array<T>::~Array()
 template<class T>
 void Array<T>::EnsureCapacity(int newSize)
 {
+	assert(newSize >= mSize);
+	int numCtor = newSize - mSize;
+	
 	if(newSize > mCapacity)
 	{
-		assert(newSize >= mSize);
-		int numCtor = newSize - mSize;
 
 		mCapacity = newSize;
 		mCapacity = (mCapacity + (mGranularity - 1)) & (-mGranularity);
@@ -169,8 +170,8 @@ void Array<T>::EnsureCapacity(int newSize)
 			}
 		}
 
-		Construct(pArray + mSize, numCtor);
 	}
+	Construct(pArray + mSize, numCtor);
 }
 
 template <class T>

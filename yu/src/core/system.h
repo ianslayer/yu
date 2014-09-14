@@ -2,7 +2,7 @@
 #define YU_SYSTEM_H
 
 #include "platform.h"
-#ifdef YU_OS_WIN32
+#if defined YU_OS_WIN32
 	#define WIN32_LEAN_AND_MEAN
 	#include <Windows.h>
 #endif
@@ -36,6 +36,14 @@ struct Display
 
 };
 
+struct CPUInfo
+{
+};
+	
+struct GPUInfo
+{
+};
+	
 class System
 {
 public:

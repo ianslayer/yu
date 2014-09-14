@@ -1,4 +1,10 @@
-#include <malloc.h>
+#include "platform.h"
+#if defined YU_OS_WIN32
+	#include <malloc.h>
+#elif defined YU_OS_MAC
+	#include <malloc/malloc.h>
+#endif
+
 #include <assert.h>
 #include <new>
 
@@ -11,6 +17,11 @@ namespace yu
 DefaultAllocator  _gDefaultAllocator;
 DefaultAllocator* gDefaultAllocator = nullptr;
 
+Allocator::~Allocator()
+{
+		
+}
+	
 void* DefaultAllocator::Alloc(size_t size)
 {
 	return malloc(size);
