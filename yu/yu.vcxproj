@@ -129,6 +129,7 @@
     <ClInclude Include="src\core\refcount.h" />
     <ClInclude Include="src\core\string.h" />
     <ClInclude Include="src\core\system.h" />
+    <ClInclude Include="src\core\thread.h" />
     <ClInclude Include="src\core\timer.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
