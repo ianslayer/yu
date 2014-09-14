@@ -27,7 +27,7 @@ int main()
 	printf("cpu freq: %llu\n", cpuFreq);
 	yu::Array<int> intArray(10);
 
-	yu::Timer timer;
+	yu::PerfTimer timer;
 	timer.Start();
 	timer.Finish();
 	printf("empty time mesuare: %llu\n", timer.cycleCounter.cycle);

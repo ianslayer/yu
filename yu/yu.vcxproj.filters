@@ -80,5 +80,8 @@
     <ClInclude Include="src\core\timer.h">
       <Filter>Source Files\core</Filter>
     </ClInclude>
+    <ClInclude Include="src\core\thread.h">
+      <Filter>Source Files\core</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

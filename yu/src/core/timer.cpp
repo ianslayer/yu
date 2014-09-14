@@ -1,7 +1,8 @@
 #include "timer.h"
 #include "thread.h"
-
-#if defined YU_OS_MAC
+#if defined YU_OS_WIN32
+	#pragma comment(lib, "Winmm.lib")
+#elif defined YU_OS_MAC
 	#include <mach/mach_time.h>
 #endif
 
