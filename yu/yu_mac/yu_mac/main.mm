@@ -7,26 +7,11 @@
 //
 
 #import <Cocoa/Cocoa.h>
-#include "../../src/container/array.h"
-#include "../../src/core/timer.h"
+#include "../../src/yu.h"
 
 int main(int argc, const char * argv[])
 {
-	yu::InitDefaultAllocator();
-	yu::InitSysTime();
-	yu::Array<int> intArray;
-	intArray.PushBack(10);
-	
-	
-	yu::PerfTimer perfTimer;
-	perfTimer.cycleCounter.cycle = 0;
-	perfTimer.Start();
-	perfTimer.Finish();
-	
-	yu::u64 cpuFreq = yu::EstimateCPUFrequency();
-	
-	printf("empty per timer cycles: %llu\n", perfTimer.cycleCounter.cycle);
-	printf("estimate cpu freq: %llu\n", cpuFreq);
+	yu::InitYu();
 	
 	return NSApplicationMain(argc, argv);
 }

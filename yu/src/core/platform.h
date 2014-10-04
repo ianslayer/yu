@@ -13,7 +13,23 @@
 #    define YU_OS_MAC
 #  endif
 #endif
- 
+
+#if defined (YU_OS_WIN32)
+#	if defined(__x86_64__)
+#		define YU_CPU_X86_64
+#	else
+#		error yu does not support the cpu
+#	endif
+#elif defined (YU_OS_MAC) || defined (YU_OS_DARWIN) || defined (YU_IPHONE)
+#	if defined(__x86_64__)
+#		define YU_CPU_X86_64
+#	elif defined (__arm__)
+#		define YU_CPU_ARM
+#	else
+#		error yu does not support the cpu
+#	endif
+#endif
+
 //compiler
 #if defined(_MSC_VER)
 #	define YU_CC_MSVC

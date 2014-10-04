@@ -165,7 +165,10 @@ void Array<T>::EnsureCapacity(int newSize)
 			{
 				Construct(growArray, mSize);
 				copy_n(pArray, (size_t) mSize, growArray);
-				delete[] pArray;
+				//delete[] pArray; //fixme, this is wrong, should destruct to size, then free memory
+				Destruct(pArray, mSize);
+				
+				allocator->Free(pArray);
 				pArray = growArray;
 			}
 		}
@@ -239,17 +242,15 @@ void Array<T>::EraseSwapBack(T* pAt)
 template <class T>
 void Array<T>::Clear()
 {
-	for(int i = 0; i < mSize; i++)
-	{
-		Destruct(&pArray[i]);
-	}
+	Destruct(pArray, mSize);
 	mSize = 0;
 }
 
 template <class T>
 void Array<T>::ClearMem()
 {
-	delete [] pArray;
+	Destruct(pArray, mSize);
+	allocator->Free(pArray);
 	pArray = 0;
 	mSize = 0;
 	mCapacity = 0;

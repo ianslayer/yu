@@ -5,6 +5,8 @@
 	#include <windows.h>
 #endif
 
+#include <stdio.h>
+
 namespace yu
 {
 System* gSystem = 0;
@@ -24,19 +26,26 @@ BOOL CALLBACK MyMonitorEnumProc(
 
 	return getMonResult;
 }
-#endif
 
 void System::GetSysDisplayInfo()
 {
-#if defined YU_OS_WIN32
 	EnumDisplayMonitors(NULL, NULL, MyMonitorEnumProc, 0);
-#endif
 }
-
+#endif
+	
 void InitSystem()
 {
 	gSystem = new System();
 	gSystem->GetSysDisplayInfo();
+	Display mainDisplay = gSystem->GetMainDisplay();
+	
+	printf("main display modes:");
+	for(int i = 0; i < mainDisplay.numDisplayMode; i++)
+	{
+		DisplayMode mode = gSystem->GetDisplayMode(mainDisplay, i);
+		printf("width: %lu, height: %lu, refresh rate: %lf\n", mode.width, mode.height, mode.refreshRate);
+	}
+	
 }
 
 void FreeSystem()
