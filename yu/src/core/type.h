@@ -2,6 +2,7 @@
 #define YU_CONTAINER_TYPE_H
 
 #include "platform.h"
+#include <new>
 #include <string.h>
 
 namespace yu

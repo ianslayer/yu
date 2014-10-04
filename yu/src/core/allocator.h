@@ -12,8 +12,8 @@ public:
 	virtual void*	Realloc(void* oldPtr, size_t newSize) = 0;
 	virtual void	Free(void* ptr) = 0;
 
-	virtual void*	AllocAligned(size_t size, size_t align) = 0;
-	virtual void	FreeAligned(void* ptr) = 0;
+	virtual void*	AllocAligned(size_t size, size_t align);
+	virtual void	FreeAligned(void* ptr) ;
 };
 
 class DefaultAllocator : public Allocator
@@ -23,33 +23,48 @@ public:
 	virtual void*	Realloc(void* oldPtr, size_t newSize);
 	virtual void	Free(void* ptr);
 
-	virtual void*	AllocAligned(size_t size, size_t align);
-	virtual void	FreeAligned(void* ptr);
 };
+extern DefaultAllocator* gDefaultAllocator;
+	
 
-//static buffer allocator
-//allocated once, then never free until program shutdown
-class StaticBufferAllocator : public Allocator 
+class StackAllocator : public Allocator
 {
 public:
-	StaticBufferAllocator(size_t poolSize);
-	virtual ~StaticBufferAllocator();
+	StackAllocator(size_t bufferSize, Allocator* baseAllocator = gDefaultAllocator);
+	virtual ~StackAllocator();
 	virtual void*	Alloc(size_t size);
-	virtual void*	Realloc(void* oldPtr, size_t newSize); //invalid call
-	virtual void	Free(void* ptr);						//invalid call
+	virtual void*	Realloc(void* oldPtr, size_t newSize);
+	virtual void	Free(void* ptr);
 
-	virtual void*	AllocAligned(size_t size, size_t align);
-	virtual void	FreeAligned(void* ptr);					//invalid call
 
 	void			Free();
 
 	void*			buffer;
+	Allocator*		allocator;
+	size_t			bufferSize;
+	size_t			waterBase;
 	size_t			waterMark;
 };
 
+class StaticAllocator : public Allocator
+{
+	StaticAllocator(size_t bufferSize, Allocator* baseAllocator = gDefaultAllocator);
+	virtual ~StaticAllocator();
+	virtual void*	Alloc(size_t size);
+	virtual void*	Realloc(void* oldPtr, size_t newSize);
+	virtual void	Free(void* ptr);
+
+	void			Free();
+	
+	void*			buffer;
+	Allocator*		allocator;
+	size_t			bufferSize;
+	size_t			waterMark;
+};
+	
 void InitDefaultAllocator();
 void FreeDefaultAllocator();
-extern DefaultAllocator* gDefaultAllocator;
+
 
 }
 
