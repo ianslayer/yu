@@ -23,6 +23,9 @@
 		B213245119C01610009D0681 /* crc32.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B213244919C0160F009D0681 /* crc32.cpp */; };
 		B213245219C01610009D0681 /* timer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B213244D19C0160F009D0681 /* timer.cpp */; };
 		B215236919C48899003A0E97 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B215236819C48899003A0E97 /* IOKit.framework */; };
+		B2DDA46819D16A6100324654 /* ApplicationServices.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B2DDA46719D16A6100324654 /* ApplicationServices.framework */; };
+		B2DDA46A19D171A200324654 /* display_mac.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B2DDA46919D171A200324654 /* display_mac.cpp */; };
+		B2DDA46E19D177D200324654 /* yu.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B2DDA46C19D177D200324654 /* yu.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -74,6 +77,10 @@
 		B213245319C0161C009D0681 /* dequeue.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = dequeue.h; sourceTree = "<group>"; };
 		B215236519C2FA63003A0E97 /* thread.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = thread.h; sourceTree = "<group>"; };
 		B215236819C48899003A0E97 /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
+		B2DDA46719D16A6100324654 /* ApplicationServices.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ApplicationServices.framework; path = System/Library/Frameworks/ApplicationServices.framework; sourceTree = SDKROOT; };
+		B2DDA46919D171A200324654 /* display_mac.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = display_mac.cpp; sourceTree = "<group>"; };
+		B2DDA46C19D177D200324654 /* yu.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = yu.cpp; path = ../src/yu.cpp; sourceTree = "<group>"; };
+		B2DDA46D19D177D200324654 /* yu.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = yu.h; path = ../src/yu.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -81,6 +88,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B2DDA46819D16A6100324654 /* ApplicationServices.framework in Frameworks */,
 				B215236919C48899003A0E97 /* IOKit.framework in Frameworks */,
 				B21323FE19BAD289009D0681 /* Cocoa.framework in Frameworks */,
 			);
@@ -121,6 +129,7 @@
 		B21323FC19BAD289009D0681 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				B2DDA46719D16A6100324654 /* ApplicationServices.framework */,
 				B215236819C48899003A0E97 /* IOKit.framework */,
 				B21323FD19BAD289009D0681 /* Cocoa.framework */,
 				B213241C19BAD289009D0681 /* XCTest.framework */,
@@ -184,6 +193,8 @@
 		B213243119BAD40D009D0681 /* src */ = {
 			isa = PBXGroup;
 			children = (
+				B2DDA46C19D177D200324654 /* yu.cpp */,
+				B2DDA46D19D177D200324654 /* yu.h */,
 				B213243219BAD42B009D0681 /* container */,
 				B213243619BAD42B009D0681 /* core */,
 			);
@@ -219,6 +230,7 @@
 				B213243919BAD42B009D0681 /* platform.h */,
 				B213243A19BAD42B009D0681 /* refcount.h */,
 				B215236519C2FA63003A0E97 /* thread.h */,
+				B2DDA46919D171A200324654 /* display_mac.cpp */,
 			);
 			name = core;
 			path = ../src/core;
@@ -325,7 +337,9 @@
 				B213241119BAD289009D0681 /* AppDelegate.m in Sources */,
 				B213240A19BAD289009D0681 /* main.mm in Sources */,
 				B213243C19BAD42B009D0681 /* system.cpp in Sources */,
+				B2DDA46A19D171A200324654 /* display_mac.cpp in Sources */,
 				B213245119C01610009D0681 /* crc32.cpp in Sources */,
+				B2DDA46E19D177D200324654 /* yu.cpp in Sources */,
 				B213245019C0160F009D0681 /* allocator.cpp in Sources */,
 				B213245219C01610009D0681 /* timer.cpp in Sources */,
 			);

@@ -2,6 +2,7 @@
 #define YU_TIMER_H
 
 #include "platform.h"
+#include "thread.h"
 #include "type.h"
 #if defined YU_OS_WIN32
 	#include <intrin.h>
@@ -64,7 +65,7 @@ YU_INLINE void CycleCount::Sample()
 #if defined(YU_OS_WIN32)		
 	cycle = (u64) __rdtsc();
 
-#elif defined YU_OS_MAC && defined (__x86_64__)
+#elif defined YU_OS_MAC && defined (YU_CPU_X86_64)
 
 	unsigned long* pSample = (unsigned long *)&cycle;
 
@@ -90,6 +91,7 @@ YU_INLINE void CycleCount::Sample()
 
 YU_INLINE void PerfTimer::Start()
 {
+	COMPILER_BARRIER();
 	cycleCounter.Sample();
 }
 
@@ -97,6 +99,7 @@ YU_INLINE void PerfTimer::Finish()
 {
 	CycleCount finishCycle;
 	finishCycle.Sample();
+	COMPILER_BARRIER();
 	cycleCounter.cycle = finishCycle.cycle - cycleCounter.cycle;
 }
 
