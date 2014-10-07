@@ -15,10 +15,12 @@ YU_INLINE bool IsPowerOfTwo(unsigned int n)
 	return ( n & (n-1) ) == 0;
 }
 	
+#if defined YU_CPU_X86_64
 YU_INLINE bool IsPowerOfTwo(size_t n)
 {
 	return ( n & (n-1) ) == 0;
 }
+#endif
 
 }
 

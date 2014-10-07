@@ -15,8 +15,10 @@
 #endif
 
 #if defined (YU_OS_WIN32)
-#	if defined(__x86_64__)
+#	if defined(_M_X64)
 #		define YU_CPU_X86_64
+#	elif defined (_M_IX86)
+#		define YU_CPU_X86
 #	else
 #		error yu does not support the cpu
 #	endif

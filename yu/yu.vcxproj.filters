@@ -42,6 +42,12 @@
     <ClCompile Include="src\core\timer.cpp">
       <Filter>Source Files\core</Filter>
     </ClCompile>
+    <ClCompile Include="src\core\display_win32.cpp">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\yu.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\platform.h">
@@ -82,6 +88,9 @@
     </ClInclude>
     <ClInclude Include="src\core\thread.h">
       <Filter>Source Files\core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\yu.h">
+      <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
