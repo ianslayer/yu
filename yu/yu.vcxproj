@@ -113,9 +113,11 @@
   <ItemGroup>
     <ClCompile Include="src\core\allocator.cpp" />
     <ClCompile Include="src\core\crc32.cpp" />
+    <ClCompile Include="src\core\display_win32.cpp" />
     <ClCompile Include="src\core\system.cpp" />
     <ClCompile Include="src\core\timer.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\yu.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\container\array.h" />
@@ -131,6 +133,7 @@
     <ClInclude Include="src\core\system.h" />
     <ClInclude Include="src\core\thread.h" />
     <ClInclude Include="src\core\timer.h" />
+    <ClInclude Include="src\yu.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

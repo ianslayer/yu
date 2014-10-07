@@ -40,11 +40,12 @@ struct DisplayMode
 
 struct Display
 {
-
-#if defined YU_OS_MAC
+#if defined YU_OS_WIN32
+	HMONITOR hMonitor;
+	DISPLAY_DEVICE device;
+#elif defined YU_OS_MAC
 	u32 id; //CGDirectDisplayID
 #endif
-	
 	int numDisplayMode;
 	
 };
