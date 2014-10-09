@@ -23,8 +23,12 @@
 		B213245119C01610009D0681 /* crc32.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B213244919C0160F009D0681 /* crc32.cpp */; };
 		B213245219C01610009D0681 /* timer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B213244D19C0160F009D0681 /* timer.cpp */; };
 		B215236919C48899003A0E97 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B215236819C48899003A0E97 /* IOKit.framework */; };
+		B215A0DA19E50971005F907C /* string.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B215A0D919E50971005F907C /* string.cpp */; };
+		B215A0E019E51BA3005F907C /* renderer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B215A0DE19E51BA3005F907C /* renderer.cpp */; };
+		B215A0E819E67C5E005F907C /* yu_app.mm in Sources */ = {isa = PBXBuildFile; fileRef = B215A0E719E67C5E005F907C /* yu_app.mm */; };
+		B2C9BBB019E6D66D0071B3D6 /* gl_mac.mm in Sources */ = {isa = PBXBuildFile; fileRef = B2C9BBAF19E6D66D0071B3D6 /* gl_mac.mm */; };
 		B2DDA46819D16A6100324654 /* ApplicationServices.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B2DDA46719D16A6100324654 /* ApplicationServices.framework */; };
-		B2DDA46A19D171A200324654 /* display_mac.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B2DDA46919D171A200324654 /* display_mac.cpp */; };
+		B2DDA46A19D171A200324654 /* system_mac.mm in Sources */ = {isa = PBXBuildFile; fileRef = B2DDA46919D171A200324654 /* system_mac.mm */; };
 		B2DDA46E19D177D200324654 /* yu.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B2DDA46C19D177D200324654 /* yu.cpp */; };
 /* End PBXBuildFile section */
 
@@ -60,7 +64,6 @@
 		B213242719BAD289009D0681 /* yu_macTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = yu_macTests.m; sourceTree = "<group>"; };
 		B213243319BAD42B009D0681 /* array.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = array.h; sourceTree = "<group>"; };
 		B213243419BAD42B009D0681 /* hash.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = hash.h; sourceTree = "<group>"; };
-		B213243519BAD42B009D0681 /* type.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = type.h; sourceTree = "<group>"; };
 		B213243719BAD42B009D0681 /* allocator.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = allocator.h; sourceTree = "<group>"; };
 		B213243819BAD42B009D0681 /* bit.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = bit.h; sourceTree = "<group>"; };
 		B213243919BAD42B009D0681 /* platform.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = platform.h; sourceTree = "<group>"; };
@@ -77,8 +80,20 @@
 		B213245319C0161C009D0681 /* dequeue.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = dequeue.h; sourceTree = "<group>"; };
 		B215236519C2FA63003A0E97 /* thread.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = thread.h; sourceTree = "<group>"; };
 		B215236819C48899003A0E97 /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
+		B215A0D519E4FF54005F907C /* vector.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = vector.h; path = ../src/math/vector.h; sourceTree = "<group>"; };
+		B215A0D619E500BD005F907C /* yu_math.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = yu_math.h; path = ../src/math/yu_math.h; sourceTree = "<group>"; };
+		B215A0D719E5045F005F907C /* matrix.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = matrix.h; path = ../src/math/matrix.h; sourceTree = "<group>"; };
+		B215A0D819E50840005F907C /* atomic.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = atomic.h; sourceTree = "<group>"; };
+		B215A0D919E50971005F907C /* string.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = string.cpp; sourceTree = "<group>"; };
+		B215A0DB19E50F34005F907C /* new.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = new.h; sourceTree = "<group>"; };
+		B215A0DD19E51ACA005F907C /* gl_utility.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = gl_utility.h; path = ../src/renderer/gl_utility.h; sourceTree = "<group>"; };
+		B215A0DE19E51BA3005F907C /* renderer.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = renderer.cpp; path = ../src/renderer/renderer.cpp; sourceTree = "<group>"; };
+		B215A0DF19E51BA3005F907C /* renderer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = renderer.h; path = ../src/renderer/renderer.h; sourceTree = "<group>"; };
+		B215A0E719E67C5E005F907C /* yu_app.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; name = yu_app.mm; path = ../src/yu_app.mm; sourceTree = "<group>"; };
+		B215A0E919E67C9B005F907C /* yu_app.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = yu_app.h; path = ../src/yu_app.h; sourceTree = "<group>"; };
+		B2C9BBAF19E6D66D0071B3D6 /* gl_mac.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; name = gl_mac.mm; path = ../src/renderer/gl_mac.mm; sourceTree = "<group>"; };
 		B2DDA46719D16A6100324654 /* ApplicationServices.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ApplicationServices.framework; path = System/Library/Frameworks/ApplicationServices.framework; sourceTree = SDKROOT; };
-		B2DDA46919D171A200324654 /* display_mac.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = display_mac.cpp; sourceTree = "<group>"; };
+		B2DDA46919D171A200324654 /* system_mac.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = system_mac.mm; sourceTree = "<group>"; };
 		B2DDA46C19D177D200324654 /* yu.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = yu.cpp; path = ../src/yu.cpp; sourceTree = "<group>"; };
 		B2DDA46D19D177D200324654 /* yu.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = yu.h; path = ../src/yu.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -195,6 +210,10 @@
 			children = (
 				B2DDA46C19D177D200324654 /* yu.cpp */,
 				B2DDA46D19D177D200324654 /* yu.h */,
+				B215A0E919E67C9B005F907C /* yu_app.h */,
+				B215A0E719E67C5E005F907C /* yu_app.mm */,
+				B215A0DC19E51A70005F907C /* renderer */,
+				B215A0D419E4FF06005F907C /* math */,
 				B213243219BAD42B009D0681 /* container */,
 				B213243619BAD42B009D0681 /* core */,
 			);
@@ -207,7 +226,6 @@
 				B213245319C0161C009D0681 /* dequeue.h */,
 				B213243319BAD42B009D0681 /* array.h */,
 				B213243419BAD42B009D0681 /* hash.h */,
-				B213243519BAD42B009D0681 /* type.h */,
 			);
 			name = container;
 			path = ../src/container;
@@ -221,6 +239,7 @@
 				B213244919C0160F009D0681 /* crc32.cpp */,
 				B213244A19C0160F009D0681 /* crc32.h */,
 				B213244B19C0160F009D0681 /* string.h */,
+				B215A0D919E50971005F907C /* string.cpp */,
 				B213244C19C0160F009D0681 /* system.h */,
 				B213243B19BAD42B009D0681 /* system.cpp */,
 				B213244E19C0160F009D0681 /* timer.h */,
@@ -230,10 +249,33 @@
 				B213243919BAD42B009D0681 /* platform.h */,
 				B213243A19BAD42B009D0681 /* refcount.h */,
 				B215236519C2FA63003A0E97 /* thread.h */,
-				B2DDA46919D171A200324654 /* display_mac.cpp */,
+				B2DDA46919D171A200324654 /* system_mac.mm */,
+				B215A0D819E50840005F907C /* atomic.h */,
+				B215A0DB19E50F34005F907C /* new.h */,
 			);
 			name = core;
 			path = ../src/core;
+			sourceTree = "<group>";
+		};
+		B215A0D419E4FF06005F907C /* math */ = {
+			isa = PBXGroup;
+			children = (
+				B215A0D519E4FF54005F907C /* vector.h */,
+				B215A0D619E500BD005F907C /* yu_math.h */,
+				B215A0D719E5045F005F907C /* matrix.h */,
+			);
+			name = math;
+			sourceTree = "<group>";
+		};
+		B215A0DC19E51A70005F907C /* renderer */ = {
+			isa = PBXGroup;
+			children = (
+				B215A0DD19E51ACA005F907C /* gl_utility.h */,
+				B215A0DE19E51BA3005F907C /* renderer.cpp */,
+				B215A0DF19E51BA3005F907C /* renderer.h */,
+				B2C9BBAF19E6D66D0071B3D6 /* gl_mac.mm */,
+			);
+			name = renderer;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -334,10 +376,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B215A0DA19E50971005F907C /* string.cpp in Sources */,
 				B213241119BAD289009D0681 /* AppDelegate.m in Sources */,
+				B2C9BBB019E6D66D0071B3D6 /* gl_mac.mm in Sources */,
+				B215A0E019E51BA3005F907C /* renderer.cpp in Sources */,
 				B213240A19BAD289009D0681 /* main.mm in Sources */,
 				B213243C19BAD42B009D0681 /* system.cpp in Sources */,
-				B2DDA46A19D171A200324654 /* display_mac.cpp in Sources */,
+				B2DDA46A19D171A200324654 /* system_mac.mm in Sources */,
+				B215A0E819E67C5E005F907C /* yu_app.mm in Sources */,
 				B213245119C01610009D0681 /* crc32.cpp in Sources */,
 				B2DDA46E19D177D200324654 /* yu.cpp in Sources */,
 				B213245019C0160F009D0681 /* allocator.cpp in Sources */,
@@ -473,9 +519,26 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_OBJC_ARC = NO;
+				CLANG_WARN_ASSIGN_ENUM = YES;
+				CLANG_WARN_IMPLICIT_SIGN_CONVERSION = YES;
+				CLANG_WARN_OBJC_EXPLICIT_OWNERSHIP_TYPE = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_RECEIVER_WEAK = YES;
+				CLANG_WARN_OBJC_REPEATED_USE_OF_WEAK = YES;
+				CLANG_WARN_SUSPICIOUS_IMPLICIT_CONVERSION = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
 				COMBINE_HIDPI_IMAGES = YES;
+				GCC_ENABLE_CPP_EXCEPTIONS = NO;
+				GCC_ENABLE_CPP_RTTI = NO;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "yu_mac/yu_mac-Prefix.pch";
+				GCC_WARN_INHIBIT_ALL_WARNINGS = NO;
+				GCC_WARN_INITIALIZER_NOT_FULLY_BRACKETED = YES;
+				GCC_WARN_PEDANTIC = NO;
+				GCC_WARN_SHADOW = YES;
+				GCC_WARN_UNUSED_LABEL = NO;
+				GCC_WARN_UNUSED_PARAMETER = NO;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include,
@@ -490,9 +553,26 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_OBJC_ARC = NO;
+				CLANG_WARN_ASSIGN_ENUM = YES;
+				CLANG_WARN_IMPLICIT_SIGN_CONVERSION = YES;
+				CLANG_WARN_OBJC_EXPLICIT_OWNERSHIP_TYPE = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_RECEIVER_WEAK = YES;
+				CLANG_WARN_OBJC_REPEATED_USE_OF_WEAK = YES;
+				CLANG_WARN_SUSPICIOUS_IMPLICIT_CONVERSION = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
 				COMBINE_HIDPI_IMAGES = YES;
+				GCC_ENABLE_CPP_EXCEPTIONS = NO;
+				GCC_ENABLE_CPP_RTTI = NO;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "yu_mac/yu_mac-Prefix.pch";
+				GCC_WARN_INHIBIT_ALL_WARNINGS = NO;
+				GCC_WARN_INITIALIZER_NOT_FULLY_BRACKETED = YES;
+				GCC_WARN_PEDANTIC = NO;
+				GCC_WARN_SHADOW = YES;
+				GCC_WARN_UNUSED_LABEL = NO;
+				GCC_WARN_UNUSED_PARAMETER = NO;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include,

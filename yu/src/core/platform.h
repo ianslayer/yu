@@ -91,4 +91,6 @@ namespace yu
 	typedef double f64;
 }
 
+#include <stddef.h>
+
 #endif

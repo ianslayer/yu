@@ -1,14 +1,14 @@
 #ifndef YU_HASH_H
 #define YU_HASH_H
 
-#include <new>
+#include "../core/new.h"
 #include "../core/type.h"
 #include "../core/allocator.h"
 
 namespace yu
 {
 
-template <class Key, class T, typename HashFunc = Key::HashFunc>
+template <class Key, class T, typename HashFunc = typename Key::HashFunc>
 class HashTable
 {
 public:

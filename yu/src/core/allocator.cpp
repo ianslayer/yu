@@ -126,6 +126,21 @@ void	StackAllocator::Free(void* ptr)
 	
 }
 
+
+void * operator new(size_t n) throw()
+{
+	void* p = yu::_gDefaultAllocator.Alloc(n);
+
+	if(!p)
+	{
+		exit(1);
+	}
+
+	return p;
+}
+
+/*
+
 void * operator new(size_t n) throw(std::bad_alloc)
 {
 	void* p = yu::_gDefaultAllocator.Alloc(n);
@@ -139,16 +154,46 @@ void * operator new(size_t n) throw(std::bad_alloc)
 
 	return p;
 }
+*/
 
-void * operator new(size_t n, const std::nothrow_t& nothrow_value) throw()
+
+void * operator new[] (size_t n) throw()
 {
 	void* p = yu::_gDefaultAllocator.Alloc(n);
+
+	if(!p)
+	{
+		exit(1);
+		
+	}
+
 	return p;
 }
+
+
+/*
+void * operator new[](size_t n) throw(std::bad_alloc)
+{
+	void* p = yu::_gDefaultAllocator.Alloc(n);
+
+	if(!p)
+	{
+		//exit(1);
+		static const std::bad_alloc nomem;
+		throw nomem;
+	}
+
+	return p;
+}
+*/
 
 void operator delete(void * p) throw()
 {
 	yu::_gDefaultAllocator.Free(p);
 }
 
+void operator delete[](void * p) throw()
+{
+	yu::_gDefaultAllocator.Free(p);
+}
 

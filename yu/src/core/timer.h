@@ -2,8 +2,8 @@
 #define YU_TIMER_H
 
 #include "platform.h"
-#include "thread.h"
-#include "type.h"
+#include "atomic.h"
+
 #if defined YU_OS_WIN32
 	#include <intrin.h>
 #endif
@@ -37,7 +37,7 @@ public:
 	Time() {}
 	void Sample();
 	
-	i64 time;
+	u64 time;
 };
 	
 class SysTimer
