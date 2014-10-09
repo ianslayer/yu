@@ -7,11 +7,13 @@
 //
 
 #import <Cocoa/Cocoa.h>
-#include "../../src/yu.h"
+#include "../../src/yu_app.h"
 
 int main(int argc, const char * argv[])
 {
-	yu::InitYu();
+	NSApplication* yuApp = [YuApp sharedApplication];
 	
-	return NSApplicationMain(argc, argv);
+	[yuApp run];
+
+	return 0;
 }

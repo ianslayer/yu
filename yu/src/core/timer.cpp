@@ -1,10 +1,13 @@
 #include "timer.h"
 #include "thread.h"
+
 #if defined YU_OS_WIN32
 	#pragma comment(lib, "Winmm.lib")
 #elif defined YU_OS_MAC
 	#include <mach/mach_time.h>
 #endif
+
+#include <stdio.h>
 
 namespace yu
 {
@@ -59,6 +62,8 @@ void InitSysTime()
 {
 	initCycle.Sample();
 	cpuFrequency = EstimateCPUFrequency();
+	
+	printf("estimated cpu freq: %llu\n", cpuFrequency);
 }
 
 u64 EstimateCPUFrequency()

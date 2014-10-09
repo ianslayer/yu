@@ -5,7 +5,14 @@
 #if defined YU_OS_WIN32
 	#define WIN32_LEAN_AND_MEAN
 	#include <Windows.h>
-#elif defined YU_OS_MAC
+#elif defined YU_OS_MAC //ugly hack to put NS object into C struct
+	#if defined __OBJC__
+		@class NSScreen;
+		@class NSWindow;
+	#else
+		typedef void NSScreen;
+		typedef void NSWindow;
+	#endif
 #endif
 
 #include "../container/array.h"
@@ -18,15 +25,20 @@ struct Event
 
 };
 
+struct Rect
+{
+	double		width;
+	double		height;
+	double		x,y;
+};
+
 struct Window
 {
-#ifdef YU_OS_WIN32
-    HWND	hwnd;
+#if defined YU_OS_WIN32
+    HWND		hwnd;
+#elif defined YU_OS_MAC
+	NSWindow*	win;
 #endif
-
-	//client area;
-	int		width;
-	int		height;
 
 };
 
@@ -34,19 +46,18 @@ struct DisplayMode
 {
 	size_t		width;
 	size_t		height;
-	double		x,y;
 	double		refreshRate;
 };
 
 struct Display
 {
 #if defined YU_OS_WIN32
-	HMONITOR hMonitor;
-	DISPLAY_DEVICE device;
+	HMONITOR		hMonitor;
+	DISPLAY_DEVICE	device;
 #elif defined YU_OS_MAC
-	u32 id; //CGDirectDisplayID
+	u32				id; //CGDirectDisplayID
+	NSScreen*		screen; //NSScreen
 #endif
-	int numDisplayMode;
 	
 };
 
@@ -65,17 +76,28 @@ public:
 	int				NumDisplays() const;
 	Display			GetDisplay(int index) const;
 	Display			GetMainDisplay() const;
-	int				NumDisplayMode() const;
+	int				NumDisplayMode(const Display& display) const;
+	Rect			GetDisplayRect(const Display& display) const;
 	DisplayMode		GetDisplayMode(const Display& display, int modeIndex) const;
+	DisplayMode		GetCurrentDisplayMode(const Display& display) const;
+	void			SetDisplayMode(const Display& display, int modeIndex);
+
+	Window			CreateFullScreenWindow(const Display& display);
+	Window			CreateWindow(const Rect& rect);
+	void			CloseWindow(Window& win);
+	
 
 	friend void		InitSystem();
-private:
-
-	void			GetSysDisplayInfo();
+	
+	Window			mainWindow;
 	Array<Window>	windowList;
+private:
+	
+/*
+	void			GetSysDisplayInfo();
 	Array<Display>	displayList;
 	int				mainDisplayIndex;
-	
+*/	
 	
 };
 

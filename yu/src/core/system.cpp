@@ -5,26 +5,41 @@
 namespace yu
 {
 System* gSystem = 0;
-
-
 	
 void InitSystem()
 {
 	gSystem = new System();
-	gSystem->GetSysDisplayInfo();
+	//gSystem->GetSysDisplayInfo();
 	Display mainDisplay = gSystem->GetMainDisplay();
 	
-	printf("main display modes:");
-	for(int i = 0; i < mainDisplay.numDisplayMode; i++)
+	printf("main display modes:\n");
+	
+	int numDisplayMode = gSystem->NumDisplayMode(mainDisplay);
+	
+	for(int i = 0; i < numDisplayMode; i++)
 	{
 		DisplayMode mode = gSystem->GetDisplayMode(mainDisplay, i);
 		printf("width: %lu, height: %lu, refresh rate: %lf\n", mode.width, mode.height, mode.refreshRate);
 	}
 	
+	DisplayMode currentDisplayMode = gSystem->GetCurrentDisplayMode(mainDisplay);
+	printf("current mode width: %lu, height: %lu, refresh rate: %lf\n", currentDisplayMode.width, currentDisplayMode.height, currentDisplayMode.refreshRate);
+	
+	int numDisplay = gSystem->NumDisplays();
+	
+	printf("display num: %d\n", numDisplay);
+	
+//	for(int i = 0; i)
+
 }
 
 void FreeSystem()
 {
+	for(int i = 0 ; i < gSystem->windowList.Size(); i++)
+	{
+		gSystem->CloseWindow(gSystem->windowList[i]);
+	}
+
 	delete gSystem;
 	gSystem = 0;
 }
