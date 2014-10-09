@@ -143,7 +143,9 @@ Array<T>::~Array()
 template<class T>
 void Array<T>::EnsureCapacity(int newSize)
 {
+	assert(newSize >= 0 && mSize >= 0 && mCapacity >=0 );
 	assert(newSize >= mSize);
+	
 	int numCtor = newSize - mSize;
 	
 	if(newSize > mCapacity)
@@ -155,18 +157,18 @@ void Array<T>::EnsureCapacity(int newSize)
 		if(!pArray)
 		{
 			assert(mSize == 0);
-			pArray = (T*) allocator->Alloc(sizeof(T) * mCapacity ) ;//new T[mCapacity];
+			pArray = (T*) allocator->Alloc(sizeof(T) * (size_t) mCapacity ) ;//new T[mCapacity];
 		}
 		else
 		{
-			T* growArray = (T*) allocator->Realloc(pArray, sizeof(T) * mCapacity);
+			T* growArray = (T*) allocator->Realloc(pArray, sizeof(T) * (size_t) mCapacity);
 
 			if(growArray != pArray)
 			{
-				Construct(growArray, mSize);
+				Construct(growArray, (size_t) mSize);
 				copy_n(pArray, (size_t) mSize, growArray);
 				//delete[] pArray; //fixme, this is wrong, should destruct to size, then free memory
-				Destruct(pArray, mSize);
+				Destruct(pArray, (size_t) mSize);
 				
 				allocator->Free(pArray);
 				pArray = growArray;
@@ -174,7 +176,7 @@ void Array<T>::EnsureCapacity(int newSize)
 		}
 
 	}
-	Construct(pArray + mSize, numCtor);
+	Construct(pArray + mSize, (size_t) numCtor);
 }
 
 template <class T>
@@ -215,7 +217,7 @@ template <class T>
 void Array<T>::Erase(T* pAt)
 {
 	assert(pAt >= pArray && pAt < pArray + Size() );
-	int numToCopy = ( pArray + Size() - 1 - pAt ) / sizeof(T);
+	size_t numToCopy = (size_t)( pArray + Size() - 1 - pAt ) / sizeof(T);
 	if(numToCopy != 0)
 	{
 		T* pCopy = pAt + 1;
@@ -249,7 +251,7 @@ void Array<T>::Clear()
 template <class T>
 void Array<T>::ClearMem()
 {
-	Destruct(pArray, mSize);
+	Destruct(pArray, (size_t) mSize);
 	allocator->Free(pArray);
 	pArray = 0;
 	mSize = 0;

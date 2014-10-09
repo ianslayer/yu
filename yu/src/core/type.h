@@ -2,8 +2,8 @@
 #define YU_CONTAINER_TYPE_H
 
 #include "platform.h"
-#include <new>
-#include <string.h>
+#include "new.h"
+#include "string.h"
 
 namespace yu
 {
@@ -145,7 +145,7 @@ namespace yu
 	template<class sIterator, class dIterator>
 	YU_INLINE void do_copy_n(sIterator source, size_t count, dIterator dest, true_type)
 	{
-		memcpy(dest, source, sizeof( typename type_of_pointer<sIterator>::type )  * count );	
+		yu::memcpy(dest, source, sizeof( typename type_of_pointer<sIterator>::type )  * count );
 	}
 
 	template<class sIterator, class dIterator>
@@ -166,7 +166,7 @@ namespace yu
 	template<class sIterator, class dIterator>
 	YU_INLINE void do_copy(sIterator sourceBegin, sIterator sourceEnd, dIterator dest, true_type)
 	{
-		memcpy(dest, sourceBegin, (size_t) sourceEnd - (size_t) sourceBegin);	
+		yu::memcpy(dest, sourceBegin, (size_t) sourceEnd - (size_t) sourceBegin);
 	}
 
 	template<class sIterator, class dIterator>
