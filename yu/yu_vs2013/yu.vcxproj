@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
       <Configuration>Debug</Configuration>
@@ -27,23 +27,27 @@
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v120</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v120</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v120</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v120</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -111,37 +115,39 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\core\allocator.cpp" />
-    <ClCompile Include="src\core\crc32.cpp" />
-    <ClCompile Include="src\core\string.cpp" />
-    <ClCompile Include="src\core\system.cpp" />
-    <ClCompile Include="src\core\system_win32.cpp" />
-    <ClCompile Include="src\core\timer.cpp" />
-    <ClCompile Include="src\main.cpp" />
-    <ClCompile Include="src\renderer\renderer.cpp" />
-    <ClCompile Include="src\renderer\renderer_dx11.cpp" />
-    <ClCompile Include="src\yu.cpp" />
+    <ClCompile Include="..\src\core\allocator.cpp" />
+    <ClCompile Include="..\src\core\crc32.cpp" />
+    <ClCompile Include="..\src\core\string.cpp" />
+    <ClCompile Include="..\src\core\system.cpp" />
+    <ClCompile Include="..\src\core\system_win32.cpp" />
+    <ClCompile Include="..\src\core\timer.cpp" />
+    <ClCompile Include="..\src\main.cpp" />
+    <ClCompile Include="..\src\renderer\renderer.cpp" />
+    <ClCompile Include="..\src\renderer\renderer_dx11.cpp" />
+    <ClCompile Include="..\src\yu.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\container\array.h" />
-    <ClInclude Include="src\container\dequeue.h" />
-    <ClInclude Include="src\container\hash.h" />
-    <ClInclude Include="src\container\type.h" />
-    <ClInclude Include="src\core\allocator.h" />
-    <ClInclude Include="src\core\bit.h" />
-    <ClInclude Include="src\core\crc32.h" />
-    <ClInclude Include="src\core\platform.h" />
-    <ClInclude Include="src\core\refcount.h" />
-    <ClInclude Include="src\core\string.h" />
-    <ClInclude Include="src\core\system.h" />
-    <ClInclude Include="src\core\thread.h" />
-    <ClInclude Include="src\core\timer.h" />
-    <ClInclude Include="src\math\matrix.h" />
-    <ClInclude Include="src\math\vector.h" />
-    <ClInclude Include="src\math\yu_math.h" />
-    <ClInclude Include="src\renderer\gl_utility.h" />
-    <ClInclude Include="src\renderer\renderer.h" />
-    <ClInclude Include="src\yu.h" />
+    <ClInclude Include="..\src\container\array.h" />
+    <ClInclude Include="..\src\container\dequeue.h" />
+    <ClInclude Include="..\src\container\hash.h" />
+    <ClInclude Include="..\src\core\allocator.h" />
+    <ClInclude Include="..\src\core\atomic.h" />
+    <ClInclude Include="..\src\core\bit.h" />
+    <ClInclude Include="..\src\core\crc32.h" />
+    <ClInclude Include="..\src\core\new.h" />
+    <ClInclude Include="..\src\core\platform.h" />
+    <ClInclude Include="..\src\core\refcount.h" />
+    <ClInclude Include="..\src\core\string.h" />
+    <ClInclude Include="..\src\core\system.h" />
+    <ClInclude Include="..\src\core\thread.h" />
+    <ClInclude Include="..\src\core\timer.h" />
+    <ClInclude Include="..\src\core\type.h" />
+    <ClInclude Include="..\src\math\matrix.h" />
+    <ClInclude Include="..\src\math\vector.h" />
+    <ClInclude Include="..\src\math\yu_math.h" />
+    <ClInclude Include="..\src\renderer\gl_utility.h" />
+    <ClInclude Include="..\src\renderer\renderer.h" />
+    <ClInclude Include="..\src\yu.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
