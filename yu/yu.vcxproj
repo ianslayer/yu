@@ -113,10 +113,13 @@
   <ItemGroup>
     <ClCompile Include="src\core\allocator.cpp" />
     <ClCompile Include="src\core\crc32.cpp" />
-    <ClCompile Include="src\core\display_win32.cpp" />
+    <ClCompile Include="src\core\string.cpp" />
     <ClCompile Include="src\core\system.cpp" />
+    <ClCompile Include="src\core\system_win32.cpp" />
     <ClCompile Include="src\core\timer.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\renderer\renderer.cpp" />
+    <ClCompile Include="src\renderer\renderer_dx11.cpp" />
     <ClCompile Include="src\yu.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -133,6 +136,11 @@
     <ClInclude Include="src\core\system.h" />
     <ClInclude Include="src\core\thread.h" />
     <ClInclude Include="src\core\timer.h" />
+    <ClInclude Include="src\math\matrix.h" />
+    <ClInclude Include="src\math\vector.h" />
+    <ClInclude Include="src\math\yu_math.h" />
+    <ClInclude Include="src\renderer\gl_utility.h" />
+    <ClInclude Include="src\renderer\renderer.h" />
     <ClInclude Include="src\yu.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
