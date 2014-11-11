@@ -27,94 +27,100 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\main.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\core\system.cpp">
+    <ClCompile Include="..\src\core\allocator.cpp">
       <Filter>Source Files\core</Filter>
     </ClCompile>
-    <ClCompile Include="src\core\allocator.cpp">
+    <ClCompile Include="..\src\core\crc32.cpp">
       <Filter>Source Files\core</Filter>
     </ClCompile>
-    <ClCompile Include="src\core\crc32.cpp">
+    <ClCompile Include="..\src\core\string.cpp">
       <Filter>Source Files\core</Filter>
     </ClCompile>
-    <ClCompile Include="src\core\timer.cpp">
+    <ClCompile Include="..\src\core\system.cpp">
       <Filter>Source Files\core</Filter>
     </ClCompile>
-    <ClCompile Include="src\yu.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\core\system_win32.cpp">
+    <ClCompile Include="..\src\core\system_win32.cpp">
       <Filter>Source Files\core</Filter>
     </ClCompile>
-    <ClCompile Include="src\renderer\renderer.cpp">
+    <ClCompile Include="..\src\core\timer.cpp">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\renderer\renderer.cpp">
       <Filter>Source Files\renderer</Filter>
     </ClCompile>
-    <ClCompile Include="src\core\string.cpp">
-      <Filter>Source Files\core</Filter>
-    </ClCompile>
-    <ClCompile Include="src\renderer\renderer_dx11.cpp">
+    <ClCompile Include="..\src\renderer\renderer_dx11.cpp">
       <Filter>Source Files\renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\yu.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\core\platform.h">
-      <Filter>Source Files\core</Filter>
-    </ClInclude>
-    <ClInclude Include="src\container\array.h">
+    <ClInclude Include="..\src\container\array.h">
       <Filter>Source Files\container</Filter>
     </ClInclude>
-    <ClInclude Include="src\container\hash.h">
+    <ClInclude Include="..\src\container\dequeue.h">
       <Filter>Source Files\container</Filter>
     </ClInclude>
-    <ClInclude Include="src\core\refcount.h">
-      <Filter>Source Files\core</Filter>
-    </ClInclude>
-    <ClInclude Include="src\core\allocator.h">
-      <Filter>Source Files\core</Filter>
-    </ClInclude>
-    <ClInclude Include="src\core\bit.h">
-      <Filter>Source Files\core</Filter>
-    </ClInclude>
-    <ClInclude Include="src\container\type.h">
-      <Filter>Source Files\core</Filter>
-    </ClInclude>
-    <ClInclude Include="src\core\system.h">
-      <Filter>Source Files\core</Filter>
-    </ClInclude>
-    <ClInclude Include="src\core\crc32.h">
-      <Filter>Source Files\core</Filter>
-    </ClInclude>
-    <ClInclude Include="src\core\string.h">
-      <Filter>Source Files\core</Filter>
-    </ClInclude>
-    <ClInclude Include="src\container\dequeue.h">
+    <ClInclude Include="..\src\container\hash.h">
       <Filter>Source Files\container</Filter>
     </ClInclude>
-    <ClInclude Include="src\core\timer.h">
+    <ClInclude Include="..\src\core\allocator.h">
       <Filter>Source Files\core</Filter>
     </ClInclude>
-    <ClInclude Include="src\core\thread.h">
+    <ClInclude Include="..\src\core\atomic.h">
       <Filter>Source Files\core</Filter>
     </ClInclude>
-    <ClInclude Include="src\yu.h">
+    <ClInclude Include="..\src\core\bit.h">
+      <Filter>Source Files\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\core\crc32.h">
+      <Filter>Source Files\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\core\new.h">
+      <Filter>Source Files\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\core\platform.h">
+      <Filter>Source Files\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\core\refcount.h">
+      <Filter>Source Files\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\core\string.h">
+      <Filter>Source Files\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\core\system.h">
+      <Filter>Source Files\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\core\thread.h">
+      <Filter>Source Files\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\core\timer.h">
+      <Filter>Source Files\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\core\type.h">
+      <Filter>Source Files\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\math\matrix.h">
+      <Filter>Source Files\math</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\math\vector.h">
+      <Filter>Source Files\math</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\math\yu_math.h">
+      <Filter>Source Files\math</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\renderer\gl_utility.h">
+      <Filter>Source Files\renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\renderer\renderer.h">
+      <Filter>Source Files\renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\yu.h">
       <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\math\matrix.h">
-      <Filter>Source Files\math</Filter>
-    </ClInclude>
-    <ClInclude Include="src\math\vector.h">
-      <Filter>Source Files\math</Filter>
-    </ClInclude>
-    <ClInclude Include="src\math\yu_math.h">
-      <Filter>Source Files\math</Filter>
-    </ClInclude>
-    <ClInclude Include="src\renderer\gl_utility.h">
-      <Filter>Source Files\renderer</Filter>
-    </ClInclude>
-    <ClInclude Include="src\renderer\renderer.h">
-      <Filter>Source Files\renderer</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
