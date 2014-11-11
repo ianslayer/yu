@@ -28,8 +28,6 @@ void InitSystem()
 	int numDisplay = gSystem->NumDisplays();
 	
 	printf("display num: %d\n", numDisplay);
-	
-//	for(int i = 0; i)
 
 }
 
@@ -37,7 +35,7 @@ void FreeSystem()
 {
 	for(int i = 0 ; i < gSystem->windowList.Size(); i++)
 	{
-		gSystem->CloseWindow(gSystem->windowList[i]);
+		gSystem->CloseWin(gSystem->windowList[i]);
 	}
 
 	delete gSystem;
