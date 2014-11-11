@@ -4,6 +4,7 @@
 #include "platform.h"
 #if defined YU_OS_WIN32
 	#define WIN32_LEAN_AND_MEAN
+	#define NOMINMAX
 	#include <Windows.h>
 #elif defined YU_OS_MAC //ugly hack to put NS object into C struct
 	#if defined __OBJC__
@@ -83,8 +84,8 @@ public:
 	void			SetDisplayMode(const Display& display, int modeIndex);
 
 	Window			CreateFullScreenWindow(const Display& display);
-	Window			CreateWindow(const Rect& rect);
-	void			CloseWindow(Window& win);
+	Window			CreateWin(const Rect& rect);
+	void			CloseWin(Window& win);
 	
 
 	friend void		InitSystem();
@@ -92,12 +93,6 @@ public:
 	Window			mainWindow;
 	Array<Window>	windowList;
 private:
-	
-/*
-	void			GetSysDisplayInfo();
-	Array<Display>	displayList;
-	int				mainDisplayIndex;
-*/	
 	
 };
 

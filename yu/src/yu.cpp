@@ -9,6 +9,7 @@
 
 #include "core/timer.h"
 
+#include "renderer/renderer.h"
 
 namespace yu
 {
@@ -25,7 +26,9 @@ void InitYu()
 	rect.width = 800;
 	rect.height = 600;
 	
-	gSystem->mainWindow = gSystem->CreateWindow(rect);
+	gSystem->mainWindow = gSystem->CreateWin(rect);
+
+	InitDX11();
 }
 
 void FreeYu()

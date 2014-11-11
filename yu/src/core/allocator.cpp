@@ -1,6 +1,7 @@
 #include "platform.h"
 #if defined YU_OS_WIN32
 	#include <malloc.h>
+	#include <stdlib.h>
 #elif defined YU_OS_MAC
 	#include <malloc/malloc.h>
 #endif
