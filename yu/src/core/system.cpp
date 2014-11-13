@@ -6,9 +6,17 @@ namespace yu
 {
 System* gSystem = 0;
 	
-void InitSystem()
+bool PlatformInitSystem();
+
+bool InitSystem()
 {
 	gSystem = new System();
+
+	if(!PlatformInitSystem())
+	{
+		return false;
+	}
+
 	//gSystem->GetSysDisplayInfo();
 	Display mainDisplay = gSystem->GetMainDisplay();
 	
@@ -29,6 +37,12 @@ void InitSystem()
 	
 	printf("display num: %d\n", numDisplay);
 
+	CPUInfo cpuInfo = gSystem->GetCPUInfo();
+
+	printf("CPU info: \n");
+	printf("Vender: %s\n", cpuInfo.vender);
+
+	return true;
 }
 
 void FreeSystem()

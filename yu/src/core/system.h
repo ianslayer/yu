@@ -64,6 +64,12 @@ struct Display
 
 struct CPUInfo
 {
+#if defined (YU_CPU_X86_64) || defined (YU_CPU_X86)
+	char	vender[16];
+	char	brand[40];
+	u32		featureBits0;	//ecx
+	u32		featureBits1;	//edx
+#endif
 };
 	
 struct GPUInfo
@@ -83,12 +89,12 @@ public:
 	DisplayMode		GetCurrentDisplayMode(const Display& display) const;
 	void			SetDisplayMode(const Display& display, int modeIndex);
 
-	Window			CreateFullScreenWindow(const Display& display);
 	Window			CreateWin(const Rect& rect);
 	void			CloseWin(Window& win);
 	
+	CPUInfo			GetCPUInfo() const;
 
-	friend void		InitSystem();
+	friend bool		InitSystem();
 	
 	Window			mainWindow;
 	Array<Window>	windowList;
@@ -96,7 +102,7 @@ private:
 	
 };
 
-void	InitSystem();
+bool	InitSystem();
 void	FreeSystem();
 
 extern System* gSystem;
