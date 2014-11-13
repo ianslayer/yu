@@ -1,9 +1,118 @@
 #include "system.h"
-
 #include <stdio.h>
+#include <intrin.h>
 
 namespace yu
 {
+
+#define GETX(l) (int(l & 0xFFFF))
+#define GETY(l) (int(l) >> 16)
+LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	//    int wmId, wmEvent;
+	PAINTSTRUCT ps;
+	HDC hdc;
+
+	switch (message)
+	{
+	case WM_PAINT:
+		hdc = BeginPaint(hWnd, &ps);
+		// TODO: Add any drawing code here...
+		EndPaint(hWnd, &ps);
+		break;
+	case WM_MOUSEMOVE:
+		static int lastX, lastY;
+		int x, y;
+		x = GETX(lParam);
+		y = GETY(lParam);
+		//if(gInputListener)
+		//	gInputListener->OnMouseMove(x, y, x - lastX, y - lastY);
+		lastX = x;
+		lastY = y;
+		break;
+	case WM_KEYDOWN:
+		//if(gInputListener)
+		//	gInputListener->OnKey((unsigned int) wParam, true);
+		break;
+	case WM_KEYUP:
+		//if(gInputListener)
+		//	gInputListener->OnKey((unsigned int) wParam, false);
+		break;
+	case WM_LBUTTONDOWN:
+		//if(gInputListener)
+		//	gInputListener->OnMouseButton(GETX(lParam), GETY(lParam), MOUSE_LEFT, true);
+		break;
+	case WM_LBUTTONUP:
+		//if(gInputListener)
+		//	gInputListener->OnMouseButton(GETX(lParam), GETY(lParam), MOUSE_LEFT, false);
+		break;
+	case WM_RBUTTONDOWN:
+		//if(gInputListener)
+		//gInputListener->OnMouseButton(GETX(lParam), GETY(lParam), MOUSE_RIGHT, true);
+		break;
+	case WM_RBUTTONUP:
+		//if(gInputListener)
+		//gInputListener->OnMouseButton(GETX(lParam), GETY(lParam), MOUSE_RIGHT, false);
+		break;
+	case WM_MOUSEWHEEL:
+		static int scroll;
+		int s;
+
+		scroll += GET_WHEEL_DELTA_WPARAM(wParam);
+		s = scroll / WHEEL_DELTA;
+		scroll %= WHEEL_DELTA;
+
+		POINT point;
+		point.x = GETX(lParam);
+		point.y = GETY(lParam);
+		ScreenToClient(hWnd, &point);
+
+		//if (s != 0 && gInputListener) gInputListener->OnMouseWheel(point.x, point.y, s);
+		break;   
+
+	case WM_DESTROY:
+		PostQuitMessage(0);
+		break;
+
+	case WM_SIZE:
+		//modify backbuffer size
+		UINT width ;
+		UINT height;
+		RECT clientRect;
+		width = GETX(lParam);
+		height = GETY(lParam);
+		
+		GetClientRect(hWnd, &clientRect);
+		//ResizeBackBuffer(width, height);
+		break;
+	default:
+		return DefWindowProc(hWnd, message, wParam, lParam);
+	}
+	return 0;
+}
+
+bool PlatformInitSystem()
+{
+	WNDCLASSEX wcex;
+	wcex.cbSize = sizeof(WNDCLASSEX);
+
+	TCHAR* windowClass = TEXT("yuWindow");
+	wcex.style			= CS_HREDRAW | CS_VREDRAW ;
+	wcex.lpfnWndProc	= WndProc;
+	wcex.cbClsExtra		= 0;
+	wcex.cbWndExtra		= 0;
+	wcex.hInstance		= NULL;
+	wcex.hIcon			= NULL;
+	wcex.hCursor		= LoadCursor(NULL, IDC_ARROW);
+	wcex.hbrBackground	= (HBRUSH)(COLOR_WINDOW+1);
+	wcex.lpszMenuName	= NULL;
+	wcex.lpszClassName	= windowClass;
+	wcex.hIconSm		= NULL;
+
+	RegisterClassEx(&wcex);
+
+	return true;
+}
 
 BOOL CALLBACK MyMonitorEnumProc(
 	_In_  HMONITOR hMonitor,
@@ -47,7 +156,6 @@ Display System::GetMainDisplay() const
 {
 	Display mainDisplay;
 	memset(&mainDisplay, 0, sizeof(mainDisplay));
-	//EnumDisplayMonitors(NULL, NULL, GetMainDisplayEnumProc, (LPARAM) &mainDisplay);
 	
 	int index = 0;
 	Display display;
@@ -82,12 +190,15 @@ Display System::GetMainDisplay() const
 	if(!mainDisplayFound)
 		printf("error: no main display found\n");
 	
+	EnumDisplayMonitors(NULL, NULL, GetMainDisplayEnumProc, (LPARAM) &mainDisplay);
+
 	return mainDisplay;
 }
 
 DisplayMode System::GetDisplayMode(const Display& display, int modeIndex) const
 {
 	DisplayMode mode;
+	memset(&mode, 0, sizeof(mode));
 
 	DEVMODE devMode;
 
@@ -276,18 +387,73 @@ Display System::GetDisplay(int index) const
 	return display;
 }
 
-
 Window System::CreateWin(const Rect& rect)
 {
 	Window window;
 	memset(&window, 0, sizeof(window));
+
+	DWORD windowStyle = WS_CAPTION | WS_SYSMENU | WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
+	TCHAR* windowClass = TEXT("yuWindow");
+	TCHAR* windowTitle = TEXT("yu");
+	window.hwnd = CreateWindowEx(0, windowClass, windowTitle,
+		windowStyle, (int)rect.x, (int)rect.y, (int)rect.width, (int)rect.height, NULL, NULL, NULL, NULL);
+
+	RECT rc = { (LONG)rect.x, (LONG)rect.y, (LONG)rect.x + (LONG)rect.width , (LONG)rect.y + (LONG)rect.height };
+
+	AdjustWindowRect( &rc, windowStyle, FALSE);
+	MoveWindow(window.hwnd, (int)rect.x, (int)rect.y, (int)(rc.right - rc.left), (int)(rc.bottom - rc.top), TRUE);
+
+	ShowWindow(window.hwnd, SW_SHOW);
+
+	windowList.PushBack(window);
 
 	return window;
 }
 
 void System::CloseWin(Window& win)
 {
-	
+	for(int i = 0; i < windowList.Size(); i++)
+	{
+		if(windowList[i].hwnd == win.hwnd)
+		{
+			windowList.EraseSwapBack(&windowList[i]);
+			break;
+		}
+	}
+	CloseWindow(win.hwnd);
+}
+
+CPUInfo System::GetCPUInfo() const
+{
+	CPUInfo cpuInfo;
+	memset(&cpuInfo, 0, sizeof(cpuInfo));
+	struct Registers
+	{
+		u32 eax, ebx, ecx, edx;
+	};
+	struct Str
+	{
+		char str[4];
+	};
+	union Info
+	{
+		Registers	reg;
+		Str			str[4];
+		int			info[4];
+	};
+
+	Info info;
+
+	__cpuid(info.info, 0);
+	memcpy(cpuInfo.vender, &info.reg.ebx, sizeof(int));
+	memcpy(cpuInfo.vender+4, &info.reg.edx, sizeof(int));
+	memcpy(cpuInfo.vender+8, &info.reg.ecx, sizeof(int));
+
+	__cpuid(info.info, 1);
+	cpuInfo.featureBits0 = info.reg.ecx;
+	cpuInfo.featureBits1 = info.reg.edx;
+
+	return cpuInfo;
 }
 
 }

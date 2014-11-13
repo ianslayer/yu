@@ -57,6 +57,12 @@
     <ClCompile Include="..\src\yu.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\core\thread.cpp">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\core\worker.cpp">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\src\container\array.h">
@@ -121,6 +127,9 @@
     </ClInclude>
     <ClInclude Include="..\src\yu.h">
       <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\core\worker.h">
+      <Filter>Source Files\core</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
