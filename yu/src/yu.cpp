@@ -1,5 +1,3 @@
-
-#include "yu.h"
 #include "core/system.h"
 #include "math/vector.h"
 #include "math/matrix.h"
@@ -21,14 +19,22 @@ void InitYu()
 	InitSystem();
 	
 	Rect rect;
-	rect.x = 0;
-	rect.y = 0;
-	rect.width = 800;
-	rect.height = 600;
+	rect.x = 128;
+	rect.y = 128;
+	rect.width = 1920;
+	rect.height = 1080;
 	
 	gSystem->mainWindow = gSystem->CreateWin(rect);
 
-	InitDX11();
+	FrameBufferDesc desc;
+	desc.format = TEX_FORMAT_R8G8B8A8_UNORM;
+	desc.fullScreen = false;
+	desc.width = (int) rect.width;
+	desc.height =(int) rect.height;
+	desc.sampleCount = 1;
+	desc.refreshRate = 60;
+
+	InitDX11(gSystem->mainWindow, desc);
 }
 
 void FreeYu()
