@@ -57,10 +57,13 @@
     <ClCompile Include="..\src\yu.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\core\thread.cpp">
+    <ClCompile Include="..\src\core\worker.cpp">
       <Filter>Source Files\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\core\worker.cpp">
+    <ClCompile Include="..\src\core\thread_win32.cpp">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\core\thread.cpp">
       <Filter>Source Files\core</Filter>
     </ClCompile>
   </ItemGroup>
@@ -75,9 +78,6 @@
       <Filter>Source Files\container</Filter>
     </ClInclude>
     <ClInclude Include="..\src\core\allocator.h">
-      <Filter>Source Files\core</Filter>
-    </ClInclude>
-    <ClInclude Include="..\src\core\atomic.h">
       <Filter>Source Files\core</Filter>
     </ClInclude>
     <ClInclude Include="..\src\core\bit.h">

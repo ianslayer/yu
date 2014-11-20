@@ -57,10 +57,10 @@
     <ClCompile Include="..\src\yu.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\core\thread.cpp">
+    <ClCompile Include="..\src\core\worker.cpp">
       <Filter>Source Files\core</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\core\worker.cpp">
+    <ClCompile Include="..\src\core\thread_win32.cpp">
       <Filter>Source Files\core</Filter>
     </ClCompile>
   </ItemGroup>

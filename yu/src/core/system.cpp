@@ -5,7 +5,7 @@
 namespace yu
 {
 System* gSystem = 0;
-	
+
 bool PlatformInitSystem();
 
 bool InitSystem()
@@ -16,28 +16,28 @@ bool InitSystem()
 	{
 		return false;
 	}
-
-	//gSystem->GetSysDisplayInfo();
-	Display mainDisplay = gSystem->GetMainDisplay();
+	/*
+	Display mainDisplay = System::GetMainDisplay();
 	
 	printf("main display modes:\n");
 	
-	int numDisplayMode = gSystem->NumDisplayMode(mainDisplay);
+	int numDisplayMode = System::NumDisplayMode(mainDisplay);
 	
 	for(int i = 0; i < numDisplayMode; i++)
 	{
-		DisplayMode mode = gSystem->GetDisplayMode(mainDisplay, i);
+		DisplayMode mode = System::GetDisplayMode(mainDisplay, i);
 		printf("width: %lu, height: %lu, refresh rate: %lf\n", mode.width, mode.height, mode.refreshRate);
 	}
 	
-	DisplayMode currentDisplayMode = gSystem->GetCurrentDisplayMode(mainDisplay);
+	DisplayMode currentDisplayMode = System::GetCurrentDisplayMode(mainDisplay);
 	printf("current mode width: %lu, height: %lu, refresh rate: %lf\n", currentDisplayMode.width, currentDisplayMode.height, currentDisplayMode.refreshRate);
 	
-	int numDisplay = gSystem->NumDisplays();
+	int numDisplay = System::NumDisplays();
 	
 	printf("display num: %d\n", numDisplay);
+	*/
 
-	CPUInfo cpuInfo = gSystem->GetCPUInfo();
+	CPUInfo cpuInfo = System::GetCPUInfo();
 
 	printf("CPU info: \n");
 	printf("Vender: %s\n", cpuInfo.vender);
@@ -47,10 +47,7 @@ bool InitSystem()
 
 void FreeSystem()
 {
-	for(int i = 0 ; i < gSystem->windowList.Size(); i++)
-	{
-		gSystem->CloseWin(gSystem->windowList[i]);
-	}
+
 
 	delete gSystem;
 	gSystem = 0;

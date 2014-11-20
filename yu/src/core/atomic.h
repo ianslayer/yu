@@ -7,6 +7,7 @@
 	#define COMPILER_BARRIER() asm volatile("" ::: "memory")
 #endif
 
+
 namespace yu
 {
 
