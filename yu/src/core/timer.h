@@ -2,7 +2,6 @@
 #define YU_TIMER_H
 
 #include "platform.h"
-#include "atomic.h"
 
 #if defined YU_OS_WIN32
 	#include <intrin.h>

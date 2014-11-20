@@ -123,7 +123,7 @@
     <ClCompile Include="..\src\core\string.cpp" />
     <ClCompile Include="..\src\core\system.cpp" />
     <ClCompile Include="..\src\core\system_win32.cpp" />
-    <ClCompile Include="..\src\core\thread.cpp" />
+    <ClCompile Include="..\src\core\thread_win32.cpp" />
     <ClCompile Include="..\src\core\timer.cpp" />
     <ClCompile Include="..\src\core\worker.cpp" />
     <ClCompile Include="..\src\main.cpp" />

@@ -1,25 +1,55 @@
 #include "system.h"
+#include "thread.h"
+#include "../container/dequeue.h"
+#include "../container/array.h"
+#include "../renderer/renderer.h"
 #include <stdio.h>
 #include <intrin.h>
-
 namespace yu
 {
 
+struct CreateWinParam
+{
+	Rect	rect;
+	Window	win;
+	CondVar	winCreationCV;
+	Mutex	winCreationCS;
+};
+
+
+struct WindowThreadCmd
+{
+	enum CommandType
+	{
+		CREATE_WINDOW, 
+	};
+	
+	union Command
+	{
+		CreateWinParam*	createWinParam;
+	};
+
+	CommandType	type;
+	Command		cmd;
+};
+
+class SystemImpl : public System
+{
+public:
+	LockSpscFifo<WindowThreadCmd, 16>	winThreadCmdQueue;
+	Array<Window>						windowList;
+	Thread								windowThread;
+};
+
+void SetYuExit();
+bool YuRunning();
+void ResizeBackBuffer(unsigned int width, unsigned int height, TexFormat fmt);
 #define GETX(l) (int(l & 0xFFFF))
 #define GETY(l) (int(l) >> 16)
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-	//    int wmId, wmEvent;
-	PAINTSTRUCT ps;
-	HDC hdc;
-
 	switch (message)
 	{
-	case WM_PAINT:
-		hdc = BeginPaint(hWnd, &ps);
-		// TODO: Add any drawing code here...
-		EndPaint(hWnd, &ps);
-		break;
 	case WM_MOUSEMOVE:
 		static int lastX, lastY;
 		int x, y;
@@ -45,6 +75,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_LBUTTONUP:
 		//if(gInputListener)
 		//	gInputListener->OnMouseButton(GETX(lParam), GETY(lParam), MOUSE_LEFT, false);
+		//UINT x, y;
+		x = GETX(lParam);
+		y = GETY(lParam);
 		break;
 	case WM_RBUTTONDOWN:
 		//if(gInputListener)
@@ -71,6 +104,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		break;   
 
 	case WM_DESTROY:
+		SetYuExit();
 		PostQuitMessage(0);
 		break;
 
@@ -83,11 +117,83 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		height = GETY(lParam);
 		
 		GetClientRect(hWnd, &clientRect);
-		//ResizeBackBuffer(width, height);
+
+		RECT windowRect;
+		GetWindowRect(hWnd, &windowRect);
+		ResizeBackBuffer(width, height, TexFormat::TEX_FORMAT_R8G8B8A8_UNORM);
 		break;
 	default:
 		return DefWindowProc(hWnd, message, wParam, lParam);
 	}
+	return 0;
+}
+
+void ExecWindowCommand(WindowThreadCmd& cmd)
+{
+	switch (cmd.type)
+	{
+		case (WindowThreadCmd::CREATE_WINDOW):
+		{
+			CreateWinParam* param = (CreateWinParam*)cmd.cmd.createWinParam;
+			param->winCreationCS.Lock();
+			Rect rect = param->rect;
+			Window window;
+			memset(&window, 0, sizeof(window));
+
+			DWORD windowStyle = WS_CAPTION | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
+			TCHAR* windowClass = TEXT("yuWindow");
+			TCHAR* windowTitle = TEXT("yu");
+			window.hwnd = CreateWindowEx(0, windowClass, windowTitle,
+				windowStyle, (int)rect.x, (int)rect.y, (int)rect.width, (int)rect.height, NULL, NULL, NULL, NULL);
+
+			RECT rc = { (LONG)rect.x, (LONG)rect.y, (LONG)rect.x + (LONG)rect.width, (LONG)rect.y + (LONG)rect.height };
+
+			AdjustWindowRect(&rc, windowStyle, FALSE);
+			MoveWindow(window.hwnd, (int)rect.x, (int)rect.y, (int)(rc.right - rc.left), (int)(rc.bottom - rc.top), TRUE);
+
+			ShowWindow(window.hwnd, SW_SHOW);
+
+			((SystemImpl*)(gSystem->sysImpl))->windowList.PushBack(window);
+			param->win = window;
+			param->winCreationCS.Unlock();
+
+			NotifyCondVar(param->winCreationCV);
+		}
+		break;
+
+
+	}
+}
+
+
+ThreadReturn ThreadCall WindowThreadFunc(ThreadContext context)
+{
+	SystemImpl* sysImpl = (SystemImpl*)context;
+
+	MSG msg = { 0 };
+
+	while ( YuRunning())
+	{
+		//while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
+		while (GetMessage(&msg, NULL, 0, 0))
+		{
+			while (!sysImpl->winThreadCmdQueue.IsNull())
+			{
+				WindowThreadCmd& cmd = sysImpl->winThreadCmdQueue.Deq();
+				ExecWindowCommand(cmd);
+			}
+
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+		}
+	}
+	
+	for (int i = 0; i < ((SystemImpl*)(gSystem->sysImpl))->windowList.Size(); i++)
+	{
+		gSystem->CloseWin(((SystemImpl*)(gSystem->sysImpl))->windowList[i]);
+	}
+
+	OutputDebugString(TEXT("exit window thread\n"));
 	return 0;
 }
 
@@ -97,7 +203,7 @@ bool PlatformInitSystem()
 	wcex.cbSize = sizeof(WNDCLASSEX);
 
 	TCHAR* windowClass = TEXT("yuWindow");
-	wcex.style			= CS_HREDRAW | CS_VREDRAW ;
+	wcex.style			= CS_OWNDC | CS_HREDRAW | CS_VREDRAW ;
 	wcex.lpfnWndProc	= WndProc;
 	wcex.cbClsExtra		= 0;
 	wcex.cbWndExtra		= 0;
@@ -111,6 +217,10 @@ bool PlatformInitSystem()
 
 	RegisterClassEx(&wcex);
 
+	SystemImpl* sysImpl = new SystemImpl();
+	gSystem->sysImpl = sysImpl;
+	sysImpl->windowThread = CreateThread(WindowThreadFunc, sysImpl);
+	SetThreadName(sysImpl->windowThread.threadHandle, "Window Thread");
 	return true;
 }
 
@@ -152,7 +262,7 @@ BOOL CALLBACK GetMainDisplayEnumProc(
 	return getMonResult;
 }
 
-Display System::GetMainDisplay() const
+Display System::GetMainDisplay()
 {
 	Display mainDisplay;
 	memset(&mainDisplay, 0, sizeof(mainDisplay));
@@ -195,7 +305,7 @@ Display System::GetMainDisplay() const
 	return mainDisplay;
 }
 
-DisplayMode System::GetDisplayMode(const Display& display, int modeIndex) const
+DisplayMode System::GetDisplayMode(const Display& display, int modeIndex)
 {
 	DisplayMode mode;
 	memset(&mode, 0, sizeof(mode));
@@ -246,7 +356,7 @@ DisplayMode System::GetDisplayMode(const Display& display, int modeIndex) const
 	return mode;
 }
 
-DisplayMode System::GetCurrentDisplayMode(const Display& display) const
+DisplayMode System::GetCurrentDisplayMode(const Display& display)
 {
 	DisplayMode mode;
 
@@ -290,7 +400,7 @@ DisplayMode System::GetCurrentDisplayMode(const Display& display) const
 	return mode;
 }
 
-int System::NumDisplayMode(const Display& display) const
+int System::NumDisplayMode(const Display& display)
 {
 
 	DEVMODE devMode;
@@ -314,14 +424,13 @@ int System::NumDisplayMode(const Display& display) const
 	return supportedIndex;
 }
 
-int System::NumDisplays() const
+int System::NumDisplays()
 {
 	int index = 0;
 	int numDisplay = 0;
 	Display display;
 	memset(&display, 0, sizeof(display));
 	display.device.cb = sizeof(display.device);
-
 
 	while(EnumDisplayDevices(NULL, index, &display.device, 0))
 	{
@@ -345,7 +454,7 @@ int System::NumDisplays() const
 	return numDisplay;
 }
 
-Display System::GetDisplay(int index) const
+Display System::GetDisplay(int index)
 {
 	Display display;
 	memset(&display, 0, sizeof(display));
@@ -389,41 +498,52 @@ Display System::GetDisplay(int index) const
 
 Window System::CreateWin(const Rect& rect)
 {
-	Window window;
-	memset(&window, 0, sizeof(window));
+	SystemImpl* sys = (SystemImpl*)(this->sysImpl);
+	CreateWinParam param;
+	WindowThreadCmd cmd;
+	param.rect = rect;
 
-	DWORD windowStyle = WS_CAPTION | WS_SYSMENU | WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
-	TCHAR* windowClass = TEXT("yuWindow");
-	TCHAR* windowTitle = TEXT("yu");
-	window.hwnd = CreateWindowEx(0, windowClass, windowTitle,
-		windowStyle, (int)rect.x, (int)rect.y, (int)rect.width, (int)rect.height, NULL, NULL, NULL, NULL);
+	param.winCreationCS.Lock();
+	cmd.type = WindowThreadCmd::CREATE_WINDOW;
+	cmd.cmd.createWinParam = &param;
 
-	RECT rc = { (LONG)rect.x, (LONG)rect.y, (LONG)rect.x + (LONG)rect.width , (LONG)rect.y + (LONG)rect.height };
 
-	AdjustWindowRect( &rc, windowStyle, FALSE);
-	MoveWindow(window.hwnd, (int)rect.x, (int)rect.y, (int)(rc.right - rc.left), (int)(rc.bottom - rc.top), TRUE);
+	SystemImpl* sysImpl = (SystemImpl*)gSystem->sysImpl;
 
-	ShowWindow(window.hwnd, SW_SHOW);
+	//sysImpl->windowThread = CreateThread(WindowThreadFunc, sysImpl);
+	//SetThreadName(sysImpl->windowThread.threadHandle, "Window Thread");
 
-	windowList.PushBack(window);
+	while (1)
+	{
+		if (!sys->winThreadCmdQueue.IsFull())
+		{
+			//sys->winThreadCmdQueue.Enq(cmd);
+			//KickStart();
+			sys->winThreadCmdQueue.Enq(cmd);			
+			BOOL success = PostThreadMessage(GetThreadId(sysImpl->windowThread.threadHandle), WM_APP, 0, 0);
+			WaitForCondVar(param.winCreationCV, param.winCreationCS);
+			break;
+		}
+	}
+	param.winCreationCS.Unlock();
 
-	return window;
+	return param.win;
 }
 
 void System::CloseWin(Window& win)
 {
-	for(int i = 0; i < windowList.Size(); i++)
+	for(int i = 0; i < ((SystemImpl*)sysImpl)->windowList.Size(); i++)
 	{
-		if(windowList[i].hwnd == win.hwnd)
+		if (((SystemImpl*)sysImpl)->windowList[i].hwnd == win.hwnd)
 		{
-			windowList.EraseSwapBack(&windowList[i]);
+			((SystemImpl*)sysImpl)->windowList.EraseSwapBack(&((SystemImpl*)sysImpl)->windowList[i]);
 			break;
 		}
 	}
 	CloseWindow(win.hwnd);
 }
 
-CPUInfo System::GetCPUInfo() const
+CPUInfo System::GetCPUInfo()
 {
 	CPUInfo cpuInfo;
 	memset(&cpuInfo, 0, sizeof(cpuInfo));

@@ -22,8 +22,7 @@ class WorkerSysem
 
 //need a fast per frame work item pool
 
-void EnqueueWorkItem(WorkItem* item, WorkItem* dep, int numDep);
-
+void SubmitWorkItem(WorkItem* item, WorkItem* dep, int numDep);
 
 void InitWorkerSystem();
 void FreeWorkerSystem();
