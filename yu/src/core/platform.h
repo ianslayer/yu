@@ -73,6 +73,11 @@
 #	error yu need to define align
 #endif
 
+#if defined YU_OS_WIN32
+#	define COMPILER_BARRIER() _ReadWriteBarrier()
+#elif defined YU_OS_MAC
+#	define COMPILER_BARRIER() asm volatile("" ::: "memory")
+#endif
 
 //int type
 namespace yu

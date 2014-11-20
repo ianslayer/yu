@@ -16,15 +16,8 @@
 	#endif
 #endif
 
-#include "../container/array.h"
-
 namespace yu
 {
-
-struct Event
-{
-
-};
 
 struct Rect
 {
@@ -80,26 +73,25 @@ class System
 {
 public:
 
-	int				NumDisplays() const;
-	Display			GetDisplay(int index) const;
-	Display			GetMainDisplay() const;
-	int				NumDisplayMode(const Display& display) const;
-	Rect			GetDisplayRect(const Display& display) const;
-	DisplayMode		GetDisplayMode(const Display& display, int modeIndex) const;
-	DisplayMode		GetCurrentDisplayMode(const Display& display) const;
-	void			SetDisplayMode(const Display& display, int modeIndex);
+	static int			NumDisplays();
+	static Display		GetDisplay(int index);
+	static Display		GetMainDisplay();
+	static int			NumDisplayMode(const Display& display);
+	//static Rect			GetDisplayRect(const Display& display);
+	static DisplayMode	GetDisplayMode(const Display& display, int modeIndex);
+	static DisplayMode	GetCurrentDisplayMode(const Display& display);
+	//static void			SetDisplayMode(const Display& display, int modeIndex);
 
-	Window			CreateWin(const Rect& rect);
-	void			CloseWin(Window& win);
+	Window				CreateWin(const Rect& rect);
+	void				CloseWin(Window& win);
 	
-	CPUInfo			GetCPUInfo() const;
+	static CPUInfo		GetCPUInfo();
 
-	friend bool		InitSystem();
-	
-	Window			mainWindow;
-	Array<Window>	windowList;
-private:
-	
+	friend bool			InitSystem();
+
+	Window				mainWindow;
+	System*				sysImpl;
+
 };
 
 bool	InitSystem();

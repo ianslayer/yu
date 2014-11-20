@@ -8,6 +8,7 @@ struct Window;
 
 enum TexFormat
 {
+	TEX_FORMAT_UNKNOWN,
 	TEX_FORMAT_R8G8B8A8_UNORM,
 	TEX_FORMAT_R8G8B8A8_UNORM_SRGB,
 
@@ -29,11 +30,9 @@ struct FrameBuffer
 
 };
 
-bool InitDX11(const Window& window, const FrameBufferDesc& desc);
-void SetFullScreenDisplayMode(const DisplayMode& displayMode);
-
+void InitDX11Thread(const Window& win, const FrameBufferDesc& desc);
 void SwapFrameBuffer();
-void ResizeBackBuffer(unsigned int width, unsigned int height);
+
 
 }
 

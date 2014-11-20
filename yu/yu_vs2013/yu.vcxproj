@@ -81,6 +81,7 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <MinimalRebuild>false</MinimalRebuild>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -98,6 +99,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
+      <Profile>true</Profile>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -115,6 +117,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <LinkTimeCodeGeneration>
       </LinkTimeCodeGeneration>
+      <Profile>true</Profile>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -124,6 +127,7 @@
     <ClCompile Include="..\src\core\system.cpp" />
     <ClCompile Include="..\src\core\system_win32.cpp" />
     <ClCompile Include="..\src\core\thread.cpp" />
+    <ClCompile Include="..\src\core\thread_win32.cpp" />
     <ClCompile Include="..\src\core\timer.cpp" />
     <ClCompile Include="..\src\core\worker.cpp" />
     <ClCompile Include="..\src\main.cpp" />
@@ -136,7 +140,6 @@
     <ClInclude Include="..\src\container\dequeue.h" />
     <ClInclude Include="..\src\container\hash.h" />
     <ClInclude Include="..\src\core\allocator.h" />
-    <ClInclude Include="..\src\core\atomic.h" />
     <ClInclude Include="..\src\core\bit.h" />
     <ClInclude Include="..\src\core\crc32.h" />
     <ClInclude Include="..\src\core\new.h" />
