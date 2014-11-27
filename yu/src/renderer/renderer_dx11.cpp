@@ -1,9 +1,9 @@
 #include <math.h>
 #include <d3d11.h>
-#include <stdio.h>
 #include <atomic>
 #include "../container/dequeue.h"
 #include "../core/system.h"
+#include "../core/log.h"
 #include "../core/thread.h"
 #include "../core/timer.h"
 #include "renderer.h"
@@ -113,14 +113,14 @@ bool SetFullScreen(const FrameBufferDesc& desc)
 
 				if (SUCCEEDED(switchHr))
 				{
-					printf("switch to full screen\n");
+					Log("switch to full screen\n");
 					return false;
 				}
 			}
 		}
 		else
 		{
-			printf("failed to enter fullscreen mode\n");
+			Log("failed to enter fullscreen mode\n");
 			return false;
 		}
 
@@ -140,13 +140,13 @@ bool InitDX11(const Window& win, const FrameBufferDesc& desc)
 		dllD3D11CreateDevice = (LPD3D11CREATEDEVICE)GetProcAddress(hModuleDX11, "D3D11CreateDevice");
 		if (dllD3D11CreateDevice == NULL)
 		{
-			printf("error: failed to load D3D11CreateDevice\n");
+			Log("error: failed to load D3D11CreateDevice\n");
 			return false;
 		}
 	}
 	else
 	{
-		printf("error: can't find d3d11.dll\n");
+		Log("error: can't find d3d11.dll\n");
 		return false;
 	}
 
@@ -157,13 +157,13 @@ bool InitDX11(const Window& win, const FrameBufferDesc& desc)
 		dllCreateDXGIFactory1 = (LPCREATEDXGIFACTORY)GetProcAddress(hModuleDXGI, "CreateDXGIFactory1");
 		if (dllCreateDXGIFactory1 == NULL)
 		{
-			printf("error: failed to load CreateDXGIFactory1");
+			Log("error: failed to load CreateDXGIFactory1");
 			return false;
 		}
 	}
 	else
 	{
-		printf("error: can't find dxgi.dll\n");
+		Log("error: can't find dxgi.dll\n");
 		return false;
 	}
 
@@ -172,7 +172,7 @@ bool InitDX11(const Window& win, const FrameBufferDesc& desc)
 
 	if (FAILED(hr))
 	{
-		printf("error: failed to create DXGIFactory1\n");
+		Log("error: failed to create DXGIFactory1\n");
 		return false;
 	}
 
@@ -185,7 +185,7 @@ bool InitDX11(const Window& win, const FrameBufferDesc& desc)
 		DXGI_ADAPTER_DESC1 adapterDesc;
 		adapter->GetDesc1(&adapterDesc);
 
-		printf("adapter desc: %ls\n", adapterDesc.Description);
+		Log("adapter desc: %ls\n", adapterDesc.Description);
 
 
 		for (UINT j = 0; adapter->EnumOutputs(j, &gDx11Device->dxgiOutput) != DXGI_ERROR_NOT_FOUND; j++)
@@ -199,21 +199,20 @@ bool InitDX11(const Window& win, const FrameBufferDesc& desc)
 			DXGI_MODE_DESC* pModeList = new DXGI_MODE_DESC[numDispMode];
 
 			hr = gDx11Device->dxgiOutput->GetDisplayModeList(DXGI_FORMAT_R8G8B8A8_UNORM, 0, &numDispMode, pModeList);
-			printf("output mode:\n");
+			Log("output mode:\n");
 			for (UINT m = 0; m < numDispMode; m++)
 			{
 
-				printf("width:%d, height:%d, refresh rate: %lf \n", pModeList[m].Width, pModeList[m].Height, (double)pModeList[m].RefreshRate.Numerator / (double)pModeList[m].RefreshRate.Denominator);
+				Log("width:%d, height:%d, refresh rate: %lf \n", pModeList[m].Width, pModeList[m].Height, (double)pModeList[m].RefreshRate.Numerator / (double)pModeList[m].RefreshRate.Denominator);
 			}
 
 			delete[] pModeList;
 
-			printf("output monitor: %ls\n", outputDesc.Monitor);
-			printf("output device: %ls\n", outputDesc.DeviceName);
+			Log("output device: %ls\n", outputDesc.DeviceName);
 
 			if (outputDesc.Monitor == mainDisplay.hMonitor)
 			{
-				printf("main display\n");
+				Log("main display\n");
 
 				D3D_FEATURE_LEVEL FeatureLevel;
 				D3D_FEATURE_LEVEL FeatureLevels[1] = { D3D_FEATURE_LEVEL_11_0 };
@@ -276,11 +275,11 @@ bool InitDX11(const Window& win, const FrameBufferDesc& desc)
 			return true;
 		}
 
-		printf("error: failed to create swap chain\n");
+		Log("error: failed to create swap chain\n");
 		return false;
 	}
 
-	printf("error: failed to create d3d11 device\n");
+	Log("error: failed to create d3d11 device\n");
 	return false;
 }
 
@@ -316,7 +315,7 @@ void ResizeBackBuffer(unsigned int width, unsigned int height, TexFormat fmt)
 	}
 	else
 	{
-		printf("command queue full, ResizeBackBuffer failed\n");
+		Log("command queue full, ResizeBackBuffer failed\n");
 	}
 	
 }
@@ -334,7 +333,7 @@ void ExecResizeBackBufferCmd(unsigned int width, unsigned int height, TexFormat 
 	HRESULT hr = gDx11Device->dxgiSwapChain->ResizeBuffers(1, width, height, DXGIFormat(fmt), DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH);
 	if (FAILED(hr))
 	{
-		printf("error: resize buffer failed\n");
+		Log("error: resize buffer failed\n");
 	}
 
 }
@@ -397,12 +396,12 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 		/*
 		if (f > laps || frameTimer.DurationInMs() > 20)
 		{
-			printf("render thread frame:\n");
-			printf("frame time: %lf\n", frameTimer.DurationInMs());
-			printf("work time: %lf\n", innerTimer.DurationInMs());
-			printf("wait kick time: %lf\n", waitKickTime);
-			printf("frame complete: %lf\n", completeFrameTime);
-			printf("\n\n");
+			Log("render thread frame:\n");
+			Log("frame time: %lf\n", frameTimer.DurationInMs());
+			Log("work time: %lf\n", innerTimer.DurationInMs());
+			Log("wait kick time: %lf\n", waitKickTime);
+			Log("frame complete: %lf\n", completeFrameTime);
+			Log("\n\n");
 			f = 0;
 		}
 		*/
