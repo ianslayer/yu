@@ -1,7 +1,6 @@
 #ifndef YU_HASH_H
 #define YU_HASH_H
 
-#include "../core/new.h"
 #include "../core/type.h"
 #include "../core/allocator.h"
 

@@ -1,13 +1,19 @@
 #include "system.h"
+#include "thread.h"
 #include <ApplicationSErvices/ApplicationServices.h>
 #import <Cocoa/Cocoa.h>
 
 namespace yu
 {
 
+bool PlatformInitSystem()
+{
+	return true;
+}
+
 #define MAX_DISPLAY 16
 
-int System::NumDisplays() const
+int System::NumDisplays()
 {
 	CGDirectDisplayID displayIds[MAX_DISPLAY];
 	uint32_t numDisplay;
@@ -16,7 +22,8 @@ int System::NumDisplays() const
 	return (int) numDisplay;
 }
 
-Rect System::GetDisplayRect(const Display& display) const
+/*
+Rect System::GetDisplayRect(const Display& display)
 {
 	Rect rect;
 	CGRect cgRect = CGDisplayBounds(display.id);
@@ -28,6 +35,7 @@ Rect System::GetDisplayRect(const Display& display) const
 	
 	return rect;
 }
+*/
 
 CGDirectDisplayID DisplayFromScreen(NSScreen *s)
 {
@@ -53,14 +61,13 @@ NSScreen* ScreenFromDisplay(const Display& display)
 	return nullptr;
 }
 
-Display System::GetDisplay(int index) const
+Display System::GetDisplay(int index)
 {
 	CGDirectDisplayID displayIds[MAX_DISPLAY];
 	uint32_t numDisplay;
 	CGGetOnlineDisplayList(MAX_DISPLAY, displayIds, &numDisplay);
 	
-	Display display;
-	memset(&display, 0, sizeof(display));
+	Display display = {};
 	
 	if(index < numDisplay)
 	{
@@ -72,16 +79,16 @@ Display System::GetDisplay(int index) const
 	return display;
 }
 
-Display System::GetMainDisplay() const
+Display System::GetMainDisplay()
 {
-	Display display;
-	memset(&display, 0, sizeof(display));
+	Display display = {};
+	//memset(&display, 0, sizeof(display));
 	display.id = CGMainDisplayID();
 	display.screen = ScreenFromDisplay(display);
 	return display;
 }
 
-int System::NumDisplayMode(const yu::Display &display) const
+int System::NumDisplayMode(const yu::Display &display)
 {
 	CFArrayRef displayModeList = CGDisplayCopyAllDisplayModes(display.id, NULL);
 	CFIndex totalModes = CFArrayGetCount(displayModeList);
@@ -90,10 +97,9 @@ int System::NumDisplayMode(const yu::Display &display) const
 	return (int) totalModes;
 }
 
-DisplayMode System::GetDisplayMode(const yu::Display &display, int modeIndex) const
+DisplayMode System::GetDisplayMode(const yu::Display &display, int modeIndex)
 {
-	DisplayMode displayMode;
-	memset(&displayMode, 0, sizeof(displayMode));
+	DisplayMode displayMode = {};
 	
 	CFArrayRef displayModeList = CGDisplayCopyAllDisplayModes(display.id, NULL);
 	
@@ -112,7 +118,7 @@ DisplayMode System::GetDisplayMode(const yu::Display &display, int modeIndex) co
 	return displayMode;
 }
 
-DisplayMode System::GetCurrentDisplayMode(const Display& display) const
+DisplayMode System::GetCurrentDisplayMode(const Display& display)
 {
 	DisplayMode displayMode;
 	CGDisplayModeRef mode = CGDisplayCopyDisplayMode(display.id);
@@ -123,6 +129,7 @@ DisplayMode System::GetCurrentDisplayMode(const Display& display) const
 	return displayMode;
 }
 
+/*
 void System::SetDisplayMode(const Display& display, int modeIndex)
 {
 	if(modeIndex < NumDisplayMode(display))
@@ -130,11 +137,11 @@ void System::SetDisplayMode(const Display& display, int modeIndex)
 		
 	}
 }
+*/
 
-Window	System::CreateWindow(const Rect& rect)
+Window	System::CreateWin(const Rect& rect)
 {
-	Window window;
-	memset(&window, 0, sizeof(window));
+	Window window = {};
 	
     NSRect winrect;
     winrect.origin.x = rect.x;
@@ -149,20 +156,20 @@ Window	System::CreateWindow(const Rect& rect)
 	
 	window.win = win;
 	
-	windowList.PushBack(window);
+	//windowList.PushBack(window);
 	
 	return window;
 }
 
-void System::CloseWindow(yu::Window &win)
+void System::CloseWin(yu::Window &win)
 {
-	for(int i = 0; i < windowList.Size(); i++)
+	//for(int i = 0; i < windowList.Size(); i++)
 	{
-		if(win.win == windowList[i].win)
+	//	if(win.win == windowList[i].win)
 		{
 			[win.win release];
-			windowList.Erase(i);
-			break;
+	//		windowList.Erase(i);
+	//		break;
 		}
 	}
 }
@@ -189,5 +196,6 @@ void System::GetSysDisplayInfo()
 		displayList.PushBack(display);
 	}
 }*/
-	
+
+
 }

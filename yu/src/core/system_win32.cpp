@@ -4,7 +4,6 @@
 #include "../container/array.h"
 #include "../renderer/renderer.h"
 #include <stdio.h>
-#include <intrin.h>
 namespace yu
 {
 
@@ -137,8 +136,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 			CreateWinParam* param = (CreateWinParam*)cmd.cmd.createWinParam;
 			param->winCreationCS.Lock();
 			Rect rect = param->rect;
-			Window window;
-			memset(&window, 0, sizeof(window));
+			Window window = {};
 
 			DWORD windowStyle = WS_CAPTION | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
 			TCHAR* windowClass = TEXT("yuWindow");
@@ -264,12 +262,10 @@ BOOL CALLBACK GetMainDisplayEnumProc(
 
 Display System::GetMainDisplay()
 {
-	Display mainDisplay;
-	memset(&mainDisplay, 0, sizeof(mainDisplay));
+	Display mainDisplay={};
 	
 	int index = 0;
-	Display display;
-	memset(&display, 0, sizeof(display));
+	Display display={};
 	display.device.cb = sizeof(display.device);
 
 	bool mainDisplayFound = false;
@@ -278,8 +274,7 @@ Display System::GetMainDisplay()
 	{
 		printf(("Device Name: %s Device String: %s\n"), display.device.DeviceName, display.device.DeviceString);
 
-		Display monitor;
-		memset(&monitor, 0, sizeof(monitor));
+		Display monitor={};
 		monitor.device.cb = sizeof(monitor.device);		
 		if(EnumDisplayDevices(display.device.DeviceName, 0, &monitor.device, 0))
 		{
@@ -307,8 +302,7 @@ Display System::GetMainDisplay()
 
 DisplayMode System::GetDisplayMode(const Display& display, int modeIndex)
 {
-	DisplayMode mode;
-	memset(&mode, 0, sizeof(mode));
+	DisplayMode mode={};
 
 	DEVMODE devMode;
 
@@ -360,9 +354,7 @@ DisplayMode System::GetCurrentDisplayMode(const Display& display)
 {
 	DisplayMode mode;
 
-	DEVMODE devMode;
-
-	memset(&devMode, 0, sizeof(devMode));
+	DEVMODE devMode={};
 	devMode.dmSize = sizeof(devMode);
 
 	int iterModeIndex = 0;
@@ -403,9 +395,7 @@ DisplayMode System::GetCurrentDisplayMode(const Display& display)
 int System::NumDisplayMode(const Display& display)
 {
 
-	DEVMODE devMode;
-
-	memset(&devMode, 0, sizeof(devMode));
+	DEVMODE devMode={};
 	devMode.dmSize = sizeof(devMode);
 
 	int iterModeIndex = 0;
@@ -428,8 +418,7 @@ int System::NumDisplays()
 {
 	int index = 0;
 	int numDisplay = 0;
-	Display display;
-	memset(&display, 0, sizeof(display));
+	Display display={};
 	display.device.cb = sizeof(display.device);
 
 	while(EnumDisplayDevices(NULL, index, &display.device, 0))
@@ -439,9 +428,8 @@ int System::NumDisplays()
 			numDisplay++;
 			printf(("Device Name: %s Device String: %s\n"), display.device.DeviceName, display.device.DeviceString);
 
-			Display monitor;
-			memset(&monitor, 0, sizeof(monitor));
-			monitor.device.cb = sizeof(monitor.device);		
+			Display monitor={};
+			monitor.device.cb = sizeof(monitor.device);
 			if(EnumDisplayDevices(display.device.DeviceName, 0, &monitor.device, 0))
 			{
 				printf(("	Monitor Name: %s Monitor String: %s\n"), monitor.device.DeviceName, monitor.device.DeviceString);
@@ -456,8 +444,7 @@ int System::NumDisplays()
 
 Display System::GetDisplay(int index)
 {
-	Display display;
-	memset(&display, 0, sizeof(display));
+	Display display={};
 
 	int displayIndex = 0;
 	int activeDisplayIndex = 0;
@@ -469,8 +456,7 @@ Display System::GetDisplay(int index)
 
 			printf(("Device Name: %s Device String: %s\n"), display.device.DeviceName, display.device.DeviceString);
 
-			Display monitor;
-			memset(&monitor, 0, sizeof(monitor));
+			Display monitor={};
 			monitor.device.cb = sizeof(monitor.device);		
 			if(EnumDisplayDevices(display.device.DeviceName, 0, &monitor.device, 0))
 			{
@@ -541,39 +527,6 @@ void System::CloseWin(Window& win)
 		}
 	}
 	CloseWindow(win.hwnd);
-}
-
-CPUInfo System::GetCPUInfo()
-{
-	CPUInfo cpuInfo;
-	memset(&cpuInfo, 0, sizeof(cpuInfo));
-	struct Registers
-	{
-		u32 eax, ebx, ecx, edx;
-	};
-	struct Str
-	{
-		char str[4];
-	};
-	union Info
-	{
-		Registers	reg;
-		Str			str[4];
-		int			info[4];
-	};
-
-	Info info;
-
-	__cpuid(info.info, 0);
-	memcpy(cpuInfo.vender, &info.reg.ebx, sizeof(int));
-	memcpy(cpuInfo.vender+4, &info.reg.edx, sizeof(int));
-	memcpy(cpuInfo.vender+8, &info.reg.ecx, sizeof(int));
-
-	__cpuid(info.info, 1);
-	cpuInfo.featureBits0 = info.reg.ecx;
-	cpuInfo.featureBits1 = info.reg.edx;
-
-	return cpuInfo;
 }
 
 }

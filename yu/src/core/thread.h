@@ -42,22 +42,6 @@ struct Thread
 	ThreadHandle threadHandle;
 };
 
-void	InitThreadRuntime();
-void	FreeThreadRuntime();
-Thread	CreateThread(ThreadFunc func, ThreadContext context, ThreadPriority priority = NormalPriority, u64 affinityMask = 0);
-ThreadHandle GetCurrentThreadHandle();
-//u64		GetThreadAffinityMask(Thread& thread);
-void	SetThreadAffinity(ThreadHandle threadHandle, u64 affinityMask);
-void	SetThreadName(ThreadHandle thread, const char* name);
-void	SetThreadPriority(ThreadHandle thread, ThreadPriority priority);
-bool	AllThreadExited();
-unsigned int	NumThreads();
-struct  FrameLock;
-FrameLock*	AddFrameLock(ThreadHandle handle);
-void	WaitForKick(FrameLock* lock);
-void	FrameComplete(FrameLock* lock);
-void	DummyWorkLoad(double timeInMs);
-
 class Mutex
 {
 public:
@@ -95,20 +79,38 @@ public:
 #endif
 };
 
-void WaitForCondVar(CondVar& cv, Mutex& m);
-void NotifyCondVar(CondVar& cv);
-void NotifyAllCondVar(CondVar& cv);
-
 struct Event
 {
-	CondVar			cv;
-	Mutex			cs;
-	bool			signaled = false;
+	CondVar	cv;
+	Mutex	cs;
+	bool	signaled = false;
 };
 
-void WaitForEvent(Event& ev);
-void SignalEvent(Event& ev);
-void ResetEvent(Event& ev);
+void			InitThreadRuntime();
+void			FreeThreadRuntime();
+Thread			CreateThread(ThreadFunc func, ThreadContext context, ThreadPriority priority = NormalPriority, u64 affinityMask = 0);
+ThreadHandle	GetCurrentThreadHandle();
+//u64			GetThreadAffinityMask(Thread& thread);
+void			SetThreadAffinity(ThreadHandle threadHandle, u64 affinityMask);
+void			SetThreadName(ThreadHandle thread, const char* name);
+void			SetThreadPriority(ThreadHandle thread, ThreadPriority priority);
+bool			AllThreadExited();
+unsigned int	NumThreads();
+
+struct			FrameLock;
+FrameLock*		AddFrameLock(ThreadHandle handle);
+void			WaitForKick(FrameLock* lock);
+void			FrameComplete(FrameLock* lock);
+
+void			DummyWorkLoad(double timeInMs);
+
+void			WaitForCondVar(CondVar& cv, Mutex& m);
+void			NotifyCondVar(CondVar& cv);
+void			NotifyAllCondVar(CondVar& cv);
+
+void			WaitForEvent(Event& ev, bool autoReset = false);
+void			SignalEvent(Event& ev);
+void			ResetEvent(Event& ev);
 
 }
 

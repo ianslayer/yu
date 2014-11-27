@@ -7,24 +7,25 @@ namespace yu
 
 struct FrameLock
 {
+	FrameLock() : frameCount(0){}
 	Event				event;
-	std::atomic<u64>	frameCount = 0;	
+	u64					frameCount;
 	ThreadHandle		threadHandle;
 	int					threadIndex = -1;
-	bool				frameStarted = false;
-	Mutex				frameStartedCs;
 };
 
-void WaitForEvent(Event& ev)
+void WaitForEvent(Event& ev, bool autoReset)
 {
-	ev.cs.Lock();
+	ScopedLock lock(ev.cs);
 	if (ev.signaled == true)
 	{
-		ev.cs.Unlock();
+		if(autoReset)
+			ev.signaled = false;
 		return;
 	}
 	WaitForCondVar(ev.cv, ev.cs);
-	ev.cs.Unlock();
+	if(autoReset)
+		ev.signaled = false;
 }
 
 void SignalEvent(Event& ev)
@@ -44,6 +45,7 @@ void ResetEvent(Event& ev)
 
 struct ThreadTable
 {
+	ThreadTable() : numThreads(0), numLocks(0), frameCount(0){}
 	enum ThreadState
 	{
 		THREAD_RUNNING = 0,
@@ -52,22 +54,25 @@ struct ThreadTable
 
 	struct ThreadEntry
 	{
-		std::atomic<int>	threadState = THREAD_RUNNING;
+		ThreadEntry() : threadState(THREAD_RUNNING){}
+		std::atomic<int>	threadState;
 		ThreadHandle		threadHandle;
 	};
 
 	ThreadEntry					threadList[MAX_THREAD];
-	FrameLock					frameLockList[MAX_THREAD];
-	std::atomic<unsigned int>	numThreads = 0;
-	std::atomic<unsigned int>	numLocks = 0;
-	std::atomic<u64>			frameCount = 0;
+	FrameLock					frameLockList[MAX_THREAD]; // TODO: this is prone to false sharing
+	std::atomic<unsigned int>	numThreads ;
+	std::atomic<unsigned int>	numLocks ;
+	std::atomic<u64>			frameCount;
 };
 
-static ThreadTable* gThreadTable = nullptr;
+static ThreadTable* gThreadTable;
+static Event* gFrameSync;
 
 void InitThreadRuntime()
 {
 	gThreadTable = new ThreadTable();
+	gFrameSync = new Event;
 	std::atomic_thread_fence(std::memory_order_seq_cst);
 }
 
@@ -76,11 +81,6 @@ void FreeThreadRuntime()
 	delete gThreadTable;
 }
 
-
-extern Event* gFrameSync;
-
-
-#ifdef BUZY_WAIT
 void FakeKickStart() //for clear thread;
 {
 	//gThreadTable->frameCount.fetch_add(1);
@@ -89,157 +89,60 @@ void FakeKickStart() //for clear thread;
 
 void KickStart()
 {
-
-	for (unsigned int i = 0; i < gThreadTable->numLocks; i++)
-	{
-		for (;;)
-		{
-			gThreadTable->frameLockList[i].frameStartedCs.Lock();
-			if (gThreadTable->frameLockList[i].frameStarted)
-			{
-				gThreadTable->frameLockList[i].frameStartedCs.Unlock();
-				break;
-			}
-			gThreadTable->frameLockList[i].frameStartedCs.Unlock();
-		}
-	}
-}
-
-void WaitForKick(FrameLock* lock)
-{
-
-	while (lock->frameCount > gThreadTable->frameCount)
-	{//spin a little if we are ahead of main thread
-		//	std::atomic_thread_fence(std::memory_order_acquire);
-	}
-	lock->frameStartedCs.Lock();
-	lock->frameStarted = true;
-	lock->frameStartedCs.Unlock();
-}
-
-void WaitFrameComplete()
-{
-	
-	for (unsigned int i = 0; i < gThreadTable->numLocks; i++)
-	{
-		while (1)
-		{
-			gThreadTable->frameLockList[i].event.cs.Lock();
-			if (gThreadTable->frameLockList[i].event.signaled == true)
-			{
-				gThreadTable->frameLockList[i].event.cs.Unlock();
-				ResetEvent(gThreadTable->frameLockList[i].event);
-				gThreadTable->frameLockList[i].frameStartedCs.Lock();
-				gThreadTable->frameLockList[i].frameStarted = false;
-				gThreadTable->frameLockList[i].frameStartedCs.Unlock();
-				break;
-			}
-			gThreadTable->frameLockList[i].event.cs.Unlock();
-		}
-
-		//WaitForEvent(gThreadTable->frameLockList[i].event);
-	}
-
-	gThreadTable->frameCount.fetch_add(1);
-
-}
-
-void FrameComplete(FrameLock* lock)
-{
-	lock->frameCount.fetch_add(1);
-	//SignalEvent(lock->event);
-}
-
-#else
-
-void FakeKickStart() //for clear thread;
-{
-	//gThreadTable->frameCount.fetch_add(1);
 	SignalEvent(*gFrameSync);
-}
-
-void KickStart()
-{
-	//gThreadTable->frameCount.fetch_add(1);
-	SignalEvent(*gFrameSync);
-
-	for (unsigned int i = 0; i < gThreadTable->numLocks; i++)
-	{
-		for (;;)
-		{
-			gThreadTable->frameLockList[i].frameStartedCs.Lock();
-			if (gThreadTable->frameLockList[i].frameStarted)
-			{
-				gThreadTable->frameLockList[i].frameStartedCs.Unlock();
-				break;
-			}
-			gThreadTable->frameLockList[i].frameStartedCs.Unlock();
-		}
-	}
-	ResetEvent(*gFrameSync);
 }
 
 void WaitForKick(FrameLock* lock)
 {
 	//std::atomic_thread_fence(std::memory_order_acquire);
 	WaitForEvent(*gFrameSync);
-	while (lock->frameCount > gThreadTable->frameCount)
+	u64 globalFrameCount = gThreadTable->frameCount.load(std::memory_order_acquire);
+	while (lock->frameCount > globalFrameCount)
 	{//spin a little if we are ahead of main thread
-	//	std::atomic_thread_fence(std::memory_order_acquire);
-	}	
-	lock->frameStartedCs.Lock();
-	lock->frameStarted = true;
-	lock->frameStartedCs.Unlock();
+		//TODO: should replaced with a barrier
+		globalFrameCount = gThreadTable->frameCount.load(std::memory_order_acquire);
+	}
 }
 
 void WaitFrameComplete()
 {
-	
 	for (unsigned int i = 0; i < gThreadTable->numLocks; i++)
 	{
 		WaitForEvent(gThreadTable->frameLockList[i].event);
 		ResetEvent(gThreadTable->frameLockList[i].event);
-		gThreadTable->frameLockList[i].frameStartedCs.Lock();
-		gThreadTable->frameLockList[i].frameStarted = false;
-		gThreadTable->frameLockList[i].frameStartedCs.Unlock();
 	}
-//	ResetEvent(*gFrameSync); //TODO, better move this as early as possible, but must sure all thread is started
-	gThreadTable->frameCount.fetch_add(1);
+	ResetEvent(*gFrameSync);
+	gThreadTable->frameCount.fetch_add(1, std::memory_order_release);
 
 }
 
 void FrameComplete(FrameLock* lock)
 {
-	lock->frameCount.fetch_add(1);
+	lock->frameCount++;
 	SignalEvent(lock->event);
 }
 
-#endif
-
 void RegisterThread(ThreadHandle handle)
 {
-	unsigned int slot = gThreadTable->numThreads.fetch_add(1, std::memory_order_seq_cst);
+	unsigned int slot = gThreadTable->numThreads.fetch_add(1);
 	gThreadTable->threadList[slot].threadHandle = handle;
 }
 
 FrameLock*	AddFrameLock(ThreadHandle handle)
 {
-	unsigned int slot = gThreadTable->numLocks.fetch_add(1, std::memory_order_seq_cst);
+	unsigned int slot = gThreadTable->numLocks.fetch_add(1);
 	gThreadTable->frameLockList[slot].threadHandle = handle;
 	for (unsigned int i = 0; i < gThreadTable->numThreads; i++)
 	{
 		if (gThreadTable->threadList[i].threadHandle == handle)
 		{
-			gThreadTable->frameLockList[slot].threadIndex = i;
+			gThreadTable->frameLockList[slot].threadIndex = (int)i;
 			break;
 		}
 	}
 
 	return &gThreadTable->frameLockList[slot];
 }
-
-
-
 
 void ThreadExit(ThreadHandle handle)
 {
@@ -277,7 +180,6 @@ void DummyWorkLoad(double timeInMs)
 	double deltaT = 0;
 	while (1)
 	{
-
 		if (deltaT >= timeInMs)
 			break;
 		PerfTimer endTime;
