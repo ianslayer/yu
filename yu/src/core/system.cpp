@@ -65,7 +65,8 @@ void FreeSystem()
 void cpuid(u32 info[4], u32 cmdEax, u32 cmdEcx = 0)
 {
 #if defined YU_OS_WIN32
-	__cpuid(info, cmdEax);
+	i32* infoI = (i32*)info;
+	__cpuidex(infoI, cmdEax, cmdEcx);
 #elif defined YU_OS_MAC
 	u32 eax, ebx, ecx, edx;
 	__asm__ ("mov %4, %%eax;"
@@ -89,7 +90,8 @@ void CPUModel(u32 eax)
 
 CPUInfo System::GetCPUInfo()
 {
-	CPUInfo cpuInfo = {};
+	CPUInfo cpuInfo;
+	memset(&cpuInfo, 0, sizeof(cpuInfo));
 	struct Registers
 	{
 		u32 eax, ebx, ecx, edx;

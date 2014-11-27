@@ -3,7 +3,7 @@
 #include "../container/dequeue.h"
 #include "../container/array.h"
 #include "../renderer/renderer.h"
-#include <stdio.h>
+
 namespace yu
 {
 
@@ -304,9 +304,8 @@ DisplayMode System::GetDisplayMode(const Display& display, int modeIndex)
 {
 	DisplayMode mode={};
 
-	DEVMODE devMode;
+	DEVMODE devMode = {};
 
-	memset(&devMode, 0, sizeof(devMode));
 	devMode.dmSize = sizeof(devMode);
 
 	int iterModeIndex = 0;
