@@ -7,7 +7,6 @@ void InitYu();
 void FreeYu();
 bool YuRunning();
 void KickStart();
-void WaitKickComplete();
 void WaitFrameComplete();
 }
 
