@@ -123,6 +123,7 @@
   <ItemGroup>
     <ClCompile Include="..\src\core\allocator.cpp" />
     <ClCompile Include="..\src\core\crc32.cpp" />
+    <ClCompile Include="..\src\core\log.cpp" />
     <ClCompile Include="..\src\core\string.cpp" />
     <ClCompile Include="..\src\core\system.cpp" />
     <ClCompile Include="..\src\core\system_win32.cpp" />
@@ -142,6 +143,7 @@
     <ClInclude Include="..\src\core\allocator.h" />
     <ClInclude Include="..\src\core\bit.h" />
     <ClInclude Include="..\src\core\crc32.h" />
+    <ClInclude Include="..\src\core\log.h" />
     <ClInclude Include="..\src\core\new.h" />
     <ClInclude Include="..\src\core\platform.h" />
     <ClInclude Include="..\src\core\refcount.h" />

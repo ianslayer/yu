@@ -107,7 +107,7 @@ void InitYu()
 	
 	//TEST create dummy thread
 	Thread thread0 = CreateThread(DummyThreadFunc, nullptr);
-	SetThreadAffinity(thread0.threadHandle, 1);
+	SetThreadAffinity(thread0.threadHandle, 1<<2);
 	//Thread thread1 = CreateThread(DummyThradFunc, nullptr);
 	//SetThreadAffinity(thread1.threadHandle, 2);
 	//Thread thread2 = CreateThread(DummyThradFunc, nullptr);
