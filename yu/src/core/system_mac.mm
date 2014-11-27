@@ -1,13 +1,138 @@
-#include "system.h"
-#include "thread.h"
 #include <ApplicationSErvices/ApplicationServices.h>
 #import <Cocoa/Cocoa.h>
+#import "yu_app.h"
+#include "thread.h"
+#include "yu.h"
+
+#include "system.h"
+#include "../container/array.h"
+#include "../container/dequeue.h"
 
 namespace yu
 {
 
+struct CreateWinParam
+{
+	Rect	rect;
+	Window	win;
+	CondVar	winCreationCV;
+	Mutex	winCreationCS;
+};
+
+
+struct WindowThreadCmd
+{
+	enum CommandType
+	{
+		CREATE_WINDOW, 
+	};
+	
+	union Command
+	{
+		CreateWinParam*	createWinParam;
+	};
+
+	CommandType	type;
+	Command		cmd;
+};
+
+class SystemImpl : public System
+{
+public:
+	LockSpscFifo<WindowThreadCmd, 16>	winThreadCmdQueue;
+	Array<Window>						windowList;
+	Thread								windowThread;
+};
+
+}
+
+@implementation YuApp
+@synthesize system;
+- (void) run
+{
+	 NSAutoreleasePool* pool = [[NSAutoreleasePool alloc] init];
+	 _running = YES;
+	
+    NSRect winrect;
+    winrect.origin.x = 0;
+    winrect.origin.y = 0;
+    winrect.size.width = 1280;
+    winrect.size.height = 720;
+	
+    NSWindow* win = [[NSWindow alloc] initWithContentRect:winrect styleMask:NSTitledWindowMask|NSClosableWindowMask backing:NSBackingStoreBuffered defer:NO];
+	
+	[win setAcceptsMouseMovedEvents:YES];
+	[((NSWindow*)win) makeKeyAndOrderFront:nil];
+	[NSApp activateIgnoringOtherApps:YES];
+	//[self mainWindow] = win;
+	
+    YuView* view = [[YuView alloc] initWithFrame:winrect];
+
+    [win setContentView:view];
+    [win setAcceptsMouseMovedEvents:YES];
+    [win setDelegate:view];
+    //[view setApp:pApp];
+    //Win = win;
+    //View = view;
+	
+	//[self mainWin] = win;
+	//[((NSWindow*)win) makeKeyAndOrderFront:nil];
+	
+	[self finishLaunching];
+	[pool drain];
+	
+	NSRunLoop* loop = [NSRunLoop currentRunLoop];
+	while([loop runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]])
+
+//    while ([self isRunning])
+    {
+        pool = [[NSAutoreleasePool alloc] init];
+        NSEvent* event = [self nextEventMatchingMask:NSAnyEventMask untilDate:nil inMode:NSDefaultRunLoopMode dequeue:YES];
+        if (event)
+        {
+            [self sendEvent:event];
+        }
+		
+        [pool drain];
+    }
+}
+
+@end
+
+@implementation YuView
+-(BOOL) acceptsFirstResponder
+{
+    return YES;
+}
+-(BOOL) acceptsFirstMouse:(NSEvent *)ev
+{
+    return YES;
+}
+
+-(BOOL)windowShouldClose:(id)sender
+{
+	yu::FreeYu();
+	exit(0);
+    return 1;
+}
+
+- (void)mouseDown:(NSEvent *)theEvent {
+
+}
+ 
+- (void)mouseUp:(NSEvent *)theEvent {
+
+}
+
+@end
+
+namespace yu
+{
 bool PlatformInitSystem()
 {
+	gSystem->sysImpl = new SystemImpl();
+	//YuApp* yuApp = (YuApp*)[NSApp sharedApplication];
+	//[yuApp setSystem: gSystem];
 	return true;
 }
 
@@ -142,7 +267,8 @@ void System::SetDisplayMode(const Display& display, int modeIndex)
 Window	System::CreateWin(const Rect& rect)
 {
 	Window window = {};
-	
+
+/*
     NSRect winrect;
     winrect.origin.x = rect.x;
     winrect.origin.y = rect.y;
@@ -157,7 +283,7 @@ Window	System::CreateWin(const Rect& rect)
 	window.win = win;
 	
 	//windowList.PushBack(window);
-	
+	*/
 	return window;
 }
 

@@ -20,7 +20,7 @@ namespace yu
 
 bool YuRunning();
 
-ThreadReturn ThreadCall DummyThradFunc(ThreadContext context)
+ThreadReturn ThreadCall DummyThreadFunc(ThreadContext context)
 {
 	FrameLock* lock = AddFrameLock(GetCurrentThreadHandle());
 
@@ -74,56 +74,6 @@ ThreadReturn ThreadCall DummyThradFunc(ThreadContext context)
 	return 0;
 }
 
-
-ThreadReturn ThreadCall MainThread(ThreadContext context)
-{
-	unsigned int lap = 100;
-	unsigned int f = 0;
-	double kickStartTime = 0;
-	double waitFrameTime = 0;
-
-	yu::PerfTimer gapTimer;
-	while(YuRunning())
-	{
-		yu::PerfTimer frameTimer;
-		yu::PerfTimer timer;
-
-		gapTimer.Finish();
-		frameTimer.Start();
-
-		timer.Start();
-		yu::KickStart();
-		timer.Finish();
-		kickStartTime = timer.DurationInMs();
-		yu::DummyWorkLoad(10);
-		timer.Start();
-		
-		yu::WaitFrameComplete();
-		timer.Finish();
-		waitFrameTime = timer.DurationInMs();
-		//Log("frame time: %lf\n", timer.DurationInMs());
-		frameTimer.Finish();
-
-		
-		f++;
-		
-		if (f > lap || frameTimer.DurationInMs() > 20)
-		{
-			Log("main thread frame:\n");
-			Log("frame time: %lf\n", frameTimer.DurationInMs());
-			Log("kick time: %lf\n", kickStartTime);
-			Log("wait frame time: %lf\n", waitFrameTime);
-			Log("frame gap time: %lf\n", gapTimer.DurationInMs());
-			Log("\n\n");
-			
-			f = 0;
-		}
-		
-		gapTimer.Start();
-	}
-	return 0;
-}
-
 std::atomic<int> gYuRunning;
 void InitYu()
 {
@@ -156,15 +106,12 @@ void InitYu()
 #endif
 	
 	//TEST create dummy thread
-	Thread thread0 = CreateThread(DummyThradFunc, nullptr);
+	Thread thread0 = CreateThread(DummyThreadFunc, nullptr);
 	SetThreadAffinity(thread0.threadHandle, 1);
 	//Thread thread1 = CreateThread(DummyThradFunc, nullptr);
 	//SetThreadAffinity(thread1.threadHandle, 2);
 	//Thread thread2 = CreateThread(DummyThradFunc, nullptr);
 	//SetThreadAffinity(thread2.threadHandle, 16);
-	
-	Thread mainThread = CreateThread(MainThread, nullptr);
-	SetThreadAffinity(mainThread.threadHandle, 2);
 	
 }
 void FakeKickStart();
@@ -188,7 +135,56 @@ void SetYuExit()
 	gYuRunning.fetch_sub(1, std::memory_order_seq_cst);
 }
 
+int YuMain()
+{
+	yu::InitYu();
 
+	yu::SetThreadAffinity(yu::GetCurrentThreadHandle(), 1);
+	unsigned int lap = 100;
+	unsigned int f = 0;
+	double kickStartTime = 0;
+	double waitKickTime = 0;
+	double waitFrameTime = 0;
+	while( yu::YuRunning() )
+	{
+		yu::PerfTimer frameTimer;
+		yu::PerfTimer timer;
+
+		frameTimer.Start();
+
+		timer.Start();
+		yu::KickStart();
+		timer.Finish();
+		kickStartTime = timer.DurationInMs();
+		
+		timer.Start();
+		
+		yu::WaitFrameComplete();
+		timer.Finish();
+		waitFrameTime = timer.DurationInMs();
+		//printf("frame time: %lf\n", timer.DurationInMs());
+		frameTimer.Finish();
+
+		
+		f++;
+		if (f > lap || frameTimer.DurationInMs() > 20)
+		{
+			yu::Log("main thread frame:\n");
+			yu::Log("frame time: %lf\n", frameTimer.DurationInMs());
+			yu::Log("kick time: %lf\n", kickStartTime);
+			yu::Log("wait frame time: %lf\n", waitFrameTime);
+
+			yu::Log("\n\n");
+			
+			f = 0;
+		}
+		
+	}
+
+	yu::FreeYu();
+
+	return 0;
+}
 
 
 
