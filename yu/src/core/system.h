@@ -60,13 +60,29 @@ struct CPUInfo
 #if defined (YU_CPU_X86_64) || defined (YU_CPU_X86)
 	char	vender[16];
 	char	brand[40];
-	u32		featureBits0;	//ecx
-	u32		featureBits1;	//edx
+	
+	bool	x2apic = false;
+	bool	sse = false;
+	bool	sse2 = false;
+	bool	sse3 = false;
+	bool	ssse3 = false;
+	bool	sse4_1 = false;
+	bool	sse4_2 = false;
+	bool	avx = false;
+	bool	avx2 = false;
+	
+	bool	tsc = false;
+	bool	invariantTsc = false;
+	
+	u32		numLogicalProcessors = 0;
+	u32		numLogicalProcessorsPerCore = 0;
+	
 #endif
 };
 	
 struct GPUInfo
 {
+
 };
 	
 class System
@@ -86,6 +102,8 @@ public:
 	void				CloseWin(Window& win);
 	
 	static CPUInfo		GetCPUInfo();
+
+	const char*			GetCwd();
 
 	friend bool			InitSystem();
 

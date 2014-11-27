@@ -55,7 +55,6 @@ Thread CreateThread(ThreadFunc func, ThreadContext context, ThreadPriority prior
 	Thread thread;
 
 	ThreadRunnerContext runnerContext;
-	PerfTimer timer;
 	runnerContext.threadCreationCS.Lock();
 	runnerContext.priority = priority;
 	runnerContext.affinityMask = affinityMask;
