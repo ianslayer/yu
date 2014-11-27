@@ -91,7 +91,7 @@ void	SetThreadAffinity(ThreadHandle threadHandle, u64 affinityMask)
 	
 	for(int i = 0; i < 64; i++)
 	{
-		if(affinityMask & 1<<i)
+		if((affinityMask>>i) & 1)
 		{
 			affinityTag[numCore].affinity_tag = i;
 			numCore++;

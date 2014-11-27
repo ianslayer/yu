@@ -88,7 +88,8 @@ struct GPUInfo
 class System
 {
 public:
-
+	System() : sysImpl(0) {}
+	~System() { delete sysImpl;}
 	static int			NumDisplays();
 	static Display		GetDisplay(int index);
 	static Display		GetMainDisplay();

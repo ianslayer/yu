@@ -8,6 +8,7 @@ void FreeYu();
 bool YuRunning();
 void KickStart();
 void WaitFrameComplete();
+int YuMain();
 }
 
 #endif

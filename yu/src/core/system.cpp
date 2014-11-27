@@ -150,12 +150,13 @@ CPUInfo System::GetCPUInfo()
 	if(strcmp("GenuineIntel", cpuInfo.vender) == 0 && maxCmd >= 0xb)
 	{
 		u32 nextLevel = 0;
+		u32 levelType = 0;
 		do
 		{
 			cpuid(info.info, 0xb, nextLevel);
 	
-			u32 levelType = (info.reg.ecx & 0xF00) >> 8;
-			u32 numProcessor = info.reg.ebx & 0xFF;
+			levelType = (info.reg.ecx & 0xFF00) >> 8;
+			u32 numProcessor = info.reg.ebx & 0xFFFF;
 			
 			//0 : invalid
 			//1 : SMT
@@ -169,9 +170,9 @@ CPUInfo System::GetCPUInfo()
 			{
 				cpuInfo.numLogicalProcessors = numProcessor;
 			}
-			nextLevel = (info.reg.eax & 0xF);
+			nextLevel ++;//= (info.reg.eax & 0xF);
 			
-		}while(nextLevel != 0);
+		}while(levelType != 0);
 		
 	}
 	
