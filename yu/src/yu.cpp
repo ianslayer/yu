@@ -1,16 +1,11 @@
 #include "core/log.h"
 #include "core/system.h"
-#include "math/vector.h"
-#include "math/matrix.h"
-
-#include "container/array.h"
-#include "container/hash.h"
-
+#include "core/allocator.h"
 #include "core/timer.h"
 #include "core/thread.h"
-
+#include "core/worker.h"
+#include "core/string.h"
 #include "renderer/renderer.h"
-
 #include "yu.h"
 
 #include <atomic>
@@ -19,20 +14,23 @@ namespace yu
 {
 
 bool YuRunning();
+void KickStart();
+void WaitFrameComplete();
+void FakeKickStart();
 
 ThreadReturn ThreadCall DummyThreadFunc(ThreadContext context)
 {
-	FrameLock* lock = AddFrameLock(GetCurrentThreadHandle());
+	FrameLock* lock = AddFrameLock();
 
 	unsigned int laps = 100;
 	unsigned int f = 0;
-	
+
 	while (YuRunning())
 	{
 		PerfTimer frameTimer;
 		PerfTimer innerTimer;
 		PerfTimer kTimer;
-		
+
 		double waitKickTime = 0;
 		double completeFrameTime = 0;
 
@@ -47,7 +45,7 @@ ThreadReturn ThreadCall DummyThreadFunc(ThreadContext context)
 		//Log("wait kick takes %lf ms\n", timer.DurationInMs());
 
 		innerTimer.Start();
-		DummyWorkLoad(12);
+		DummyWorkLoad(10);
 		innerTimer.Finish();
 
 		kTimer.Start();
@@ -56,19 +54,20 @@ ThreadReturn ThreadCall DummyThreadFunc(ThreadContext context)
 		completeFrameTime = kTimer.DurationInMs();
 
 		frameTimer.Finish();
-		
+
 		f++;
-		
+		/*
 		if (f > laps)
 		{
-			Log("thread frame:\n");
-			Log("frame time: %lf\n", frameTimer.DurationInMs());
-			Log("work time: %lf\n", innerTimer.DurationInMs());
-			Log("wait kick time: %lf\n", waitKickTime);
-			Log("frame complete: %lf\n", completeFrameTime);
-			Log("\n\n");
-			f = 0;
+		Log("thread frame:\n");
+		Log("frame time: %lf\n", frameTimer.DurationInMs());
+		Log("work time: %lf\n", innerTimer.DurationInMs());
+		Log("wait kick time: %lf\n", waitKickTime);
+		Log("frame complete: %lf\n", completeFrameTime);
+		Log("\n\n");
+		f = 0;
 		}
+		*/
 
 	}
 	return 0;
@@ -77,12 +76,13 @@ ThreadReturn ThreadCall DummyThreadFunc(ThreadContext context)
 std::atomic<int> gYuRunning;
 void InitYu()
 {
-	InitLog();
+	InitSysLog();
 	gYuRunning = 1;
 	InitSysTime();
-	InitThreadRuntime();
-	std::atomic_thread_fence(std::memory_order_seq_cst);
 	InitDefaultAllocator();
+	InitSysStrTable();
+	InitThreadRuntime();
+	InitWorkerSystem();
 	InitSystem();
 
 	Rect rect;
@@ -104,25 +104,22 @@ void InitYu()
 #if defined YU_OS_WIN32
 	InitDX11Thread(gSystem->mainWindow, frameBufferDesc);
 #endif
-	
-	//TEST create dummy thread
-	Thread thread0 = CreateThread(DummyThreadFunc, nullptr);
-	SetThreadAffinity(thread0.threadHandle, 1<<2);
-	//Thread thread1 = CreateThread(DummyThradFunc, nullptr);
-	//SetThreadAffinity(thread1.threadHandle, 2);
-	//Thread thread2 = CreateThread(DummyThradFunc, nullptr);
-	//SetThreadAffinity(thread2.threadHandle, 16);
-	
+
 }
-void FakeKickStart();
+
 void FreeYu()
 {
 	FakeKickStart(); //make sure all thread proceed to exit
+	SubmitTerminateWork();
+
 	while (!AllThreadExited());
-	//OutputDebugString(TEXT("all worker thread exited\n"));
+
 	FreeSystem();
-	FreeDefaultAllocator();
+	FreeWorkerSystem();
 	FreeThreadRuntime();
+	FreeSysStrTable();
+	FreeDefaultAllocator();
+	FreeSysLog();
 }
 
 bool YuRunning()
@@ -132,7 +129,7 @@ bool YuRunning()
 
 void SetYuExit()
 {
-	gYuRunning.fetch_sub(1, std::memory_order_seq_cst);
+	gYuRunning.fetch_sub(1);
 }
 
 int YuMain()
@@ -143,8 +140,10 @@ int YuMain()
 	unsigned int lap = 100;
 	unsigned int f = 0;
 	double kickStartTime = 0;
-	double waitKickTime = 0;
 	double waitFrameTime = 0;
+
+	WorkItem* startWork = FrameStartWorkItem();
+
 	while( yu::YuRunning() )
 	{
 		yu::PerfTimer frameTimer;
@@ -153,12 +152,16 @@ int YuMain()
 		frameTimer.Start();
 
 		timer.Start();
+
+		SubmitWorkItem(startWork, nullptr, 0);
+
 		yu::KickStart();
 		timer.Finish();
 		kickStartTime = timer.DurationInMs();
 		
+		gSystem->ProcessInput();
+
 		timer.Start();
-		
 		yu::WaitFrameComplete();
 		timer.Finish();
 		waitFrameTime = timer.DurationInMs();
@@ -167,6 +170,7 @@ int YuMain()
 
 		
 		f++;
+		
 		if (f > lap || frameTimer.DurationInMs() > 20)
 		{
 			yu::Log("main thread frame:\n");

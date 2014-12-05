@@ -10,17 +10,22 @@
 namespace yu
 {
 
-class CycleCount
+struct CycleCount
 {
-public:
-	CycleCount() {}
-	void Sample();
 	u64 cycle;
 };
-
-class PerfTimer
+YU_INLINE CycleCount operator-(CycleCount c1, CycleCount c2)
 {
-public:
+	CycleCount c;
+	c.cycle = c1.cycle - c2.cycle;
+	return c;
+}
+CycleCount	SampleCycle();
+u64			EstimateCPUFrequency();
+f64			ConvertToMs(const CycleCount& cycles);
+
+struct PerfTimer
+{
 	void Start();
 	void Finish();
 
@@ -30,16 +35,20 @@ public:
 	CycleCount        cycleCounter;
 };
 	
-class Time
+struct Time
 {
-public:
-	Time() {}
-	void Sample();
-	
 	u64 time;
 };
+YU_INLINE Time operator-(Time t1, Time t2)
+{
+	Time t;
+	t.time = t1.time - t2.time;
+	return t;
+}
+Time SampleTime();
+Time SysStartTime();
 	
-class SysTimer
+class Timer
 {
 public:
 	void	Start();
@@ -51,22 +60,20 @@ public:
 	Time	time;
 	
 };
+f64		ConvertToMs(const Time& time);
 
 void	InitSysTime();
-u64		EstimateCPUFrequency();
-f64		ConvertToMs(const CycleCount& cycles);
-f64		ConvertToMs(const Time& time);
-f64		DurationInMs(const Time& finish, const Time& start);
-	
-YU_INLINE void CycleCount::Sample()
-{
 
+	
+YU_INLINE CycleCount SampleCycle()
+{
+	CycleCount count;
 #if defined(YU_OS_WIN32)		
-	cycle = (u64) __rdtsc();
+	count.cycle = (u64) __rdtsc();
 
 #elif defined YU_OS_MAC && defined (YU_CPU_X86_64)
 
-	unsigned long* pSample = (unsigned long *)&cycle;
+	unsigned long* pSample = (unsigned long *)&(count.cycle);
 
 	__asm__ ("rdtsc\n\t"
 			 "movl %%eax, (%0)\n\t"
@@ -85,21 +92,21 @@ YU_INLINE void CycleCount::Sample()
 	}*/
 
 #endif			
+	return count;
 }
-
 
 YU_INLINE void PerfTimer::Start()
 {
 	COMPILER_BARRIER();
-	cycleCounter.Sample();
+	cycleCounter = SampleCycle();
 }
 
 YU_INLINE void PerfTimer::Finish()
 {
 	CycleCount finishCycle;
-	finishCycle.Sample();
+	finishCycle = SampleCycle();
 	COMPILER_BARRIER();
-	cycleCounter.cycle = finishCycle.cycle - cycleCounter.cycle;
+	cycleCounter = finishCycle - cycleCounter;
 }
 
 

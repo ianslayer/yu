@@ -1,8 +1,9 @@
 #include "timer.h"
-#include "thread.h"
 #include "log.h"
+#include "thread.h"
 
 #if defined YU_OS_WIN32
+	#include <windows.h>
 	#pragma comment(lib, "Winmm.lib")
 #elif defined YU_OS_MAC
 	#include <mach/mach_time.h>
@@ -13,7 +14,8 @@ namespace yu
 static CycleCount initCycle;
 static u64        cpuFrequency;
 	
-static Time	initTime;
+static Time initTime;
+static u64 timerFrequency;
 
 const CycleCount& PerfTimer::Duration() const
 {
@@ -25,97 +27,86 @@ f64 PerfTimer::DurationInMs() const
 	return ConvertToMs(cycleCounter);
 }
 	
-void Time::Sample()
+Time SampleTime()
 {
+	Time time;
 #if defined YU_OS_WIN32
-
+	LARGE_INTEGER perfCount;
+	QueryPerformanceCounter(&perfCount);
+	time.time = perfCount.QuadPart;
 #elif defined YU_OS_MAC
-	time = mach_absolute_time();
+	time.time = mach_absolute_time();
 #endif
-}
-	
-void SysTimer::Start()
-{
-	time.Sample();
+	return time;
 }
 
-void SysTimer::Finish()
+Time SysStartTime()
 {
-	Time finishTime;
-	finishTime.Sample();
+	return initTime;
+}
 	
+void Timer::Start()
+{
+	time = SampleTime();
+}
+
+void Timer::Finish()
+{
+	Time finishTime = SampleTime();
 	time.time = finishTime.time - time.time;
 }
 	
-const Time& SysTimer::Duration() const
+const Time& Timer::Duration() const
 {
 	return time;
 }
 
-f64 SysTimer::DurationInMs() const
+f64 Timer::DurationInMs() const
 {
 	return ConvertToMs(time);
 }
 	
 void InitSysTime()
 {
-	initCycle.Sample();
+#if defined YU_OS_WIN32
+	LARGE_INTEGER frequency;
+	QueryPerformanceFrequency(&frequency);
+	timerFrequency = frequency.QuadPart;
+#elif defined YU_OS_MAC
+	mach_timebase_info_data_t timeInfo;
+	mach_timebase_info(&timeInfo);
+	timerFrequency = timeInfo.numer / timeInfo.denom;
+#endif
+
+	initCycle = SampleCycle();
 	cpuFrequency = EstimateCPUFrequency();
 	
+	initTime = SampleTime();
+
 	Log("estimated cpu freq: %llu\n", cpuFrequency);
+	Log("timer freq: %llu\n", timerFrequency);
 }
 
 u64 EstimateCPUFrequency()
 {
-#if defined YU_OS_WIN32
-	HANDLE currentThreadHandle = ::GetCurrentThread();
-	DWORD_PTR affinity_mask = ::SetThreadAffinityMask(currentThreadHandle, 1);
+	ThreadHandle currentThreadHandle = GetCurrentThreadHandle();
+	u64 originAffinity = GetThreadAffinity(currentThreadHandle);
+	SetThreadAffinity(currentThreadHandle, 1);
 
-	DWORD timeStartCount = timeGetTime();
-	DWORD duration = 0;
+	Time startCount = SampleTime();
+	Time duration = {};
 
 	PerfTimer timer;
 	timer.Start();
-	while(duration < 1000)
+	while (ConvertToMs(duration) < 1000)
 	{
-		DWORD timeCount = timeGetTime();
-		duration = timeCount - timeStartCount;
+		Time curTime = SampleTime();
+		duration = curTime - startCount;
 	}
 	timer.Finish();
-	::SetThreadAffinityMask(currentThreadHandle, affinity_mask);
+	SetThreadAffinity(currentThreadHandle, originAffinity);
 
 	return timer.Duration().cycle;
-#elif defined YU_OS_MAC
-	thread_act_t thread = pthread_mach_thread_np(pthread_self());
-	
-	mach_msg_type_number_t count = 1;
-	boolean_t getDefault;
-	thread_affinity_policy originAffinityTag;
-	thread_policy_get(thread, THREAD_AFFINITY_POLICY, (thread_policy_t) &originAffinityTag, &count, &getDefault);
-	
-	thread_affinity_policy core1AffinityTag;
-	core1AffinityTag.affinity_tag = 1;
-	
-	thread_policy_set(thread, THREAD_AFFINITY_POLICY, (thread_policy_t) &core1AffinityTag, 1);
-	
-	Time start, finish;
-	start.Sample();
-	finish.Sample();
-	
-	PerfTimer timer;
-	timer.Start();
-	
-	while(DurationInMs(finish, start) < 1000)
-	{
-		finish.Sample();
-	}
-	timer.Finish();
-	
-	thread_policy_set(thread, THREAD_AFFINITY_POLICY, (thread_policy_t) &originAffinityTag, 1);
-	
-	return timer.Duration().cycle;
-#endif
-	return 0;
 }
 
 f64 ConvertToMs(const CycleCount& cycles)
@@ -129,6 +120,8 @@ f64 ConvertToMs(const CycleCount& cycles)
 f64 ConvertToMs(const Time& time)
 {
 #if defined YU_OS_WIN32
+	u64 timeInMs = time.time * 1000;
+	return (f64) timeInMs /(f64)timerFrequency;
 #elif defined YU_OS_MAC
 	mach_timebase_info_data_t timeInfo;
 	mach_timebase_info(&timeInfo);
@@ -137,15 +130,6 @@ f64 ConvertToMs(const Time& time)
 	
 	return ret;
 #endif
-	
-	return 0;
-}
-	
-f64 DurationInMs(const Time& finish, const Time& start)
-{
-	Time duration;
-	duration.time = finish.time - start.time;
-	return ConvertToMs(duration);
 }
 	
 }

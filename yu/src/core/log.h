@@ -3,12 +3,15 @@
 
 namespace yu
 {
-void InitLog();
-void FreeLog();
-void LockLog();
-void UnlockLog();
+class Logger;
+void InitSysLog();
+void FreeSysLog();
 void Log(char const *fmt, ...);
-void LLog(char const *fmt, ...);
+
+void BeginBlockLog();
+void EndBlockLog();
+void BlockLog(char const *fmt, ...);
+
 }
 
 #endif

@@ -25,7 +25,29 @@ public:
 
 };
 extern DefaultAllocator* gDefaultAllocator;
-	
+
+struct ArenaImpl;
+class ArenaAllocator : public Allocator
+{
+public:
+	ArenaAllocator(size_t blockSize = 64 * 1024, Allocator* baseAllocator = gDefaultAllocator);
+	virtual ~ArenaAllocator();
+	virtual void*	Alloc(size_t size);
+	//virtual void*	AllocNonAligned(size_t size);//this is crazy
+	virtual void*	Realloc(void* oldPtr, size_t newSize);
+	virtual void	Free(void* ptr);
+
+	void			RecycleBlocks();
+
+private:
+	ArenaImpl* arenaImpl;
+};
+extern ArenaAllocator* gSysArena;
+
+class VmArenaAllocator : public ArenaAllocator
+{
+
+};
 
 class StackAllocator : public Allocator
 {
@@ -36,8 +58,8 @@ public:
 	virtual void*	Realloc(void* oldPtr, size_t newSize);
 	virtual void	Free(void* ptr);
 
-
-	void			Free();
+	void			Rewind();
+	void			Rewind(size_t oldWaterMark);
 
 	void*			buffer;
 	Allocator*		allocator;
@@ -45,27 +67,11 @@ public:
 	size_t			waterBase;
 	size_t			waterMark;
 };
-
-class StaticAllocator : public Allocator
-{
-	StaticAllocator(size_t bufferSize, Allocator* baseAllocator = gDefaultAllocator);
-	virtual ~StaticAllocator();
-	virtual void*	Alloc(size_t size);
-	virtual void*	Realloc(void* oldPtr, size_t newSize);
-	virtual void	Free(void* ptr);
-
-	void			Free();
-	
-	void*			buffer;
-	Allocator*		allocator;
-	size_t			bufferSize;
-	size_t			waterMark;
-};
 	
 void InitDefaultAllocator();
 void FreeDefaultAllocator();
 
-
 }
+
 
 #endif

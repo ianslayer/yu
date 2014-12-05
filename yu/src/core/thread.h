@@ -3,11 +3,15 @@
 
 #include "platform.h"
 #if defined YU_OS_WIN32
+	#define WIN32_LEAN_AND_MEAN
+	#define NOMINMAX
 	#include <windows.h>
 #elif defined YU_OS_MAC
 	#include <mach/mach.h>
 	#include <pthread.h>
 #endif
+
+#include <atomic>
 
 namespace yu
 {
@@ -16,7 +20,7 @@ namespace yu
 	typedef DWORD ThreadReturn;
 	typedef PVOID ThreadContext;
 	#define ThreadCall WINAPI
-	typedef HANDLE ThreadHandle;
+	typedef DWORD ThreadHandle;
 #else
 	typedef void* ThreadReturn;
 	typedef void* ThreadContext;
@@ -24,7 +28,7 @@ namespace yu
 	typedef pthread_t ThreadHandle;
 #endif
 
-typedef ThreadReturn(ThreadCall* ThreadFunc)(ThreadContext);
+typedef ThreadReturn ThreadCall ThreadFunc(ThreadContext);
 
 enum ThreadPriority
 {
@@ -39,12 +43,11 @@ enum ThreadPriority
 
 struct Thread
 {
-	ThreadHandle threadHandle;
+	ThreadHandle handle;
 };
 
-class Mutex
+struct Mutex
 {
-public:
 	Mutex();
 	~Mutex();
 
@@ -57,18 +60,36 @@ public:
 #endif
 };
 
-class ScopedLock
+struct RWMutex
 {
-public:
+	RWMutex();
+	~RWMutex();
+
+	void ReaderLock();
+
+};
+
+struct ScopedLock
+{
 	ScopedLock(Mutex& m);
 	~ScopedLock();
 
 	Mutex& m;
 };
 
-class CondVar
+struct Locker
 {
-public:
+	Locker(Mutex& m);
+	~Locker();
+
+	void Lock();
+
+	bool locked;
+	Mutex& m;
+};
+
+struct CondVar
+{
 	CondVar();
 	~CondVar();
 
@@ -78,19 +99,41 @@ public:
 	pthread_cond_t cv;
 #endif
 };
+void			WaitForCondVar(CondVar& cv, Mutex& m);
+void			NotifyCondVar(CondVar& cv);
+void			NotifyAllCondVar(CondVar& cv);
 
 struct Event
 {
+	Event() : signaled(false)
+	{}
 	CondVar	cv;
 	Mutex	cs;
-	bool	signaled = false;
+	std::atomic<bool>	signaled;
 };
+void			WaitForEvent(Event& ev);
+void			SignalEvent(Event& ev);
+void			ResetEvent(Event& ev);
+
+struct Semaphore
+{
+	Semaphore(int initCount, int maxCount);
+	~Semaphore();
+
+#if defined YU_OS_WIN32
+	HANDLE sem;
+#else
+
+#endif
+};
+void			WaitForSem(Semaphore& sem);
+void			SignalSem(Semaphore& sem);
 
 void			InitThreadRuntime();
 void			FreeThreadRuntime();
 Thread			CreateThread(ThreadFunc func, ThreadContext context, ThreadPriority priority = NormalPriority, u64 affinityMask = 0);
 ThreadHandle	GetCurrentThreadHandle();
-//u64			GetThreadAffinityMask(Thread& thread);
+u64				GetThreadAffinity(ThreadHandle thread);
 void			SetThreadAffinity(ThreadHandle threadHandle, u64 affinityMask);
 void			SetThreadName(ThreadHandle thread, const char* name);
 void			SetThreadPriority(ThreadHandle thread, ThreadPriority priority);
@@ -98,19 +141,11 @@ bool			AllThreadExited();
 unsigned int	NumThreads();
 
 struct			FrameLock;
-FrameLock*		AddFrameLock(ThreadHandle handle);
+FrameLock*		AddFrameLock();
 void			WaitForKick(FrameLock* lock);
 void			FrameComplete(FrameLock* lock);
 
 void			DummyWorkLoad(double timeInMs);
-
-void			WaitForCondVar(CondVar& cv, Mutex& m);
-void			NotifyCondVar(CondVar& cv);
-void			NotifyAllCondVar(CondVar& cv);
-
-void			WaitForEvent(Event& ev, bool autoReset = false);
-void			SignalEvent(Event& ev);
-void			ResetEvent(Event& ev);
 
 }
 

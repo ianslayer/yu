@@ -1,45 +1,8 @@
-#include "system.h"
-#include "thread.h"
-#include "../container/dequeue.h"
-#include "../container/array.h"
+#include "system_impl.h"
 #include "../renderer/renderer.h"
 
 namespace yu
 {
-
-struct CreateWinParam
-{
-	Rect	rect;
-	Window	win;
-	CondVar	winCreationCV;
-	Mutex	winCreationCS;
-};
-
-
-struct WindowThreadCmd
-{
-	enum CommandType
-	{
-		CREATE_WINDOW, 
-	};
-	
-	union Command
-	{
-		CreateWinParam*	createWinParam;
-	};
-
-	CommandType	type;
-	Command		cmd;
-};
-
-class SystemImpl : public System
-{
-public:
-	LockSpscFifo<WindowThreadCmd, 16>	winThreadCmdQueue;
-	Array<Window>						windowList;
-	Thread								windowThread;
-};
-
 void SetYuExit();
 bool YuRunning();
 void ResizeBackBuffer(unsigned int width, unsigned int height, TexFormat fmt);
@@ -47,59 +10,89 @@ void ResizeBackBuffer(unsigned int width, unsigned int height, TexFormat fmt);
 #define GETY(l) (int(l) >> 16)
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+	InputEvent ev = {};
+	ev.timeStamp = SampleTime().time;
+	int x, y;
 	switch (message)
 	{
-	case WM_MOUSEMOVE:
-		static int lastX, lastY;
-		int x, y;
-		x = GETX(lParam);
-		y = GETY(lParam);
-		//if(gInputListener)
-		//	gInputListener->OnMouseMove(x, y, x - lastX, y - lastY);
-		lastX = x;
-		lastY = y;
-		break;
 	case WM_KEYDOWN:
-		//if(gInputListener)
-		//	gInputListener->OnKey((unsigned int) wParam, true);
+		if (lParam & (1<<30))
+		{
+			break;
+		}
+		ev.type = InputEvent::KEYBOARD;
+		ev.data.keyboardEvent.type = InputEvent::KeyboardEvent::DOWN;
+		ev.data.keyboardEvent.key = (unsigned int)wParam;
+		
 		break;
 	case WM_KEYUP:
-		//if(gInputListener)
-		//	gInputListener->OnKey((unsigned int) wParam, false);
+		ev.type = InputEvent::KEYBOARD;
+		ev.data.keyboardEvent.type = InputEvent::KeyboardEvent::UP;
+		ev.data.keyboardEvent.key = (unsigned int)wParam;
 		break;
-	case WM_LBUTTONDOWN:
-		//if(gInputListener)
-		//	gInputListener->OnMouseButton(GETX(lParam), GETY(lParam), MOUSE_LEFT, true);
-		break;
-	case WM_LBUTTONUP:
-		//if(gInputListener)
-		//	gInputListener->OnMouseButton(GETX(lParam), GETY(lParam), MOUSE_LEFT, false);
-		//UINT x, y;
+	case WM_MOUSEMOVE:
+		ev.type = InputEvent::MOUSE;
+
 		x = GETX(lParam);
 		y = GETY(lParam);
+
+		ev.data.mouseEvent.type = InputEvent::MouseEvent::MOVE;
+		ev.data.mouseEvent.x = float(x);
+		ev.data.mouseEvent.y = float(y);
+		
+		break;
+	case WM_LBUTTONDOWN:
+		ev.type = InputEvent::MOUSE;
+
+		x = GETX(lParam);
+		y = GETY(lParam);
+
+		ev.data.mouseEvent.type = InputEvent::MouseEvent::L_BUTTON_DOWN;
+		ev.data.mouseEvent.x = float(x);
+		ev.data.mouseEvent.y = float(y);
+
+		break;
+	case WM_LBUTTONUP:
+		ev.type = InputEvent::MOUSE;
+
+		x = GETX(lParam);
+		y = GETY(lParam);
+
+		ev.data.mouseEvent.type = InputEvent::MouseEvent::L_BUTTON_UP;
+		ev.data.mouseEvent.x = float(x);
+		ev.data.mouseEvent.y = float(y);
+
 		break;
 	case WM_RBUTTONDOWN:
-		//if(gInputListener)
-		//gInputListener->OnMouseButton(GETX(lParam), GETY(lParam), MOUSE_RIGHT, true);
+		ev.type = InputEvent::MOUSE;
+
+		x = GETX(lParam);
+		y = GETY(lParam);
+
+		ev.data.mouseEvent.type = InputEvent::MouseEvent::R_BUTTON_DOWN;
+		ev.data.mouseEvent.x = float(x);
+		ev.data.mouseEvent.y = float(y);
+
 		break;
 	case WM_RBUTTONUP:
-		//if(gInputListener)
-		//gInputListener->OnMouseButton(GETX(lParam), GETY(lParam), MOUSE_RIGHT, false);
+		ev.type = InputEvent::MOUSE;
+
+		x = GETX(lParam);
+		y = GETY(lParam);
+
+		ev.data.mouseEvent.type = InputEvent::MouseEvent::R_BUTTON_UP;
+		ev.data.mouseEvent.x = float(x);
+		ev.data.mouseEvent.y = float(y);
+
 		break;
 	case WM_MOUSEWHEEL:
-		static int scroll;
-		int s;
+		ev.type = InputEvent::MOUSE;
+		int scroll;
+		scroll = GET_WHEEL_DELTA_WPARAM(wParam);
 
-		scroll += GET_WHEEL_DELTA_WPARAM(wParam);
-		s = scroll / WHEEL_DELTA;
-		scroll %= WHEEL_DELTA;
-
-		POINT point;
-		point.x = GETX(lParam);
-		point.y = GETY(lParam);
-		ScreenToClient(hWnd, &point);
-
-		//if (s != 0 && gInputListener) gInputListener->OnMouseWheel(point.x, point.y, s);
+		ev.data.mouseEvent.type = InputEvent::MouseEvent::WHEEL;
+		ev.data.mouseEvent.scroll = float(scroll) / float(WHEEL_DELTA);
+		
 		break;   
 
 	case WM_DESTROY:
@@ -124,6 +117,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	default:
 		return DefWindowProc(hWnd, message, wParam, lParam);
 	}
+	if (ev.type != InputEvent::UNKNOWN)
+		gSystem->sysImpl->inputQueue.Enqueue(ev);
 	return 0;
 }
 
@@ -175,9 +170,9 @@ ThreadReturn ThreadCall WindowThreadFunc(ThreadContext context)
 		//while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
 		while (GetMessage(&msg, NULL, 0, 0))
 		{
-			while (!sysImpl->winThreadCmdQueue.IsNull())
+			WindowThreadCmd cmd;
+			while (sysImpl->winThreadCmdQueue.Dequeue(cmd))
 			{
-				WindowThreadCmd& cmd = sysImpl->winThreadCmdQueue.Deq();
 				ExecWindowCommand(cmd);
 			}
 
@@ -191,7 +186,7 @@ ThreadReturn ThreadCall WindowThreadFunc(ThreadContext context)
 		gSystem->CloseWin(((SystemImpl*)(gSystem->sysImpl))->windowList[i]);
 	}
 
-	OutputDebugString(TEXT("exit window thread\n"));
+	OutputDebugStringA("exit window thread\n");
 	return 0;
 }
 
@@ -218,7 +213,7 @@ bool PlatformInitSystem()
 	SystemImpl* sysImpl = new SystemImpl();
 	gSystem->sysImpl = sysImpl;
 	sysImpl->windowThread = CreateThread(WindowThreadFunc, sysImpl);
-	SetThreadName(sysImpl->windowThread.threadHandle, "Window Thread");
+	SetThreadName(sysImpl->windowThread.handle, "Window Thread");
 	return true;
 }
 
@@ -254,7 +249,7 @@ BOOL CALLBACK GetMainDisplayEnumProc(
 	{
 		display->hMonitor = hMonitor;
 		memcpy(display->device.DeviceName, monInfo.szDevice, sizeof(display->device.DeviceName));
-		printf("main monitor name: %s\n", monInfo.szDevice);
+		Log("main monitor name: %s\n", monInfo.szDevice);
 	}
 
 	return getMonResult;
@@ -272,13 +267,13 @@ Display System::GetMainDisplay()
 	
 	while(EnumDisplayDevices(NULL, index, &display.device, 0))
 	{
-		printf(("Device Name: %s Device String: %s\n"), display.device.DeviceName, display.device.DeviceString);
+		Log(("Device Name: %s Device String: %s\n"), display.device.DeviceName, display.device.DeviceString);
 
 		Display monitor={};
 		monitor.device.cb = sizeof(monitor.device);		
 		if(EnumDisplayDevices(display.device.DeviceName, 0, &monitor.device, 0))
 		{
-			printf(("	Monitor Name: %s Monitor String: %s\n"), monitor.device.DeviceName, monitor.device.DeviceString);
+			Log(("	Monitor Name: %s Monitor String: %s\n"), monitor.device.DeviceName, monitor.device.DeviceString);
 
 		}
 		
@@ -293,7 +288,7 @@ Display System::GetMainDisplay()
 	}
 
 	if(!mainDisplayFound)
-		printf("error: no main display found\n");
+		Log("error: no main display found\n");
 	
 	EnumDisplayMonitors(NULL, NULL, GetMainDisplayEnumProc, (LPARAM) &mainDisplay);
 
@@ -326,10 +321,10 @@ DisplayMode System::GetDisplayMode(const Display& display, int modeIndex)
 				modeFound = true;
 
 				/*
-				printf("display mode: %d\n", supportIndex++);
-				printf("width: %d height %d\n", devMode.dmPelsWidth, devMode.dmPelsHeight);
-				printf("bits per pixel: %d\n", devMode.dmBitsPerPel);
-				printf("refresh rate: %d\n", devMode.dmDisplayFrequency);
+				Log("display mode: %d\n", supportIndex++);
+				Log("width: %d height %d\n", devMode.dmPelsWidth, devMode.dmPelsHeight);
+				Log("bits per pixel: %d\n", devMode.dmBitsPerPel);
+				Log("refresh rate: %d\n", devMode.dmDisplayFrequency);
 				*/
 
 				break;
@@ -342,16 +337,16 @@ DisplayMode System::GetDisplayMode(const Display& display, int modeIndex)
 	}
 
 	if(!modeFound)
-		printf("error: display mode out of range\n");
+		Log("error: display mode out of range\n");
 
-	//printf("\n");
+	//Log("\n");
 	
 	return mode;
 }
 
 DisplayMode System::GetCurrentDisplayMode(const Display& display)
 {
-	DisplayMode mode;
+	DisplayMode mode = {};
 
 	DEVMODE devMode={};
 	devMode.dmSize = sizeof(devMode);
@@ -373,10 +368,10 @@ DisplayMode System::GetCurrentDisplayMode(const Display& display)
 				modeFound = true;
 
 				/*
-				printf("display mode: %d\n", supportIndex++);
-				printf("width: %d height %d\n", devMode.dmPelsWidth, devMode.dmPelsHeight);
-				printf("bits per pixel: %d\n", devMode.dmBitsPerPel);
-				printf("refresh rate: %d\n", devMode.dmDisplayFrequency);
+				Log("display mode: %d\n", supportIndex++);
+				Log("width: %d height %d\n", devMode.dmPelsWidth, devMode.dmPelsHeight);
+				Log("bits per pixel: %d\n", devMode.dmBitsPerPel);
+				Log("refresh rate: %d\n", devMode.dmDisplayFrequency);
 				*/
 		}
 
@@ -384,9 +379,9 @@ DisplayMode System::GetCurrentDisplayMode(const Display& display)
 	}
 
 	if(!modeFound)
-		printf("error: display mode not supported\n");
+		Log("error: display mode not supported\n");
 
-	//printf("\n");
+	//Log("\n");
 
 	return mode;
 }
@@ -425,13 +420,13 @@ int System::NumDisplays()
 		if(display.device.StateFlags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP)
 		{
 			numDisplay++;
-			printf(("Device Name: %s Device String: %s\n"), display.device.DeviceName, display.device.DeviceString);
+			Log(("Device Name: %s Device String: %s\n"), display.device.DeviceName, display.device.DeviceString);
 
 			Display monitor={};
 			monitor.device.cb = sizeof(monitor.device);
 			if(EnumDisplayDevices(display.device.DeviceName, 0, &monitor.device, 0))
 			{
-				printf(("	Monitor Name: %s Monitor String: %s\n"), monitor.device.DeviceName, monitor.device.DeviceString);
+				Log(("	Monitor Name: %s Monitor String: %s\n"), monitor.device.DeviceName, monitor.device.DeviceString);
 
 			}
 		}
@@ -453,13 +448,13 @@ Display System::GetDisplay(int index)
 		if(display.device.StateFlags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP)
 		{
 
-			printf(("Device Name: %s Device String: %s\n"), display.device.DeviceName, display.device.DeviceString);
+			Log(("Device Name: %s Device String: %s\n"), display.device.DeviceName, display.device.DeviceString);
 
 			Display monitor={};
 			monitor.device.cb = sizeof(monitor.device);		
 			if(EnumDisplayDevices(display.device.DeviceName, 0, &monitor.device, 0))
 			{
-				printf(("	Monitor Name: %s Monitor String: %s\n"), monitor.device.DeviceName, monitor.device.DeviceString);
+				Log(("	Monitor Name: %s Monitor String: %s\n"), monitor.device.DeviceName, monitor.device.DeviceString);
 
 			}
 			if(activeDisplayIndex == index)
@@ -475,7 +470,7 @@ Display System::GetDisplay(int index)
 
 	if(!displayFound)
 	{
-		printf("error: display index out of bound\n");
+		Log("error: display index out of bound\n");
 	}
 
 	return display;
@@ -500,12 +495,10 @@ Window System::CreateWin(const Rect& rect)
 
 	while (1)
 	{
-		if (!sys->winThreadCmdQueue.IsFull())
+		BOOL success = PostThreadMessage(sysImpl->windowThread.handle, WM_APP, 0, 0);//wake window thread
+		if (sys->winThreadCmdQueue.Enqueue(cmd))
 		{
-			//sys->winThreadCmdQueue.Enq(cmd);
-			//KickStart();
-			sys->winThreadCmdQueue.Enq(cmd);			
-			BOOL success = PostThreadMessage(GetThreadId(sysImpl->windowThread.threadHandle), WM_APP, 0, 0);
+			success = PostThreadMessage(sysImpl->windowThread.handle, WM_APP, 0, 0);
 			WaitForCondVar(param.winCreationCV, param.winCreationCS);
 			break;
 		}
