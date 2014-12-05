@@ -111,7 +111,7 @@ public:
 
 -(BOOL)windowShouldClose:(id)sender
 {
-	yu::FreeYu();
+	//yu::FreeYu();
 	exit(0);
     return 1;
 }
