@@ -22,6 +22,12 @@ YU_INLINE bool IsPowerOfTwo(size_t n)
 }
 #endif
 
+template<class T>
+YU_INLINE  T RoundUp(T x, T n)
+{
+	return (x + n - 1)& ~(n - 1);
+}
+
 }
 
 #endif

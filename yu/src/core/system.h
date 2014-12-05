@@ -36,6 +36,55 @@ struct Window
 
 };
 
+struct InputEvent
+{
+	enum Type
+	{
+		UNKNOWN = 0,
+		KEYBOARD,
+		MOUSE,
+	};
+
+	struct KeyboardEvent
+	{
+		enum Type
+		{
+			DOWN,
+			UP,
+		};
+		Type	type;
+		unsigned int key;
+	};
+
+	struct MouseEvent
+	{
+		enum Type
+		{
+			MOVE,
+			L_BUTTON_DOWN,
+			L_BUTTON_UP,
+			R_BUTTON_DOWN,
+			R_BUTTON_UP,
+			WHEEL,
+		};
+		Type	type;
+		float	x;
+		float	y;
+		float	scroll;
+	};
+
+	union EventData
+	{
+		MouseEvent		mouseEvent;
+		KeyboardEvent	keyboardEvent;
+	};
+
+	Window		window;
+	Type		type;
+	EventData	data;
+	u64			timeStamp;
+};
+
 struct DisplayMode
 {
 	size_t		width;
@@ -57,10 +106,9 @@ struct Display
 
 struct CPUInfo
 {
-#if defined (YU_CPU_X86_64) || defined (YU_CPU_X86)
 	char	vender[16];
-	char	brand[40];
-	
+#if defined (YU_CPU_X86_64) || defined (YU_CPU_X86)
+
 	bool	x2apic = false;
 	bool	sse = false;
 	bool	sse2 = false;
@@ -73,11 +121,10 @@ struct CPUInfo
 	
 	bool	tsc = false;
 	bool	invariantTsc = false;
-	
+
+#endif
 	u32		numLogicalProcessors = 0;
 	u32		numLogicalProcessorsPerCore = 0;
-	
-#endif
 };
 	
 struct GPUInfo
@@ -89,7 +136,7 @@ class System
 {
 public:
 	System() : sysImpl(0) {}
-	~System() { delete sysImpl;}
+	virtual ~System();
 	static int			NumDisplays();
 	static Display		GetDisplay(int index);
 	static Display		GetMainDisplay();
@@ -104,12 +151,12 @@ public:
 	
 	static CPUInfo		GetCPUInfo();
 
-	const char*			GetCwd();
+	void				ProcessInput();
 
 	friend bool			InitSystem();
 
 	Window				mainWindow;
-	System*				sysImpl;
+	class SystemImpl*	sysImpl;
 
 };
 

@@ -1,6 +1,10 @@
 #include "system.h"
+#include "timer.h"
+#include "thread.h"
 #include "string.h"
 #include "log.h"
+#include "../container/dequeue.h"
+#include "../container/array.h"
 
 #if defined YU_OS_WIN32
 	#include <intrin.h>
@@ -10,6 +14,41 @@
 
 namespace yu
 {
+
+struct CreateWinParam
+{
+	Rect	rect;
+	Window	win;
+	CondVar	winCreationCV;
+	Mutex	winCreationCS;
+};
+
+
+struct WindowThreadCmd
+{
+	enum CommandType
+	{
+		CREATE_WINDOW,
+	};
+
+	union Command
+	{
+		CreateWinParam*	createWinParam;
+	};
+
+	CommandType	type;
+	Command		cmd;
+};
+
+class SystemImpl : public System
+{
+public:
+	SpscFifo<WindowThreadCmd, 16>		winThreadCmdQueue; //yumain to window thread
+	SpscFifo<InputEvent, 256>			inputQueue;			//window to yumain thread
+	Array<Window>						windowList;
+	Thread								windowThread;
+};
+
 System* gSystem = 0;
 
 bool PlatformInitSystem();
@@ -55,7 +94,6 @@ bool InitSystem()
 void FreeSystem()
 {
 
-
 	delete gSystem;
 	gSystem = 0;
 }
@@ -82,10 +120,6 @@ void cpuid(u32 info[4], u32 cmdEax, u32 cmdEcx = 0)
 	);
 	info[0] = eax; info[1] = ebx; info[2] = ecx; info[3] = edx;
 #endif
-}
-
-void CPUModel(u32 eax)
-{
 }
 
 CPUInfo System::GetCPUInfo()
@@ -182,5 +216,56 @@ CPUInfo System::GetCPUInfo()
 }
 
 #endif
+
+System::~System()
+{ 
+	delete sysImpl;
+}
+
+void System::ProcessInput()
+{
+	InputEvent event;
+	while (gSystem->sysImpl->inputQueue.Dequeue(event))
+	{
+		Time sysInitTime = SysStartTime();
+		Time eventTime;
+		eventTime.time = event.timeStamp;
+
+
+		switch (event.type)
+		{
+			case InputEvent::KEYBOARD:
+			{
+				Log("event time: %f ", ConvertToMs(eventTime - sysInitTime) / 1000.f);
+				if (event.data.keyboardEvent.type == InputEvent::KeyboardEvent::DOWN)
+				{
+					Log("key down\n");
+				}
+				else if (event.data.keyboardEvent.type == InputEvent::KeyboardEvent::UP)
+				{
+					Log("key up\n");
+				}
+			}break;
+			case InputEvent::MOUSE:
+			{
+				if (event.data.mouseEvent.type == InputEvent::MouseEvent::L_BUTTON_DOWN)
+				{
+					Log("event time: %f ", ConvertToMs(eventTime - sysInitTime) / 1000.f);
+					Log("left button down: %f, %f\n", event.data.mouseEvent.x, event.data.mouseEvent.y);
+				}
+				if (event.data.mouseEvent.type == InputEvent::MouseEvent::R_BUTTON_DOWN)
+				{
+					Log("event time: %f ", ConvertToMs(eventTime - sysInitTime) / 1000.f);
+					Log("right button down: %f, %f\n", event.data.mouseEvent.x, event.data.mouseEvent.y);
+				}
+				if (event.data.mouseEvent.type == InputEvent::MouseEvent::WHEEL)
+				{
+					Log("event time: %f ", ConvertToMs(eventTime - sysInitTime) / 1000.f);
+					Log("scroll: %f\n", event.data.mouseEvent.scroll);
+				}
+			}break;
+		}
+	}
+}
 
 }
