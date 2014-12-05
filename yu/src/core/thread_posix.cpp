@@ -128,16 +128,6 @@ void Mutex::Unlock()
 	pthread_mutex_unlock(&m);
 }
 
-ScopedLock::ScopedLock(Mutex& _m) : m(_m)
-{
-	m.Lock();
-}
-
-ScopedLock::~ScopedLock()
-{
-	m.Unlock();
-}
-
 CondVar::CondVar()
 {
 	pthread_cond_init(&cv, nullptr);

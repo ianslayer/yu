@@ -1,5 +1,5 @@
-#include "thread.h"
-#include "timer.h"
+#include "thread_impl.h"
+
 namespace yu
 {
 
@@ -7,7 +7,7 @@ struct ThreadRunnerContext
 {
 	ThreadPriority	priority;
 	u64				affinityMask;
-	ThreadFunc		func;
+	ThreadFunc*		func;
 	ThreadContext	context;
 
 	CondVar			threadCreationCV;
@@ -18,12 +18,14 @@ void ThreadExit(ThreadHandle handle);
 
 ThreadHandle GetCurrentThreadHandle()
 {
-	ThreadHandle threadHandle = GetCurrentThread();
+	DWORD threadId = GetThreadId(GetCurrentThread());
 
+	return threadId;
+
+	/*
 	DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &threadHandle,
 		DUPLICATE_SAME_ACCESS, FALSE, DUPLICATE_SAME_ACCESS);
-
-	return threadHandle;
+		*/
 }
 
 ThreadReturn ThreadCall ThreadRunner(ThreadContext context)
@@ -36,7 +38,7 @@ ThreadReturn ThreadCall ThreadRunner(ThreadContext context)
 	RegisterThread(threadHandle);
 
 	//subtle, but this two must be copied before notify,, else runnerContext my be destroied before they can be executed
-	ThreadFunc func = runnerContext->func;
+	ThreadFunc* func = runnerContext->func;
 	ThreadContext threadContext = runnerContext->context;
 
 	runnerContext->threadCreationCS.Unlock();
@@ -62,24 +64,39 @@ Thread CreateThread(ThreadFunc func, ThreadContext context, ThreadPriority prior
 	runnerContext.context = context;
 
 	DWORD threadId;
-	thread.threadHandle= ::CreateThread(NULL, 0, ThreadRunner, &runnerContext, 0, &threadId);
+	::CreateThread(NULL, 0, ThreadRunner, &runnerContext, 0, &threadId);
+	thread.handle = threadId;
+
 	WaitForCondVar(runnerContext.threadCreationCV, runnerContext.threadCreationCS);
 	runnerContext.threadCreationCS.Unlock();
 
 	return thread;
 }
 
-/*
-u64 GetThreadAffinity(Thread& thread)
+u64 GetThreadAffinity(ThreadHandle threadHandle)
 {
-	
+	GROUP_AFFINITY groupAffinity = {};
+	HANDLE realHandle = OpenThread(THREAD_ALL_ACCESS, FALSE, threadHandle);
+	if (realHandle)
+	{
+		::GetThreadGroupAffinity(realHandle, &groupAffinity);
+		CloseHandle(realHandle);
+		return groupAffinity.Mask;
+	}
+	return 0;
 }
-*/
 
 void SetThreadAffinity(ThreadHandle threadHandle, u64 affinityMask)
 {
 	if (affinityMask)
-		::SetThreadAffinityMask(threadHandle, affinityMask);
+	{
+		HANDLE realHandle = OpenThread(THREAD_ALL_ACCESS, FALSE, threadHandle);
+		if (realHandle)
+		{
+			::SetThreadAffinityMask(realHandle, affinityMask);
+			CloseHandle(realHandle);
+		}
+	}
 }
 
 const DWORD MS_VC_EXCEPTION = 0x406D1388;
@@ -99,7 +116,7 @@ void SetThreadName(ThreadHandle threadHandle, const char* name)
 	THREADNAME_INFO info;
 	info.dwType = 0x1000;
 	info.szName = name;
-	info.dwThreadID = GetThreadId(threadHandle);
+	info.dwThreadID = threadHandle;
 	info.dwFlags = 0;
 
 	__try
@@ -113,7 +130,7 @@ void SetThreadName(ThreadHandle threadHandle, const char* name)
 
 Mutex::Mutex()
 {
-	InitializeCriticalSection(&m);
+	InitializeCriticalSectionAndSpinCount(&m, 1000);
 }
 
 Mutex::~Mutex()
@@ -129,16 +146,6 @@ void Mutex::Lock()
 void Mutex::Unlock()
 {
 	LeaveCriticalSection(&m);
-}
-
-ScopedLock::ScopedLock(Mutex& _m) : m(_m)
-{
-	m.Lock();
-}
-
-ScopedLock::~ScopedLock()
-{
-	m.Unlock();
 }
 
 CondVar::CondVar()
@@ -164,6 +171,27 @@ void NotifyCondVar(CondVar& cv)
 void NotifyAllCondVar(CondVar& cv)
 {
 	WakeAllConditionVariable(&cv.cv);
+}
+
+Semaphore::Semaphore(int initCount, int maxCount)
+{
+	sem = CreateSemaphore(nullptr, initCount, maxCount, nullptr);
+}
+
+Semaphore::~Semaphore()
+{
+	CloseHandle(sem);
+}
+
+void WaitForSem(Semaphore& sem)
+{
+	WaitForSingleObject(sem.sem, INFINITE);
+}
+
+void SignalSem(Semaphore& sem)
+{
+	LONG prevCount;
+	ReleaseSemaphore(sem.sem, 1, &prevCount);
 }
 
 }
