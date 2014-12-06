@@ -131,5 +131,20 @@ f64 ConvertToMs(const Time& time)
 	return ret;
 #endif
 }
+
+
+void DummyWorkLoad(double timeInMs)
+{
+	Time startTime = SampleTime();
+	double deltaT = 0;
+	while (1)
+	{
+		if (deltaT >= timeInMs)
+			break;
+		Time endTime = SampleTime();
+
+		deltaT = ConvertToMs(endTime - startTime);
+	}
+}
 	
 }

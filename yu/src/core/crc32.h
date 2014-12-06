@@ -3,7 +3,7 @@
 
 namespace yu
 {
-unsigned long CRC32( const void *data, size_t length );
+unsigned int CRC32( const void *data, size_t length );
 }
 
 #endif

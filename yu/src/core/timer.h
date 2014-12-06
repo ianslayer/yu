@@ -109,6 +109,7 @@ YU_INLINE void PerfTimer::Finish()
 	cycleCounter = finishCycle - cycleCounter;
 }
 
+void DummyWorkLoad(double timeInMs);
 
 }
 

@@ -1,6 +1,7 @@
 #include "../container/array.h"
 #include "../container/dequeue.h"
 #include "thread.h"
+#include "timer.h"
 #include "worker.h"
 #include "system.h"
 #include "log.h"
@@ -30,10 +31,16 @@ void FrameEndWorkFunc(const void* constData, void* mutableData, const WorkItem* 
 	DummyWorkLoad(10);
 	FrameComplete(lock);
 }
+
+
+bool YuRunning();
+ThreadReturn ThreadCall WorkerThreadFunc(ThreadContext context);
 struct WorkerSystem
 {
-	WorkerSystem() :workQueueSem(0, MAX_WORK_QUEUE_LEN) 
+	WorkerSystem(unsigned int coreCount) :workQueueSem(0, MAX_WORK_QUEUE_LEN)
 	{
+		numWorkerThread = coreCount - 2;
+	
 		terminateWorkItem.func = TerminateWorkFunc;
 		frameLock = AddFrameLock();
 		frameEndWorkItem.mutableData = frameLock;
@@ -41,7 +48,7 @@ struct WorkerSystem
 	}
 
 	Thread					workerThread[MAX_WORKER_THREAD];
-	int						numWorkerThread = 0;
+	unsigned int			numWorkerThread = 0;
 	ArenaAllocator			workerArena;
 
 	MpmcFifo<WorkItem*, MAX_WORK_QUEUE_LEN>	workQueue;
@@ -53,17 +60,13 @@ struct WorkerSystem
 	WorkItem				frameStartWorkItem;
 	WorkItem				frameEndWorkItem;
 };
-
-WorkerSystem* gWorkerSystem;
-
-bool YuRunning();
-
+static WorkerSystem* gWorkerSystem;
 ThreadReturn ThreadCall WorkerThreadFunc(ThreadContext context)
 {
 	Log("Worker thread started\n");
 	while (YuRunning())
 	{
-		WaitForSem(gWorkerSystem->workQueueSem);
+		WaitForSem(gWorkerSystem->workQueueSem); //TODO: eliminate gWorkerSystem here, should be passed in as parameter
 		WorkItem* item;
 		while (gWorkerSystem->workQueue.Dequeue(item))
 		{
@@ -95,15 +98,13 @@ WorkItem* FrameStartWorkItem()
 
 void InitWorkerSystem()
 {
-	gWorkerSystem = new WorkerSystem();
 	CPUInfo cpuInfo = System::GetCPUInfo();
-	gWorkerSystem->numWorkerThread = cpuInfo.numLogicalProcessors - 2;
-
+	gWorkerSystem = new WorkerSystem(cpuInfo.numLogicalProcessors);
+	
 	for (int i = 0; i < gWorkerSystem->numWorkerThread; i++)
 	{
 		gWorkerSystem->workerThread[i] = CreateThread(WorkerThreadFunc, nullptr, NormalPriority, 1 << (i+1));
 	}
-
 }
 
 void FreeWorkerSystem()

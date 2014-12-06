@@ -4,47 +4,10 @@
 #include "thread.h"
 #include "yu.h"
 
-#include "system.h"
+#include "system_impl.h"
 #include "../container/array.h"
 #include "../container/dequeue.h"
 
-namespace yu
-{
-
-struct CreateWinParam
-{
-	Rect	rect;
-	Window	win;
-	CondVar	winCreationCV;
-	Mutex	winCreationCS;
-};
-
-
-struct WindowThreadCmd
-{
-	enum CommandType
-	{
-		CREATE_WINDOW, 
-	};
-	
-	union Command
-	{
-		CreateWinParam*	createWinParam;
-	};
-
-	CommandType	type;
-	Command		cmd;
-};
-
-class SystemImpl : public System
-{
-public:
-	LockSpscFifo<WindowThreadCmd, 16>	winThreadCmdQueue;
-	Array<Window>						windowList;
-	Thread								windowThread;
-};
-
-}
 
 @implementation YuApp
 @synthesize system;
@@ -77,7 +40,7 @@ public:
 	
 	//[self mainWin] = win;
 	//[((NSWindow*)win) makeKeyAndOrderFront:nil];
-	
+	[view release];
 	[self finishLaunching];
 	[pool drain];
 	
@@ -111,7 +74,7 @@ public:
 
 -(BOOL)windowShouldClose:(id)sender
 {
-	yu::FreeYu();
+	//yu::FreeYu();
 	exit(0);
     return 1;
 }

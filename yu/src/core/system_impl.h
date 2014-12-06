@@ -9,7 +9,8 @@
 #if defined YU_OS_WIN32
 	#include <intrin.h>
 #elif defined YU_OS_MAC
-
+	//#include <sys/types.h>
+	//#include <sys/sysctl.h>
 #endif
 
 namespace yu
@@ -124,6 +125,17 @@ void cpuid(u32 info[4], u32 cmdEax, u32 cmdEcx = 0)
 
 CPUInfo System::GetCPUInfo()
 {
+/*
+	int mib[2];
+	size_t len=1024;
+	char p[1024];
+
+	mib[0] = CTL_HW;
+	mib[1] = HW_PAGESIZE;
+	//sysctl(mib, 2, p, &len, NULL, 0);
+	sysctlbyname("hw.physicalcpu_max", p, &len, NULL, 0);
+	*/
+
 	CPUInfo cpuInfo;
 	memset(&cpuInfo, 0, sizeof(cpuInfo));
 	struct Registers
