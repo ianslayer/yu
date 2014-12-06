@@ -35,7 +35,7 @@ void Locker::Lock()
 	locked = true;
 }
 
-YU_ALIGN(CACHE_LINE)
+YU_PRE_ALIGN(CACHE_LINE)
 struct FrameLock
 {
 	FrameLock() : frameCount(0){}
@@ -43,7 +43,7 @@ struct FrameLock
 	Event				event;
 	std::atomic<u64>	frameCount;
 
-};
+} YU_POST_ALIGN(CACHE_LINE);
 
 
 void WaitForEvent(Event& ev)
@@ -85,13 +85,13 @@ struct ThreadTable
 		THREAD_EXIT,
 	};
 
-	YU_ALIGN(CACHE_LINE)
+	YU_PRE_ALIGN(CACHE_LINE)
 	struct ThreadEntry
 	{
 		ThreadEntry() : threadState(THREAD_RUNNING){}
 		std::atomic<int>	threadState;
 		ThreadHandle		threadHandle;
-	};
+	} YU_POST_ALIGN(CACHE_LINE);
 
 	FrameLock					frameLockList[MAX_THREAD];
 	ThreadEntry					threadList[MAX_THREAD];
@@ -131,7 +131,7 @@ void KickStart()
 	{
 		u64 frameCount = gThreadTable->frameLockList[i].frameCount.load(std::memory_order_acquire);
 		while (frameCount <= globalFrameCount)
-			frameCount = gThreadTable->frameLockList[i].frameCount.load(std::memory_order_acquire);;
+			frameCount = gThreadTable->frameLockList[i].frameCount.load(std::memory_order_acquire);
 	}
 	ResetEvent(*gFrameSync);
 }
@@ -152,8 +152,7 @@ void WaitForKick(FrameLock* lock)
 
 void WaitFrameComplete()
 {
-
-	for (unsigned int i = 0; i < gThreadTable->numLocks; i++)
+	for (unsigned int i = 0; i < gThreadTable->numLocks; i++) //TODO: change this to barrier
 	{
 		WaitForEvent(gThreadTable->frameLockList[i].event);
 		ResetEvent(gThreadTable->frameLockList[i].event);
@@ -165,7 +164,6 @@ void WaitFrameComplete()
 
 void FrameComplete(FrameLock* lock)
 {
-
 	SignalEvent(lock->event);
 }
 
@@ -209,20 +207,6 @@ bool AllThreadExited()
 	}
 	
 	return true;
-}
-
-void DummyWorkLoad(double timeInMs)
-{
-	Time startTime = SampleTime();
-	double deltaT = 0;
-	while (1)
-	{
-		if (deltaT >= timeInMs)
-			break;
-		Time endTime = SampleTime();
-
-		deltaT = ConvertToMs(endTime - startTime);
-	}
 }
 
 
