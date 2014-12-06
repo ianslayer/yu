@@ -9,6 +9,7 @@
 #elif defined YU_OS_MAC
 	#include <mach/mach.h>
 	#include <pthread.h>
+	#include <semaphore.h>
 #endif
 
 #include <atomic>
@@ -122,8 +123,10 @@ struct Semaphore
 
 #if defined YU_OS_WIN32
 	HANDLE sem;
+#elif defined YU_OS_MAC
+	sem_t* sem;
 #else
-
+	error semaphore not implemented
 #endif
 };
 void			WaitForSem(Semaphore& sem);
@@ -144,8 +147,6 @@ struct			FrameLock;
 FrameLock*		AddFrameLock();
 void			WaitForKick(FrameLock* lock);
 void			FrameComplete(FrameLock* lock);
-
-void			DummyWorkLoad(double timeInMs);
 
 }
 

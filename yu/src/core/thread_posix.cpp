@@ -1,7 +1,6 @@
-#include "thread.h"
+#include "thread_impl.h"
+#include "string.h"
 #include "log.h"
-#include <sys/types.h>
-#include <sys/sysctl.h>
 
 namespace yu
 {
@@ -13,7 +12,7 @@ struct ThreadRunnerContext
 {
 	ThreadPriority	priority;
 	u64				affinityMask;
-	ThreadFunc		func;
+	ThreadFunc*		func;
 	ThreadContext	context;
 
 	CondVar			threadCreationCV;
@@ -30,7 +29,7 @@ ThreadReturn ThreadCall ThreadRunner(ThreadContext context)
 	RegisterThread(threadHandle);
 
 	//subtle, but this two must be copied before notify,, else runnerContext my be destroied before they can be executed
-	ThreadFunc func = runnerContext->func;
+	ThreadFunc* func = runnerContext->func;
 	ThreadContext threadContext = runnerContext->context;
 
 	runnerContext->threadCreationCS.Unlock();
@@ -55,7 +54,7 @@ Thread CreateThread(ThreadFunc func, ThreadContext context, ThreadPriority prior
 	runnerContext.func = func;
 	runnerContext.context = context;
 
-	pthread_create(&thread.threadHandle, nullptr, ThreadRunner, &runnerContext);
+	pthread_create(&thread.handle, nullptr, ThreadRunner, &runnerContext);
 	WaitForCondVar(runnerContext.threadCreationCV, runnerContext.threadCreationCS);
 	runnerContext.threadCreationCS.Unlock();
 
@@ -68,24 +67,40 @@ ThreadHandle GetCurrentThreadHandle()
 }
 
 #if defined YU_OS_MAC
+
+u64	GetThreadAffinity(ThreadHandle threadHandle)
+{
+	thread_act_t thread = pthread_mach_thread_np(threadHandle);
+	thread_affinity_policy affinityTag[64];
+	yu::memset(affinityTag, sizeof(affinityTag), 0);
+	unsigned int infoCount = 64;
+	boolean_t getDefault = false;
+	kern_return_t ret = thread_policy_get(thread, THREAD_AFFINITY_POLICY, (thread_policy_t) affinityTag, &infoCount, &getDefault);
+
+	if(ret != KERN_SUCCESS)
+	{
+		Log("error: get thread affinity failed\n");
+		return 0;
+	}
+	
+	u64 mask = 0;
+	for(unsigned int i = 0; i < infoCount; i++)
+	{
+		mask |= (1 << affinityTag[i].affinity_tag);
+	}
+	
+	return mask;
+}
+
 void	SetThreadAffinity(ThreadHandle threadHandle, u64 affinityMask)
 {
-
-	int mib[2];
-	size_t len=1024;
-	char p[1024];
-
-	mib[0] = CTL_HW;
-	mib[1] = HW_PAGESIZE;
-	//sysctl(mib, 2, p, &len, NULL, 0);
-	sysctlbyname("hw.physicalcpu_max", p, &len, NULL, 0);
 	
 	thread_act_t thread = pthread_mach_thread_np(threadHandle);
 
 	if(affinityMask == 0) return;
 	
 	thread_affinity_policy affinityTag[64];
-	memset(affinityTag, sizeof(affinityTag), 0);
+	yu::memset(affinityTag, sizeof(affinityTag), 0);
 	
 	unsigned int numCore = 0;
 	
@@ -151,6 +166,32 @@ void NotifyCondVar(CondVar& cv)
 void NotifyAllCondVar(CondVar& cv)
 {
 	pthread_cond_broadcast(&cv.cv);
+}
+
+static char yuSemName[128];
+static std::atomic<unsigned int> semName;
+Semaphore::Semaphore(int initCount, int maxCount)
+{
+	unsigned int name = semName.fetch_add(1);
+	StringBuilder nameStr(yuSemName, sizeof(yuSemName));
+	nameStr.Cat("yuSem");
+	nameStr.Cat(name);
+	sem = sem_open(yuSemName, O_CREAT, 0644, (unsigned int)initCount);
+}
+
+Semaphore::~Semaphore()
+{
+	sem_close(sem);
+}
+
+void WaitForSem(Semaphore& sem)
+{
+	sem_wait(sem.sem);
+}
+
+void SignalSem(Semaphore& sem)
+{
+	sem_post(sem.sem);
 }
 
 }

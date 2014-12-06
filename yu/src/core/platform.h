@@ -67,8 +67,12 @@
 //align
 #if defined(YU_CC_MSVC)
 #	define YU_ALIGN(n) __declspec(align(n))
+#	define YU_PRE_ALIGN(n) __declspec(align(n))
+#	define YU_POST_ALIGN(n)
 #elif defined(YU_CC_GNU) || defined(YU_CC_CLANG)
 #	define YU_ALIGN(n) __attribute__((aligned(n)))
+#	define YU_PRE_ALIGN(n)
+#	define YU_POST_ALIGN(n) __attribute__((aligned(n)))
 #else 
 #	error yu need to define align
 #endif

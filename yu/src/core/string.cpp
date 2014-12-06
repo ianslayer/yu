@@ -76,6 +76,31 @@ bool StringBuilder::Cat(const char* source)
 	return Cat(source, strlen(source));
 }
 
+bool StringBuilder::Cat(unsigned int i)
+{
+	size_t convertLen = 0;
+	unsigned int li = i;
+	do{
+		li /= 10;
+		convertLen++;
+	}
+	while(li != 0);
+
+	
+	if(strLen + 1 + convertLen > bufSize)
+		return false;
+	
+	char* dest = strBuf + strLen;
+	li = i;
+	for(size_t catSize = 0; catSize < convertLen; catSize++)
+	{
+		*dest++ = ((li % 10) + '0');
+	}
+	*dest = 0;
+
+	strLen += convertLen;
+	return true;
+}
 
 struct StringIdHashFunc
 {
