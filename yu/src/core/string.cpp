@@ -225,20 +225,20 @@ void FreeStrTable(StrTable* table)
 }
 
 StrTable* gStrTable;
-ArenaAllocator* gSysArenaAllocator;
-ArenaAllocator* gSysNodeAllocator;
+ArenaAllocator* gStrArenaAllocator;
+ArenaAllocator* gStrNodeAllocator;
 
 void InitSysStrTable()
 {
-	gSysArenaAllocator = new ArenaAllocator();
-	gSysNodeAllocator = new ArenaAllocator();
-	gStrTable = NewStrTable(true, false, gSysArenaAllocator, gSysNodeAllocator);
+	gStrArenaAllocator = new ArenaAllocator();
+	gStrNodeAllocator = new ArenaAllocator();
+	gStrTable = NewStrTable(true, false, gStrArenaAllocator, gStrNodeAllocator);
 }
 
 void FreeSysStrTable()
 {
-	delete gSysNodeAllocator;
-	delete gSysArenaAllocator;
+	delete gStrNodeAllocator;
+	delete gStrArenaAllocator;
 }
 
 StringRef InternStr(const char* str)

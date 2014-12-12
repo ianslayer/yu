@@ -10,10 +10,10 @@ namespace yu
 {
 
 template<class T, int numElem>
-class LockSpscFifo
+class LockedFifo
 {
 public:
-	LockSpscFifo();
+	LockedFifo();
 	bool			Enqueue(const T& elem);
 	bool			Dequeue(T& data);
 
@@ -25,13 +25,13 @@ private:
 };
 
 template<class T, int numElem> 
-LockSpscFifo<T, numElem>::LockSpscFifo() : readPos(0), writePos(0)
+LockedFifo<T, numElem>::LockedFifo() : readPos(0), writePos(0)
 {
 
 }
 
 template<class T, int numElem>
-bool LockSpscFifo<T, numElem>::Enqueue(const T& elem)
+bool LockedFifo<T, numElem>::Enqueue(const T& elem)
 {
 	ScopedLock lock(mutex);
 	assert(IsPowerOfTwo(numElem));
@@ -45,7 +45,7 @@ bool LockSpscFifo<T, numElem>::Enqueue(const T& elem)
 }
 
 template<class T, int numElem>
-bool LockSpscFifo<T, numElem>::Dequeue(T& data)
+bool LockedFifo<T, numElem>::Dequeue(T& data)
 {
 	ScopedLock lock(mutex);
 	assert(IsPowerOfTwo(numElem));
@@ -114,15 +114,15 @@ bool LocklessSpscFifo<T, numElem>::Dequeue(T& data)
 #if defined LOCKLESS_SPSC_FIFO
 	template<class T, int num> using SpscFifo = LocklessSpscFifo < T, num > ;  //c++ 11 black magic...
 #else
-	template<class T, int num> using SpscFifo = LockSpscFifo < T, num > ;
+	template<class T, int num> using SpscFifo = LockedFifo < T, num > ;
 #endif
 
 //from 1024 cores http://www.1024cores.net/home/lock-free-algorithms/queues/bounded-mpmc-queue
 template<typename T, int numElem>
-class MpmcFifo
+class LocklessMpmcFifo
 {
 public:
-	MpmcFifo()
+	LocklessMpmcFifo()
 		:buffer_mask_(numElem - 1)
 	{
 		assert((numElem >= 2) &&
@@ -133,7 +133,7 @@ public:
 		dequeue_pos_.store(0, std::memory_order_relaxed);
 	}
 
-	~MpmcFifo()
+	~LocklessMpmcFifo()
 	{
 	}
 
@@ -209,9 +209,16 @@ private:
 	std::atomic<size_t>     dequeue_pos_;
 	cacheline_pad_t         pad3_;
 
-	MpmcFifo(MpmcFifo const&);
-	void operator = (MpmcFifo const&);
+	LocklessMpmcFifo(LocklessMpmcFifo const&);
+	void operator = (LocklessMpmcFifo const&);
 };
+
+#define LOCKLESS_MPMC_FIFO
+#if defined LOCKLESS_MPMC_FIFO
+	template<class T, int num> using MpmcFifo = LocklessMpmcFifo < T, num >; 
+#else
+	template<class T, int num> using MpmcFifo = LockedFifo < T, num >;
+#endif
 
 }
 

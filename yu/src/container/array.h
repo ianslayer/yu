@@ -64,6 +64,8 @@ public:
 
    void             SetGranularity(int granularity);
 
+   Allocator*		GetAllocator() { return allocator; }
+
 private:
    void             EnsureCapacity(int newSize);
 
@@ -128,7 +130,7 @@ Array<T>& Array<T>::operator=(const Array<T>& rhs)
 	mGranularity = rhs.mGranularity;
 	EnsureCapacity(rhs.Size());
 	mSize = rhs.mSize;
-	copy_n(rhs.begin(), rhs.size(), pArray);
+	copy_n(rhs.Begin(), rhs.Size(), pArray);
 
 	return *this;
 }
@@ -148,7 +150,7 @@ void Array<T>::EnsureCapacity(int newSize)
 	
 	int numCtor = newSize - mSize;
 	
-	if(newSize > mCapacity)
+	if(newSize > mCapacity || !pArray)
 	{
 
 		mCapacity = newSize;
