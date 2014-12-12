@@ -12,7 +12,8 @@
 #include "../../src/yu_app.h"
 namespace yu
 {
-
+class System;
+extern System* gSystem;
 void* YuMainThread(void* context)
 {
 	YuMain();
@@ -21,13 +22,17 @@ void* YuMainThread(void* context)
 
 }
 
+YuApp* gYuApp;
+
 int main(int argc, const char * argv[])
 {
 	pthread_t yuThread;
+	gYuApp = (YuApp*)[YuApp sharedApplication];
 	pthread_create(&yuThread, nullptr, yu::YuMainThread, nullptr);
-	NSApplication* yuApp = [YuApp sharedApplication];
-
-	[yuApp run];
+	
+	while(!yu::Initialized()) ;
+	
+	[gYuApp run];
 
 	return 0;
 }

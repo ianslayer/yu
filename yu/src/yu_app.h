@@ -9,15 +9,21 @@ class System;
 }
 
 @interface YuApp : NSApplication
+{
+	yu::System* system;
+}
 
 @property (assign) IBOutlet NSWindow* mainWin;
-@property yu::System* system;
+-(void) setSystem:(yu::System*) sys;
 
 -(void) run;
 @end
 
 @interface YuView : NSView<NSWindowDelegate>
-
+{
+	yu::System* system;
+}
+-(void) setSystem:(yu::System*) sys;
 @end
 
 #endif

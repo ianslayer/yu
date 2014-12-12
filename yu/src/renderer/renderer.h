@@ -90,7 +90,7 @@ struct MeshData
 	u32			numVertices = 0;
 	u32			numIndices = 0;
 
-	enum VertexChannel
+	enum Channel
 	{
 		POSITION = 1,
 		TEXCOORD = 1 << 1,
