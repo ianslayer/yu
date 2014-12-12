@@ -44,10 +44,12 @@ private:
 };
 extern ArenaAllocator* gSysArena;
 
+/*
 class VmArenaAllocator : public ArenaAllocator
 {
 
 };
+*/
 
 class StackAllocator : public Allocator
 {
@@ -68,8 +70,37 @@ public:
 	size_t			waterMark;
 };
 	
-void InitDefaultAllocator();
-void FreeDefaultAllocator();
+
+template<class T>
+T* New(Allocator* a) 
+{
+	void* mem = a->Alloc(sizeof(T));
+	return new(mem)T();
+}
+
+template<class T>
+T* NewAligned(Allocator* a, size_t align)
+{
+	void* mem = a->AllocAligned(sizeof(T), align);
+	return new(mem) T();
+}
+
+template<class T>
+void Delete(Allocator* a, T* p)
+{
+	p->~T();
+	a->Free(p);
+}
+
+template<class T>
+void DeleteAligned(Allocator* a, T* p)
+{
+	p->~T();
+	a->FreeAligned(p);
+}
+
+void InitSysAllocator();
+void FreeSysAllocator();
 
 }
 

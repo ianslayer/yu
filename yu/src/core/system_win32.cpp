@@ -21,14 +21,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			break;
 		}
 		ev.type = InputEvent::KEYBOARD;
-		ev.data.keyboardEvent.type = InputEvent::KeyboardEvent::DOWN;
-		ev.data.keyboardEvent.key = (unsigned int)wParam;
+		ev.keyboardEvent.type = InputEvent::KeyboardEvent::DOWN;
+		ev.keyboardEvent.key = (unsigned int)wParam;
 		
 		break;
 	case WM_KEYUP:
 		ev.type = InputEvent::KEYBOARD;
-		ev.data.keyboardEvent.type = InputEvent::KeyboardEvent::UP;
-		ev.data.keyboardEvent.key = (unsigned int)wParam;
+		ev.keyboardEvent.type = InputEvent::KeyboardEvent::UP;
+		ev.keyboardEvent.key = (unsigned int)wParam;
 		break;
 	case WM_MOUSEMOVE:
 		ev.type = InputEvent::MOUSE;
@@ -36,9 +36,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		x = GETX(lParam);
 		y = GETY(lParam);
 
-		ev.data.mouseEvent.type = InputEvent::MouseEvent::MOVE;
-		ev.data.mouseEvent.x = float(x);
-		ev.data.mouseEvent.y = float(y);
+		ev.mouseEvent.type = InputEvent::MouseEvent::MOVE;
+		ev.mouseEvent.x = float(x);
+		ev.mouseEvent.y = float(y);
 		
 		break;
 	case WM_LBUTTONDOWN:
@@ -47,9 +47,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		x = GETX(lParam);
 		y = GETY(lParam);
 
-		ev.data.mouseEvent.type = InputEvent::MouseEvent::L_BUTTON_DOWN;
-		ev.data.mouseEvent.x = float(x);
-		ev.data.mouseEvent.y = float(y);
+		ev.mouseEvent.type = InputEvent::MouseEvent::L_BUTTON_DOWN;
+		ev.mouseEvent.x = float(x);
+		ev.mouseEvent.y = float(y);
 
 		break;
 	case WM_LBUTTONUP:
@@ -58,9 +58,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		x = GETX(lParam);
 		y = GETY(lParam);
 
-		ev.data.mouseEvent.type = InputEvent::MouseEvent::L_BUTTON_UP;
-		ev.data.mouseEvent.x = float(x);
-		ev.data.mouseEvent.y = float(y);
+		ev.mouseEvent.type = InputEvent::MouseEvent::L_BUTTON_UP;
+		ev.mouseEvent.x = float(x);
+		ev.mouseEvent.y = float(y);
 
 		break;
 	case WM_RBUTTONDOWN:
@@ -69,9 +69,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		x = GETX(lParam);
 		y = GETY(lParam);
 
-		ev.data.mouseEvent.type = InputEvent::MouseEvent::R_BUTTON_DOWN;
-		ev.data.mouseEvent.x = float(x);
-		ev.data.mouseEvent.y = float(y);
+		ev.mouseEvent.type = InputEvent::MouseEvent::R_BUTTON_DOWN;
+		ev.mouseEvent.x = float(x);
+		ev.mouseEvent.y = float(y);
 
 		break;
 	case WM_RBUTTONUP:
@@ -80,9 +80,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		x = GETX(lParam);
 		y = GETY(lParam);
 
-		ev.data.mouseEvent.type = InputEvent::MouseEvent::R_BUTTON_UP;
-		ev.data.mouseEvent.x = float(x);
-		ev.data.mouseEvent.y = float(y);
+		ev.mouseEvent.type = InputEvent::MouseEvent::R_BUTTON_UP;
+		ev.mouseEvent.x = float(x);
+		ev.mouseEvent.y = float(y);
 
 		break;
 	case WM_MOUSEWHEEL:
@@ -90,8 +90,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		int scroll;
 		scroll = GET_WHEEL_DELTA_WPARAM(wParam);
 
-		ev.data.mouseEvent.type = InputEvent::MouseEvent::WHEEL;
-		ev.data.mouseEvent.scroll = float(scroll) / float(WHEEL_DELTA);
+		ev.mouseEvent.type = InputEvent::MouseEvent::WHEEL;
+		ev.mouseEvent.scroll = float(scroll) / float(WHEEL_DELTA);
 		
 		break;   
 

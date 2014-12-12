@@ -72,7 +72,7 @@ struct RWMutex
 
 struct ScopedLock
 {
-	ScopedLock(Mutex& m);
+	explicit ScopedLock(Mutex& m);
 	~ScopedLock();
 
 	Mutex& m;
@@ -80,7 +80,7 @@ struct ScopedLock
 
 struct Locker
 {
-	Locker(Mutex& m);
+	explicit Locker(Mutex& m);
 	~Locker();
 
 	void Lock();
@@ -126,7 +126,7 @@ struct Semaphore
 #elif defined YU_OS_MAC
 	sem_t* sem;
 #else
-	error semaphore not implemented
+#	error semaphore not implemented
 #endif
 };
 void			WaitForSem(Semaphore& sem);
@@ -140,7 +140,7 @@ u64				GetThreadAffinity(ThreadHandle thread);
 void			SetThreadAffinity(ThreadHandle threadHandle, u64 affinityMask);
 void			SetThreadName(ThreadHandle thread, const char* name);
 void			SetThreadPriority(ThreadHandle thread, ThreadPriority priority);
-bool			AllThreadExited();
+bool			AllThreadsExited();
 unsigned int	NumThreads();
 
 struct			FrameLock;

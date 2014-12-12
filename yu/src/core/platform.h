@@ -77,29 +77,37 @@
 #	error yu need to define align
 #endif
 
+//cache size
+#if defined (YU_CPU_X86) || defined (YU_CPU_X86_64)
+#	define CACHE_LINE 64
+#else
+#	error yu need to define CACHE_LINE	
+#endif
+
 #if defined YU_OS_WIN32
 #	define COMPILER_BARRIER() _ReadWriteBarrier()
 #elif defined YU_OS_MAC
 #	define COMPILER_BARRIER() asm volatile("" ::: "memory")
 #endif
 
-//int type
+#include <stdint.h>
+
 namespace yu
 {
-	typedef unsigned char u8;
-	typedef unsigned short u16;
-	typedef unsigned int u32;
-	typedef unsigned long long int u64;
+	typedef uint8_t u8;
+	typedef uint16_t u16;
+	typedef uint32_t u32;
+	typedef uint64_t u64;
 
-	typedef char i8;
-	typedef short i16;
-	typedef int i32;
-	typedef long long int i64;
+	typedef int8_t i8;
+	typedef int16_t i16;
+	typedef int32_t i32;
+	typedef int64_t i64;
 
 	typedef float f32;
 	typedef double f64;
 }
 
-#include <stddef.h>
+//#include <stddef.h>
 
 #endif

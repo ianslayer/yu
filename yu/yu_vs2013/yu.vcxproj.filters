@@ -25,6 +25,9 @@
     <Filter Include="Source Files\renderer">
       <UniqueIdentifier>{c780c412-8c8c-4c22-9b50-0bbb52c4dac5}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\app">
+      <UniqueIdentifier>{9efb9b68-85f4-4ce8-a85f-7fdefc54041b}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\core\allocator.cpp">
@@ -41,9 +44,6 @@
     </ClCompile>
     <ClCompile Include="..\src\core\timer.cpp">
       <Filter>Source Files\core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\renderer\renderer.cpp">
-      <Filter>Source Files\renderer</Filter>
     </ClCompile>
     <ClCompile Include="..\src\renderer\renderer_dx11.cpp">
       <Filter>Source Files\renderer</Filter>
@@ -65,6 +65,15 @@
     </ClCompile>
     <ClCompile Include="..\src\renderer\shader_compiler_dx11.cpp">
       <Filter>Source Files\renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\app\work_map.cpp">
+      <Filter>Source Files\app</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\app\common.cpp">
+      <Filter>Source Files\app</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\core\file_win32.cpp">
+      <Filter>Source Files\core</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -135,6 +144,21 @@
       <Filter>Source Files\core</Filter>
     </ClInclude>
     <ClInclude Include="..\src\core\thread_impl.h">
+      <Filter>Source Files\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\app\work_map.h">
+      <Filter>Source Files\app</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\renderer\color.h">
+      <Filter>Source Files\renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\renderer\renderer_impl.h">
+      <Filter>Source Files\renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\core\free_list.h">
+      <Filter>Source Files\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\core\file.h">
       <Filter>Source Files\core</Filter>
     </ClInclude>
   </ItemGroup>

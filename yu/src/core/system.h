@@ -73,15 +73,13 @@ struct InputEvent
 		float	scroll;
 	};
 
-	union EventData
+	Window		window;
+	Type		type;
+	union
 	{
 		MouseEvent		mouseEvent;
 		KeyboardEvent	keyboardEvent;
 	};
-
-	Window		window;
-	Type		type;
-	EventData	data;
 	u64			timeStamp;
 };
 
@@ -131,7 +129,7 @@ struct GPUInfo
 {
 
 };
-	
+
 class System
 {
 public:
@@ -151,7 +149,7 @@ public:
 	
 	static CPUInfo		GetCPUInfo();
 
-	void				ProcessInput();
+	void*				GetInputQueue(); //hack, ... I don't want include dequeue.h
 
 	friend bool			InitSystem();
 

@@ -1,12 +1,15 @@
 #include "../math/vector.h"
 #include <d3d11.h>
 #include "../container/dequeue.h"
+#include "../core/allocator.h"
 #include "../core/system.h"
 #include "../core/log.h"
 #include "../core/thread.h"
 #include "../core/timer.h"
 #include "../core/string.h"
-#include "renderer.h"
+#include "renderer_impl.h"
+#include <new>
+
 typedef HRESULT WINAPI  LPCREATEDXGIFACTORY(REFIID, void ** );
 typedef HRESULT WINAPI  LPD3D11CREATEDEVICE(IDXGIAdapter*, D3D_DRIVER_TYPE, HMODULE, UINT32, D3D_FEATURE_LEVEL*, UINT, UINT32, ID3D11Device**, D3D_FEATURE_LEVEL*, ID3D11DeviceContext** );
 
@@ -27,27 +30,55 @@ Thread				renderThread;
 		p = 0;\
 		}
 
-struct RenderThreadCmd
+
+struct MeshDataDx11
 {
-	enum CommandType
-	{
-		RESIZE_BUFFER,
-	};
-
-	CommandType type;
-
-	struct ResizeBufferCmd
-	{
-		unsigned int	width;
-		unsigned int	height;
-		TexFormat		fmt;
-	};
-
-	union Command
-	{
-		ResizeBufferCmd resizeBuffCmd;
-	} cmd;
+	ID3D11Buffer* vertexBuffer = nullptr;
+	ID3D11Buffer* indexBuffer = nullptr;
+	ID3D11InputLayout* inputLayout = nullptr;
 };
+
+struct CameraConstant
+{
+	Matrix4x4 viewMatrix;
+	Matrix4x4 projectionMatrix;
+};
+
+struct CameraDataDx11
+{
+	ID3D11Buffer* constantBuffer = nullptr;
+};
+
+struct RendererDx11 : public Renderer
+{
+	MeshDataDx11 dx11MeshList[MAX_MESH];
+	CameraDataDx11 dx11CameraList[MAX_CAMERA];
+};
+
+RendererDx11* gRenderer;
+
+Renderer* CreateRenderer()
+{
+	RendererDx11* renderer = New<RendererDx11>(gSysArena);
+	memset(renderer, 0, sizeof(RendererDx11));
+	gRenderer = renderer;
+	return renderer;
+}
+
+void FreeRenderer(Renderer* renderer)
+{
+	RendererDx11* dx11Renderer = (RendererDx11*)renderer;
+	for (int i = 0; i < MAX_MESH; i++)
+	{
+		SAFE_RELEASE(dx11Renderer->dx11MeshList[i].vertexBuffer);
+		SAFE_RELEASE(dx11Renderer->dx11MeshList[i].indexBuffer);
+		SAFE_RELEASE(dx11Renderer->dx11MeshList[i].inputLayout);
+	}
+	for (int i = 0; i < MAX_CAMERA; i++)
+	{
+		SAFE_RELEASE(dx11Renderer->dx11CameraList[i].constantBuffer);
+	}
+}
 
 struct RenderDeviceDx11
 {
@@ -318,9 +349,9 @@ void ResizeBackBuffer(unsigned int width, unsigned int height, TexFormat fmt)
 
 	RenderThreadCmd cmd;
 	cmd.type = RenderThreadCmd::RESIZE_BUFFER;
-	cmd.cmd.resizeBuffCmd.width = width;
-	cmd.cmd.resizeBuffCmd.height = height;
-	cmd.cmd.resizeBuffCmd.fmt = fmt;
+	cmd.resizeBuffCmd.width = width;
+	cmd.resizeBuffCmd.height = height;
+	cmd.resizeBuffCmd.fmt = fmt;
 
 //	if(gDx11Device->goingFullScreen)
 	if (!gDx11Device->renderThreadCmdQueue.Enqueue(cmd))
@@ -348,32 +379,13 @@ void ExecResizeBackBufferCmd(unsigned int width, unsigned int height, TexFormat 
 
 }
 
-static void ExecThreadCmd()
+static void ExecSwapFrameBufferCmd(bool vsync)
 {
-	RenderThreadCmd cmd;
-	while (gDx11Device->renderThreadCmdQueue.Dequeue(cmd))
-	{
-		switch (cmd.type)
-		{
-		case(RenderThreadCmd::RESIZE_BUFFER):
-			{
-				RenderThreadCmd::ResizeBufferCmd resizeCmd = cmd.cmd.resizeBuffCmd;
-				ExecResizeBackBufferCmd(resizeCmd.width, resizeCmd.height, resizeCmd.fmt);
-			}break;
-		}
-	}
+	gDx11Device->dxgiSwapChain->Present(vsync ? 1 : 0, 0);
 }
 
 ID3DBlob* CompileShaderDx11(const char* shaderSource, size_t sourceLen, const char* entryPoint, const char* profile);
-
-static const char* testShader = "";
-
-
-struct VertexP3C4
-{
-	Vector3 pos;
-	u8		color[4];
-};
+ID3DBlob* CompileShaderFromFileDx11(const char* path, const char* entryPoint, const char* profile);
 
 ID3D11InputLayout* CreateInputLayout(D3D11_INPUT_ELEMENT_DESC* desc, UINT numElem)
 {
@@ -386,14 +398,14 @@ ID3D11InputLayout* CreateInputLayout(D3D11_INPUT_ELEMENT_DESC* desc, UINT numEle
 
 	shaderStr.Cat("};\n");
 	shaderStr.Cat("struct VS_OUTPUT {\n\
-				  	float4 Position : SV_POSITION; \n\
-					};\n\
-				");
+				  				  	float4 Position : SV_POSITION; \n\
+														};\n\
+																		");
 	shaderStr.Cat("VS_OUTPUT VS(VertexInput IN) {\n");
 	shaderStr.Cat("VS_OUTPUT Out; \n\
-					Out.Position = float4(0.0, 0.0, 0.0, 0.0); \n\
-					return Out; \n\
-				  ");
+				  					Out.Position = float4(0.0, 0.0, 0.0, 0.0); \n\
+														return Out; \n\
+																		  ");
 	shaderStr.Cat("}");
 
 	ID3DBlob* vsShader = CompileShaderDx11(shaderStr.strBuf, shaderStr.strLen, "VS", "vs_5_0");
@@ -405,32 +417,239 @@ ID3D11InputLayout* CreateInputLayout(D3D11_INPUT_ELEMENT_DESC* desc, UINT numEle
 	return inputLayout;
 }
 
-const char* vsShaderSrc = " struct VertexInput { \n\
-							float3 position : POSITION; \n\
-							float4 color : COLOR;\n\
-						};\n\
-						struct VS_OUTPUT {\n\
-							float4 Position : SV_POSITION; \n\
-						};\n\
-						VS_OUTPUT VS(VertexInput IN) { \n\
-							VS_OUTPUT Out;\n\
-							Out.Position = float4(IN.position, 1); \n\
-							return Out; \n\
-						} \n\
-";
+static void ExecUpdateMeshCmd(RendererDx11* renderer, MeshHandle handle)
+{
+	MeshData* data = renderer->meshList.Get(handle.id);
+	MeshDataDx11* dx11Data = &renderer->dx11MeshList[handle.id];
 
-const char* psShaderSrc = " struct VS_OUTPUT {\n\
-							float4 Position : SV_POSITION; \n\
-							};\n\
-							struct PS_OUTPUT {\n\
-						  	float4 color: SV_TARGET0; \n\
-						  	};\n\
-							PS_OUTPUT PS(VS_OUTPUT IN) {\n\
-								PS_OUTPUT Out; \n\
-								Out.color = float4(1, 0, 0, 1); \n\
-								return Out; \n\
-							}\
-						  ";
+	SAFE_RELEASE(dx11Data->vertexBuffer);
+	SAFE_RELEASE(dx11Data->indexBuffer);
+	SAFE_RELEASE(dx11Data->inputLayout);
+
+	//TODO: hack, fixme
+	D3D11_INPUT_ELEMENT_DESC vertDesc[] =
+	{
+		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA },
+		{ "COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA }
+	};
+
+	ID3D11InputLayout* inputLayout = CreateInputLayout(vertDesc, 2);
+	dx11Data->inputLayout = inputLayout;
+
+	UINT vertexSize = 0;
+	if (HasPos(data->channelMask))
+	{
+		vertexSize += sizeof(Vector3);
+	}
+	if (HasTexcoord(data->channelMask))
+	{
+		vertexSize += sizeof(Vector2);
+	}
+	if (HasColor(data->channelMask))
+	{
+		vertexSize += sizeof(Color);
+	}
+
+	UINT vbSize = vertexSize * data->numVertices;
+	void* vb = gDefaultAllocator->Alloc(vbSize);
+
+	u8* vertex = (u8*) vb;
+	for (u32 i = 0; i < data->numVertices; i++)
+	{
+		if (HasPos(data->channelMask))
+		{
+			*((Vector3*)vertex) = data->posList[i];
+			vertex += sizeof(Vector3);
+		}
+		if (HasTexcoord(data->channelMask))
+		{
+			*((Vector2*)vertex) = data->texcoordList[i];
+			vertex += sizeof(Vector2);
+		}
+		if (HasColor(data->channelMask))
+		{
+			*((Color*)vertex) = data->colorList[i];
+			vertex += sizeof(Color);
+		}
+	}
+	assert(vertex == (u8*)vb + vbSize);
+
+	D3D11_BUFFER_DESC vbdesc = {};
+	vbdesc.ByteWidth = vbSize;
+	vbdesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+	vbdesc.Usage = D3D11_USAGE_DEFAULT;
+
+	D3D11_SUBRESOURCE_DATA vertexBufferData;
+	vertexBufferData.pSysMem = vb;
+	vertexBufferData.SysMemPitch = vbSize;
+	vertexBufferData.SysMemSlicePitch = 0;
+	HRESULT hr = gDx11Device->d3d11Device->CreateBuffer(&vbdesc, &vertexBufferData, &dx11Data->vertexBuffer);
+	gDefaultAllocator->Free(vb);
+	if (SUCCEEDED(hr))
+	{
+		Log("successfully created vertex buffer\n");
+	}
+	else
+	{
+		Log("error: failed to create vertex buffer\n");
+	}
+
+	UINT ibSize = data->numIndices * sizeof(u32);
+
+	D3D11_BUFFER_DESC ibdesc = {};
+	ibdesc.ByteWidth = ibSize;
+	ibdesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+	ibdesc.Usage = D3D11_USAGE_DEFAULT;
+
+	D3D11_SUBRESOURCE_DATA indexBufferData;
+	indexBufferData.pSysMem = data->indices;
+	indexBufferData.SysMemPitch = ibSize;
+	indexBufferData.SysMemSlicePitch = 0;
+
+	hr = gDx11Device->d3d11Device->CreateBuffer(&ibdesc, &indexBufferData, &dx11Data->indexBuffer);
+	if (SUCCEEDED(hr))
+	{
+		Log("successfully created index buffer\n");
+	}
+	else
+	{
+		Log("error: failed to create index buffer\n");
+	}
+}
+
+void ExecUpdateCameraCmd(RendererDx11* renderer, CameraHandle handle)
+{
+	CameraData* data = renderer->cameraList.Get(handle.id);
+	CameraDataDx11* dx11Data = &renderer->dx11CameraList[handle.id];
+	CameraConstant camConstant;
+	camConstant.viewMatrix = data->ViewMatrix();
+	camConstant.projectionMatrix = data->PerspectiveMatrix();
+
+	if (!dx11Data->constantBuffer)
+	{
+		D3D11_BUFFER_DESC cbDesc = {};
+		cbDesc.ByteWidth = sizeof(CameraConstant);
+		cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+		cbDesc.Usage = D3D11_USAGE_DYNAMIC;
+		cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+		HRESULT hr = gDx11Device->d3d11Device->CreateBuffer(&cbDesc, nullptr, &dx11Data->constantBuffer);
+		if (SUCCEEDED(hr))
+		{
+			Log("successfully created camera constant buffer\n");
+		}
+	}
+	if (!dx11Data->constantBuffer)
+	{
+		Log("error: failed to create camera constant buffer\n");
+		return;
+	}
+	D3D11_MAPPED_SUBRESOURCE mappedBuf;
+	HRESULT hr = gDx11Device->d3d11DeviceContext->Map(dx11Data->constantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedBuf);
+	
+	if (SUCCEEDED(hr))
+	{
+		*((CameraConstant*)mappedBuf.pData) = camConstant;
+	}
+	else
+	{
+		Log("error: failed to map camera constant buffer\n");
+	}
+
+	gDx11Device->d3d11DeviceContext->Unmap(dx11Data->constantBuffer, 0);
+}
+
+ID3D11VertexShader* vertexShader = nullptr;
+ID3D11PixelShader* pixelShader = nullptr;
+
+struct VertexP3C4
+{
+	Vector3 pos;
+	u8		color[4];
+};
+
+static void ExecRenderCmd(RendererDx11* renderer, RenderQueue* queue, int renderListIdx)
+{
+	RenderList* list = &(queue->renderList[renderListIdx]);
+	assert(list->renderInProgress.load(std::memory_order_acquire));
+
+	for (int i = 0; i < list->cmdCount; i++)
+	{
+		MeshHandle handle = list->cmd[i].mesh;
+		MeshDataDx11* mesh = &renderer->dx11MeshList[handle.id];
+
+		gDx11Device->d3d11DeviceContext->IASetInputLayout(mesh->inputLayout);
+		UINT stride = sizeof(VertexP3C4);
+		UINT offset = 0;
+		gDx11Device->d3d11DeviceContext->IASetVertexBuffers(0, 1, &mesh->vertexBuffer, &stride, &offset);
+		gDx11Device->d3d11DeviceContext->IASetIndexBuffer(mesh->indexBuffer, DXGI_FORMAT_R32_UINT, 0);
+		gDx11Device->d3d11DeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		gDx11Device->d3d11DeviceContext->VSSetShader(vertexShader, nullptr, 0);
+		gDx11Device->d3d11DeviceContext->PSSetShader(pixelShader, nullptr, 0);
+		gDx11Device->d3d11DeviceContext->DrawIndexed(3, 0, 0);
+	}
+
+	gDx11Device->d3d11DeviceContext->Flush();
+	list->cmdCount = 0;
+	list->renderInProgress.store(false, std::memory_order_release);
+}
+
+static void ExecThreadCmd()
+{
+	RenderThreadCmd cmd;
+	while (gDx11Device->renderThreadCmdQueue.Dequeue(cmd))
+	{
+		switch (cmd.type)
+		{
+		case(RenderThreadCmd::RESIZE_BUFFER):
+			{
+				RenderThreadCmd::ResizeBufferCmd resizeCmd = cmd.resizeBuffCmd;
+				ExecResizeBackBufferCmd(resizeCmd.width, resizeCmd.height, resizeCmd.fmt);
+			}break;
+
+		}
+	}
+}
+
+static bool ExecThreadCmd(RendererDx11* renderer)
+{
+	bool frameEnd = false;
+	for (int i = 0; i < renderer->numQueue; i++)
+	{
+		RenderQueue* queue = renderer->renderQueue[i];
+		RenderThreadCmd cmd;
+		while (queue->cmdList.Dequeue(cmd))
+		{
+			switch (cmd.type)
+			{
+				case(RenderThreadCmd::RESIZE_BUFFER) :
+				{
+					RenderThreadCmd::ResizeBufferCmd resizeCmd = cmd.resizeBuffCmd;
+					ExecResizeBackBufferCmd(resizeCmd.width, resizeCmd.height, resizeCmd.fmt);
+				}break;
+				case (RenderThreadCmd::UPDATE_MESH) :
+				{
+					ExecUpdateMeshCmd(renderer, cmd.updateMeshCmd.handle);
+				}break;
+				case (RenderThreadCmd::UPDATE_CAMERA) :
+				{
+					ExecUpdateCameraCmd(renderer, cmd.updateCameraCmd.handle);
+				}break;
+				case(RenderThreadCmd::RENDER) :
+				{
+					ExecRenderCmd(renderer, queue, cmd.renderCmd.renderListIndex);
+				}break;
+				case (RenderThreadCmd::SWAP) :
+				{
+					frameEnd = true;
+					ExecSwapFrameBufferCmd(cmd.swapCmd.vsync);
+				}break;
+			}
+		}
+	}
+
+	return frameEnd;
+}
 
 bool YuRunning();
 void WaitForKick(FrameLock* lock);
@@ -442,20 +661,10 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 	param->initDx11CS.Unlock();
 	NotifyCondVar(param->initDx11CV);
 
-	FrameLock* frameLock = AddFrameLock();
+	FrameLock* frameLock = AddFrameLock(); //TODO: seperate render thread kick from others, shoot and forget
 
-	D3D11_INPUT_ELEMENT_DESC vertDesc[] = 
-	{
-		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA },
-		{ "COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA }
-	};
-
-	ID3D11InputLayout* inputLayout = CreateInputLayout(vertDesc, 2);
-	ID3DBlob* vertexShaderBlob = CompileShaderDx11(vsShaderSrc, strlen(vsShaderSrc), "VS", "vs_5_0");
-	ID3DBlob* pixelShaderBlob = CompileShaderDx11(psShaderSrc, strlen(psShaderSrc), "PS", "ps_5_0");
-
-	ID3D11VertexShader* vertexShader = nullptr;
-	ID3D11PixelShader* pixelShader = nullptr;
+	ID3DBlob* vertexShaderBlob = CompileShaderFromFileDx11("data/shaders/flat.hlsl", "VS", "vs_5_0");
+	ID3DBlob* pixelShaderBlob = CompileShaderFromFileDx11("data/shaders/flat.hlsl", "PS", "ps_5_0");
 
 	if (vertexShaderBlob)
 	{
@@ -475,50 +684,8 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 		}
 	}
 
-	VertexP3C4 triangle[3];
-	triangle[0].pos = Vector3(0, 0.5, 0.5);
-	triangle[1].pos = Vector3(0.5, -0.5, 0.5);
-	triangle[2].pos = Vector3(-0.5, -0.5, 0.5);
-
-	u32 indices[3] = { 0, 1, 2 };
-
-	ID3D11Buffer* vertexBuffer = nullptr;
-	ID3D11Buffer* indexBuffer = nullptr;
-
-
-	D3D11_BUFFER_DESC vbdesc = {};
-	vbdesc.ByteWidth = sizeof(triangle);
-	vbdesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-	vbdesc.Usage = D3D11_USAGE_DEFAULT;
-
-	D3D11_SUBRESOURCE_DATA vertexBufferData;
-	vertexBufferData.pSysMem = &triangle;
-	vertexBufferData.SysMemPitch = sizeof(triangle);
-	vertexBufferData.SysMemSlicePitch = 0;
-	HRESULT hr = gDx11Device->d3d11Device->CreateBuffer(&vbdesc, &vertexBufferData, &vertexBuffer);
-	if (SUCCEEDED(hr))
-	{
-		Log("successfully created vertex buffer\n");
-	}
-
-	D3D11_BUFFER_DESC ibdesc = {};
-	ibdesc.ByteWidth = sizeof(indices);
-	ibdesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-	ibdesc.Usage = D3D11_USAGE_DEFAULT;
-
-	D3D11_SUBRESOURCE_DATA indexBufferData;
-	indexBufferData.pSysMem = indices;
-	indexBufferData.SysMemPitch = sizeof(indices);
-	indexBufferData.SysMemSlicePitch = 0;
-
-	 hr = gDx11Device->d3d11Device->CreateBuffer(&ibdesc, &indexBufferData, &indexBuffer);
-	if (SUCCEEDED(hr))
-	{
-		Log("successfully created index buffer\n");
-	}
-
 	ID3D11Texture2D* backBufferTexture;
-	hr = gDx11Device->dxgiSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&backBufferTexture);
+	HRESULT hr = gDx11Device->dxgiSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&backBufferTexture);
 
 	ID3D11RenderTargetView* renderTarget;
 	hr = gDx11Device->d3d11Device->CreateRenderTargetView(backBufferTexture, NULL, &renderTarget);
@@ -544,7 +711,6 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 		kTimer.Finish();
 		waitKickTime = kTimer.DurationInMs();
 
-		ExecThreadCmd();
 
 		innerTimer.Start();
 
@@ -560,19 +726,16 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 		viewport.MinDepth = 0;
 		viewport.MaxDepth = 1;
 		gDx11Device->d3d11DeviceContext->RSSetViewports(1, &viewport);
-		gDx11Device->d3d11DeviceContext->IASetInputLayout(inputLayout);
-		UINT stride = sizeof(VertexP3C4);
-		UINT offset = 0;
-		gDx11Device->d3d11DeviceContext->IASetVertexBuffers(0, 1, &vertexBuffer, &stride, &offset);
-		gDx11Device->d3d11DeviceContext->IASetIndexBuffer(indexBuffer, DXGI_FORMAT_R32_UINT, 0);
-		gDx11Device->d3d11DeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		gDx11Device->d3d11DeviceContext->VSSetShader(vertexShader, nullptr, 0);
-		gDx11Device->d3d11DeviceContext->PSSetShader(pixelShader, nullptr, 0);
-		gDx11Device->d3d11DeviceContext->DrawIndexed(3, 0, 0);
-		gDx11Device->d3d11DeviceContext->Flush();
-		SwapFrameBuffer();
-		innerTimer.Finish();
 
+
+		ExecThreadCmd();
+
+		bool frameEnd = false;
+		while (!frameEnd && YuRunning())
+			frameEnd =ExecThreadCmd(gRenderer);
+
+		innerTimer.Finish();
+		FrameComplete(frameLock);
 
 		f++;
 		/*
@@ -588,21 +751,18 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 		}
 		*/
 		frameCount++;
-		FrameComplete(frameLock);
+
 	}
 	SAFE_RELEASE(backBufferTexture);
 	SAFE_RELEASE(renderTarget);
 	SAFE_RELEASE(vertexShader);
 	SAFE_RELEASE(pixelShader);
-	SAFE_RELEASE(vertexBuffer);
-	SAFE_RELEASE(indexBuffer);
-	SAFE_RELEASE(inputLayout);
 
 	FreeDX11();
 	return 0;
 }
 
-void InitDX11Thread(const Window& win, const FrameBufferDesc& desc)
+void InitRenderThread(const Window& win, const FrameBufferDesc& desc)
 {
 	InitDX11Param param;
 	param.initDx11CS.Lock();
@@ -610,14 +770,9 @@ void InitDX11Thread(const Window& win, const FrameBufferDesc& desc)
 	param.desc = desc;
 	renderThread = CreateThread(RenderThread, &param);
 	SetThreadName(renderThread.handle, "Render Thread");
-	SetThreadAffinity(renderThread.handle,  1 << 7);
+	SetThreadAffinity(renderThread.handle, 1 << 7);
 	WaitForCondVar(param.initDx11CV, param.initDx11CS);
 	param.initDx11CS.Unlock();
-}
-
-void SwapFrameBuffer()
-{
-	gDx11Device->dxgiSwapChain->Present(0, 0);
 }
 
 
