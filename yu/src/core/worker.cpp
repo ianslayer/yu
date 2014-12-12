@@ -44,8 +44,8 @@ struct WorkItem
 	std::atomic<bool>		isDone;
 
 	std::atomic<u64>		dbgFrameCount;
-};
-YU_POST_ALIGN(CACHE_LINE)
+} YU_POST_ALIGN(CACHE_LINE);
+
 
 YU_PRE_ALIGN(CACHE_LINE)
 struct WorkerThread
@@ -54,8 +54,7 @@ struct WorkerThread
 	Thread					thread;
 	ArenaAllocator			workerFrameArena;
 	Array<WorkItem*>		retiredItemPermitList; //TODO: move this into retired function, this should use a stack allocator (alloca)
-};
-YU_POST_ALIGN(CACHE_LINE)
+} YU_POST_ALIGN(CACHE_LINE);
 
 WorkItem* NewWorkItem(Allocator* allocator)
 {
@@ -302,7 +301,7 @@ void InitWorkerSystem()
 	
 	for (unsigned int i = 1; i < gWorkerSystem->numWorkerThread + 1; i++) //zero is main thread
 	{
-		gWorkerSystem->workerThread[i].id = i;
+		gWorkerSystem->workerThread[i].id = (int)i;
 		gWorkerSystem->workerThread[i].thread = CreateThread(WorkerThreadFunc, &gWorkerSystem->workerThread[i], NormalPriority, 1 << (i));
 	}
 }

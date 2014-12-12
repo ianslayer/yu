@@ -4,6 +4,7 @@
 namespace yu
 {
 void InitYu();
+bool Initialized();
 void FreeYu();
 int YuMain();
 }

@@ -1,3 +1,4 @@
+#include "../core/platform.h"
 #include "../core/worker.h"
 #include "work_map.h"
 
@@ -14,23 +15,23 @@ WorkItem* TestRenderItem();
 
 void FreeWorkItem(WorkItem* item);
 
-void Clear(WorkMap* workMap)
+void Clear(WorkMap* _workMap)
 {
-	ResetWorkItem(workMap->startWork);
-	ResetWorkItem(workMap->inputWork);
-	ResetWorkItem(workMap->testRenderer);
-	ResetWorkItem(workMap->endWork);
+	ResetWorkItem(_workMap->startWork);
+	ResetWorkItem(_workMap->inputWork);
+	ResetWorkItem(_workMap->testRenderer);
+	ResetWorkItem(_workMap->endWork);
 }
 
-void SubmitWork(WorkMap* workMap)
+void SubmitWork(WorkMap* _workMap)
 {
-	SubmitWorkItem(workMap->startWork, nullptr, 0);
-	SubmitWorkItem(workMap->inputWork, &workMap->startWork, 1);
-	SubmitWorkItem(workMap->testRenderer, &workMap->inputWork, 1);
+	SubmitWorkItem(_workMap->startWork, nullptr, 0);
+	SubmitWorkItem(_workMap->inputWork, &_workMap->startWork, 1);
+	//SubmitWorkItem(_workMap->testRenderer, &_workMap->inputWork, 1);
 
-	WorkItem* endDep[2] = { workMap->startWork, workMap->testRenderer };
+	WorkItem* endDep[2] = { _workMap->startWork, _workMap->testRenderer };
 
-	SubmitWorkItem(workMap->endWork, endDep, 2);
+	SubmitWorkItem(_workMap->endWork, endDep, 1);
 
 }
 

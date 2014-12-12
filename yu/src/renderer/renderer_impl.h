@@ -1,4 +1,5 @@
 #include "renderer.h"
+#include "../container/dequeue.h"
 #include "../core/free_list.h"
 
 namespace yu

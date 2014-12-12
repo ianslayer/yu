@@ -18,6 +18,7 @@ void WaitFrameComplete();
 void FakeKickStart();
 
 std::atomic<int> gYuRunning;
+std::atomic<int> gYuInitialized;
 void InitYu()
 {
 	InitSysLog();
@@ -31,6 +32,8 @@ void InitYu()
 
 	InitWorkMap();
 
+	gYuInitialized = 1;
+	
 	Rect rect;
 	rect.x = 128;
 	rect.y = 128;
@@ -67,6 +70,11 @@ void FreeYu()
 	FreeSysStrTable();
 	FreeSysAllocator();
 	FreeSysLog();
+}
+
+bool Initialized()
+{
+	return (gYuInitialized.load(std::memory_order_acquire) == 1);
 }
 
 bool YuRunning()
