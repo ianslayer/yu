@@ -41,11 +41,14 @@ struct WindowThreadCmd
 	Command		cmd;
 };
 
+
+using InputQueue = SpscFifo < InputEvent, 256 > ;
+
 class SystemImpl : public System
 {
 public:
 	SpscFifo<WindowThreadCmd, 16>		winThreadCmdQueue; //yumain to window thread
-	SpscFifo<InputEvent, 256>			inputQueue;			//window to yumain thread
+	InputQueue							inputQueue;			//window to yumain thread
 	Array<Window>						windowList;
 	Thread								windowThread;
 };
@@ -56,7 +59,7 @@ bool PlatformInitSystem();
 
 bool InitSystem()
 {
-	gSystem = new System();
+	gSystem = New<System>(gSysArena);
 
 	if(!PlatformInitSystem())
 	{
@@ -94,8 +97,7 @@ bool InitSystem()
 
 void FreeSystem()
 {
-
-	delete gSystem;
+	Delete(gSysArena, gSystem);
 	gSystem = 0;
 }
 
@@ -146,14 +148,13 @@ CPUInfo System::GetCPUInfo()
 	{
 		char str[4];
 	};
-	union Info
+	union
 	{
 		Registers	reg;
 		Str			str[4];
 		u32			info[4];
-	};
+	} info;
 
-	Info info;
 	u32 maxCmd;
 	cpuid(info.info, 0);
 	maxCmd = info.reg.eax;
@@ -234,50 +235,9 @@ System::~System()
 	delete sysImpl;
 }
 
-void System::ProcessInput()
+void* System::GetInputQueue()
 {
-	InputEvent event;
-	while (gSystem->sysImpl->inputQueue.Dequeue(event))
-	{
-		Time sysInitTime = SysStartTime();
-		Time eventTime;
-		eventTime.time = event.timeStamp;
-
-
-		switch (event.type)
-		{
-			case InputEvent::KEYBOARD:
-			{
-				Log("event time: %f ", ConvertToMs(eventTime - sysInitTime) / 1000.f);
-				if (event.data.keyboardEvent.type == InputEvent::KeyboardEvent::DOWN)
-				{
-					Log("key down\n");
-				}
-				else if (event.data.keyboardEvent.type == InputEvent::KeyboardEvent::UP)
-				{
-					Log("key up\n");
-				}
-			}break;
-			case InputEvent::MOUSE:
-			{
-				if (event.data.mouseEvent.type == InputEvent::MouseEvent::L_BUTTON_DOWN)
-				{
-					Log("event time: %f ", ConvertToMs(eventTime - sysInitTime) / 1000.f);
-					Log("left button down: %f, %f\n", event.data.mouseEvent.x, event.data.mouseEvent.y);
-				}
-				if (event.data.mouseEvent.type == InputEvent::MouseEvent::R_BUTTON_DOWN)
-				{
-					Log("event time: %f ", ConvertToMs(eventTime - sysInitTime) / 1000.f);
-					Log("right button down: %f, %f\n", event.data.mouseEvent.x, event.data.mouseEvent.y);
-				}
-				if (event.data.mouseEvent.type == InputEvent::MouseEvent::WHEEL)
-				{
-					Log("event time: %f ", ConvertToMs(eventTime - sysInitTime) / 1000.f);
-					Log("scroll: %f\n", event.data.mouseEvent.scroll);
-				}
-			}break;
-		}
-	}
+	return &sysImpl->inputQueue;
 }
 
 }

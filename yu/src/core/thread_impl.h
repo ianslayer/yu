@@ -7,7 +7,6 @@
 namespace yu
 {
 #define MAX_THREAD 32
-#define CACHE_LINE 64
 
 ScopedLock::ScopedLock(Mutex& _m) : m(_m)
 {
@@ -105,26 +104,27 @@ static Event* gFrameSync;
 
 void InitThreadRuntime()
 {
-	gThreadTable = new(gDefaultAllocator->AllocAligned(sizeof(ThreadTable), CACHE_LINE)) ThreadTable();
-	gFrameSync = new Event;
+	gThreadTable = NewAligned<ThreadTable>(gSysArena, CACHE_LINE);
+	gFrameSync = New<Event>(gSysArena);
 }
 
 void FreeThreadRuntime()
 {
-	gThreadTable->~ThreadTable();
-	gDefaultAllocator->FreeAligned(gThreadTable);
+	Delete(gSysArena, gFrameSync);
+	DeleteAligned(gSysArena, gThreadTable);
 }
 
 void FakeKickStart() //for clear thread;
 {
 	//gThreadTable->frameCount.fetch_add(1);
 	SignalEvent(*gFrameSync);
+	gThreadTable->frameCount.fetch_add(1);
 }
 
 void KickStart()
 {
 	SignalEvent(*gFrameSync); //TODO: eliminate gFrameSync... shared state
-
+	/*
 	u64 globalFrameCount = gThreadTable->frameCount.load(std::memory_order_relaxed);
 	
 	for (unsigned int i = 0; i < gThreadTable->numLocks; i++) //wait for all thread kicked
@@ -133,12 +133,16 @@ void KickStart()
 		while (frameCount <= globalFrameCount)
 			frameCount = gThreadTable->frameLockList[i].frameCount.load(std::memory_order_acquire);
 	}
-	ResetEvent(*gFrameSync);
+	*/
+	gThreadTable->frameCount.fetch_add(1, std::memory_order_release);
+	//ResetEvent(*gFrameSync);
 }
 
 void WaitForKick(FrameLock* lock)
 {
 	WaitForEvent(*gFrameSync);
+	lock->frameCount.fetch_add(1, std::memory_order_release);
+
 	u64 globalFrameCount = gThreadTable->frameCount.load(std::memory_order_acquire);
 	u64 frameCount = lock->frameCount.load(std::memory_order_relaxed);
 	while (frameCount > globalFrameCount)
@@ -147,7 +151,6 @@ void WaitForKick(FrameLock* lock)
 		globalFrameCount = gThreadTable->frameCount.load(std::memory_order_acquire);
 	}
 
-	lock->frameCount.fetch_add(1, std::memory_order_release);
 }
 
 void WaitFrameComplete()
@@ -157,9 +160,7 @@ void WaitFrameComplete()
 		WaitForEvent(gThreadTable->frameLockList[i].event);
 		ResetEvent(gThreadTable->frameLockList[i].event);
 	}
-	//ResetEvent(*gFrameSync);
-	gThreadTable->frameCount.fetch_add(1, std::memory_order_release);
-
+	ResetEvent(*gFrameSync);
 }
 
 void FrameComplete(FrameLock* lock)
@@ -196,7 +197,7 @@ unsigned int NumThreads()
 	return gThreadTable->numThreads;
 }
 
-bool AllThreadExited()
+bool AllThreadsExited()
 {
 	for (unsigned int i = 0; i < gThreadTable->numThreads; i++)
 	{

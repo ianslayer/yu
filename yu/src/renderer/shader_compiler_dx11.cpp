@@ -1,4 +1,5 @@
 #include "../core/log.h"
+#include "../core/file.h"
 #include <D3DCompiler.h>
 #pragma comment (lib, "D3dcompiler.lib ")
 
@@ -46,6 +47,25 @@ ID3DBlob* CompileShaderDx11(const char* shaderSource, size_t sourceLen, const ch
 	SAFE_RELEASE(errorBlob);
 
 	return shaderBlob;
+}
+
+ID3DBlob* CompileShaderFromFileDx11(const char* path, const char* entryPoint, const char* profile)
+{
+	size_t fileSize = FileSize(path);
+	if (fileSize == 0)
+	{
+		Log("error, dx11 shader compiler can't open file:%s\n", path);
+		return nullptr;
+	}
+	char* shaderSource = new char[fileSize + 1];
+	memset(shaderSource, 0, fileSize + 1);
+	size_t readSize = ReadFile(path, shaderSource, fileSize);
+	ID3DBlob* shaderBlob = CompileShaderDx11(shaderSource, fileSize, entryPoint, profile);
+	delete[] shaderSource;
+
+	return shaderBlob;
+
+
 }
 
 }

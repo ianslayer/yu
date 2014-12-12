@@ -1,5 +1,5 @@
 #include "thread_impl.h"
-
+#include "log.h"
 namespace yu
 {
 
@@ -66,7 +66,7 @@ Thread CreateThread(ThreadFunc func, ThreadContext context, ThreadPriority prior
 	DWORD threadId;
 	::CreateThread(NULL, 0, ThreadRunner, &runnerContext, 0, &threadId);
 	thread.handle = threadId;
-
+	SetThreadAffinity(thread.handle, affinityMask);
 	WaitForCondVar(runnerContext.threadCreationCV, runnerContext.threadCreationCS);
 	runnerContext.threadCreationCS.Unlock();
 
@@ -191,7 +191,12 @@ void WaitForSem(Semaphore& sem)
 void SignalSem(Semaphore& sem)
 {
 	LONG prevCount;
-	ReleaseSemaphore(sem.sem, 1, &prevCount);
+	BOOL result = ReleaseSemaphore(sem.sem, 1, &prevCount);
+	if (!result)
+	{
+		Log("error, sem signal failed");
+	}
+
 }
 
 }

@@ -20,7 +20,7 @@ const static size_t MIN_ALLOC_ALIGN = sizeof(void*);
 
 DefaultAllocator  _gDefaultAllocator;
 DefaultAllocator* gDefaultAllocator = nullptr;
-
+ArenaAllocator* gSysArena = nullptr;
 	
 void* Allocator::AllocAligned(size_t size, size_t align)
 {
@@ -66,7 +66,10 @@ void* DefaultAllocator::Alloc(size_t size)
 
 void* DefaultAllocator::Realloc(void* oldPtr, size_t newSize)
 {
-	return realloc(oldPtr, newSize);
+	//return realloc(oldPtr, newSize); ??
+
+	return malloc(newSize);
+
 }
 
 void DefaultAllocator::Free(void* ptr)
@@ -75,14 +78,15 @@ void DefaultAllocator::Free(void* ptr)
 }
 
 
-void InitDefaultAllocator()
+void InitSysAllocator()
 {
 	gDefaultAllocator = &_gDefaultAllocator;
+	gSysArena = new ArenaAllocator(4 * 1024 * 1024, gDefaultAllocator);
 }
 
-void FreeDefaultAllocator()
+void FreeSysAllocator()
 {
-
+	delete gSysArena;
 }
 	
 struct ArenaImpl

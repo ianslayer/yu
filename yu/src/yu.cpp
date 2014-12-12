@@ -4,11 +4,10 @@
 #include "core/timer.h"
 #include "core/thread.h"
 #include "core/worker.h"
-#include "core/string.h"
 #include "renderer/renderer.h"
-#include "yu.h"
+#include "app/work_map.h"
 
-#include <atomic>
+#include "yu.h"
 
 namespace yu
 {
@@ -18,72 +17,19 @@ void KickStart();
 void WaitFrameComplete();
 void FakeKickStart();
 
-ThreadReturn ThreadCall DummyThreadFunc(ThreadContext context)
-{
-	FrameLock* lock = AddFrameLock();
-
-	unsigned int laps = 100;
-	unsigned int f = 0;
-
-	while (YuRunning())
-	{
-		PerfTimer frameTimer;
-		PerfTimer innerTimer;
-		PerfTimer kTimer;
-
-		double waitKickTime = 0;
-		double completeFrameTime = 0;
-
-		frameTimer.Start();
-
-		kTimer.Start();
-		WaitForKick(lock);
-		kTimer.Finish();
-
-		waitKickTime = kTimer.DurationInMs();
-
-		//Log("wait kick takes %lf ms\n", timer.DurationInMs());
-
-		innerTimer.Start();
-		DummyWorkLoad(10);
-		innerTimer.Finish();
-
-		kTimer.Start();
-		FrameComplete(lock);
-		kTimer.Finish();
-		completeFrameTime = kTimer.DurationInMs();
-
-		frameTimer.Finish();
-
-		f++;
-		/*
-		if (f > laps)
-		{
-		Log("thread frame:\n");
-		Log("frame time: %lf\n", frameTimer.DurationInMs());
-		Log("work time: %lf\n", innerTimer.DurationInMs());
-		Log("wait kick time: %lf\n", waitKickTime);
-		Log("frame complete: %lf\n", completeFrameTime);
-		Log("\n\n");
-		f = 0;
-		}
-		*/
-
-	}
-	return 0;
-}
-
 std::atomic<int> gYuRunning;
 void InitYu()
 {
 	InitSysLog();
 	gYuRunning = 1;
 	InitSysTime();
-	InitDefaultAllocator();
+	InitSysAllocator();
 	InitSysStrTable();
 	InitThreadRuntime();
 	InitWorkerSystem();
 	InitSystem();
+
+	InitWorkMap();
 
 	Rect rect;
 	rect.x = 128;
@@ -101,30 +47,31 @@ void InitYu()
 	frameBufferDesc.refreshRate = 60;
 	frameBufferDesc.sampleCount = 1;
 	
-#if defined YU_OS_WIN32
-	InitDX11Thread(gSystem->mainWindow, frameBufferDesc);
-#endif
+	InitRenderThread(gSystem->mainWindow, frameBufferDesc);
 
 }
 
 void FreeYu()
 {
-	FakeKickStart(); //make sure all thread proceed to exit
 	SubmitTerminateWork();
 
-	while (!AllThreadExited());
+	while (!AllThreadsExited())
+	{
+		FakeKickStart();//make sure all thread proceed to exit
+	}
 
+	FreeWorkMap();
 	FreeSystem();
 	FreeWorkerSystem();
 	FreeThreadRuntime();
 	FreeSysStrTable();
-	FreeDefaultAllocator();
+	FreeSysAllocator();
 	FreeSysLog();
 }
 
 bool YuRunning()
 {
-	return (gYuRunning == 1);
+	return (gYuRunning.load(std::memory_order_acquire) == 1);
 }
 
 void SetYuExit()
@@ -136,13 +83,11 @@ int YuMain()
 {
 	yu::InitYu();
 
-	yu::SetThreadAffinity(yu::GetCurrentThreadHandle(), 1);
 	unsigned int lap = 100;
 	unsigned int f = 0;
 	double kickStartTime = 0;
 	double waitFrameTime = 0;
 
-	WorkItem* startWork = FrameStartWorkItem();
 
 	while( yu::YuRunning() )
 	{
@@ -153,24 +98,24 @@ int YuMain()
 
 		timer.Start();
 
-		SubmitWorkItem(startWork, nullptr, 0);
-
 		yu::KickStart();
 		timer.Finish();
 		kickStartTime = timer.DurationInMs();
-		
-		gSystem->ProcessInput();
+
+		Clear(gWorkMap);
+		SubmitWork(gWorkMap);
+
+		MainThreadWorker();
 
 		timer.Start();
 		yu::WaitFrameComplete();
 		timer.Finish();
 		waitFrameTime = timer.DurationInMs();
-		//printf("frame time: %lf\n", timer.DurationInMs());
 		frameTimer.Finish();
 
 		
 		f++;
-		
+		/*
 		if (f > lap || frameTimer.DurationInMs() > 20)
 		{
 			yu::Log("main thread frame:\n");
@@ -182,6 +127,7 @@ int YuMain()
 			
 			f = 0;
 		}
+		*/
 		
 	}
 

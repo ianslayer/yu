@@ -1,7 +1,7 @@
 #include "../container/array.h"
 #include "../container/dequeue.h"
+#include "allocator.h"
 #include "thread.h"
-#include "timer.h"
 #include "worker.h"
 #include "system.h"
 #include "log.h"
@@ -11,105 +11,305 @@ namespace yu
 #define MAX_WORKER_THREAD 32
 #define MAX_WORK_QUEUE_LEN 4096
 
+YU_PRE_ALIGN(CACHE_LINE)
 struct WorkItem
 {
+	WorkItem(Allocator* allocator = gDefaultAllocator) : dependList(4, allocator), permitList(16, allocator), 
+		func(nullptr), finalizer(nullptr), outputData(nullptr), inputData(nullptr)
+	{
+		permits = 0;
+		isDone = false;
+
+		dbgFrameCount = 0;
+	}
+
+	~WorkItem()
+	{
+		//TODO: where should we release the data ?
+		//Allocator* allocator = dependList.GetAllocator();
+	}
+
+	Array<WorkItem*>		dependList;
+	Array<WorkItem*>		permitList;
+
+	Mutex					lock;
+
 	WorkFunc*				func;
-	void*					constData;
-	void*					mutableData;
+	Finalizer*				finalizer;
+
+	InputData*				inputData;
+	OutputData*				outputData;
 
 	std::atomic<int>		permits;
+	std::atomic<bool>		isDone;
 
-	Array<WorkItem*>		depdentList;
-	Array<WorkItem*>		permitList;
+	std::atomic<u64>		dbgFrameCount;
 };
+YU_POST_ALIGN(CACHE_LINE)
 
-void TerminateWorkFunc(const void* constData, void* mutableData, const WorkItem* dep, int numDep) {}
-void FrameEndWorkFunc(const void* constData, void* mutableData, const WorkItem* dep, int numDep)
+YU_PRE_ALIGN(CACHE_LINE)
+struct WorkerThread
 {
-	FrameLock* lock = (FrameLock*)mutableData;
-	WaitForKick(lock);
-	DummyWorkLoad(10);
-	FrameComplete(lock);
+	int						id = -1;
+	Thread					thread;
+	ArenaAllocator			workerFrameArena;
+	Array<WorkItem*>		retiredItemPermitList; //TODO: move this into retired function, this should use a stack allocator (alloca)
+};
+YU_POST_ALIGN(CACHE_LINE)
+
+WorkItem* NewWorkItem(Allocator* allocator)
+{
+	return new(allocator->AllocAligned(sizeof(WorkItem), CACHE_LINE)) WorkItem(allocator);
 }
 
+void FreeWorkItem(WorkItem* item)
+{
+	Allocator* allocator = item->dependList.GetAllocator();
+	if (item->finalizer)
+	{
+		item->finalizer(item);
+	}
+
+	if (item->inputData)
+	{
+		FreeInputData(item);
+	}
+
+	if (item->outputData)
+	{
+		FreeOutputData(item);
+	}
+
+	item->~WorkItem();
+	allocator->FreeAligned(item);
+}
+
+InputData* AllocInputData(WorkItem* item, size_t size)
+{
+	InputData* data = (InputData*) gDefaultAllocator->Alloc(size);
+	data->source = gDefaultAllocator;
+	item->inputData = data;
+	return data;
+}
+
+void FreeInputData(WorkItem* item)
+{
+	Allocator* allocator = item->inputData->source;
+	allocator->Free(item->inputData);
+	item->inputData = nullptr;
+}
+
+InputData* GetInputData(WorkItem* item)
+{
+	return item->inputData;
+}
+
+void SetInputData(WorkItem* item, InputData* input)
+{
+	item->inputData = input;
+}
+
+OutputData* AllocOutputData(WorkItem* item, size_t size)
+{
+	OutputData* data = (OutputData*)gDefaultAllocator->Alloc(size);
+	data->source = gDefaultAllocator;
+	item->outputData = data;
+	return data;
+}
+
+void FreeOutputData(WorkItem* item)
+{
+	Allocator* allocator = item->outputData->source;
+	allocator->Free(item->outputData);
+	item->outputData = nullptr;
+}
+
+OutputData* GetOutputData(WorkItem* item)
+{
+	//TODO: check dependcy when access?
+	return item->outputData;
+}
+
+void SetOutputData(WorkItem* item, OutputData* output)
+{
+	item->outputData = output;
+}
+
+int	GetNumDepend(WorkItem* item)
+{
+	return item->dependList.Size();
+}
+
+OutputData* GetDependOutputData(WorkItem* item, int i)
+{
+	assert(i < item->dependList.Size());
+	return GetOutputData(item->dependList[i]);
+}
+
+void SetWorkFunc(WorkItem* item, WorkFunc* func)
+{
+	item->func = func;
+}
+
+void SetFinalizer(WorkItem* item, Finalizer* func)
+{
+	item->finalizer = func;
+}
+
+void TerminateWorkFunc(WorkItem* item) {}
 
 bool YuRunning();
 ThreadReturn ThreadCall WorkerThreadFunc(ThreadContext context);
 struct WorkerSystem
 {
-	WorkerSystem(unsigned int coreCount) :workQueueSem(0, MAX_WORK_QUEUE_LEN)
+	WorkerSystem() :workQueueSem(0, MAX_WORK_QUEUE_LEN)
 	{
-		numWorkerThread = coreCount - 2;
+		CPUInfo cpuInfo = System::GetCPUInfo();
+		numWorkerThread = cpuInfo.numLogicalProcessors - 2;
 	
-		terminateWorkItem.func = TerminateWorkFunc;
-		frameLock = AddFrameLock();
-		frameEndWorkItem.mutableData = frameLock;
-		frameEndWorkItem.func = FrameEndWorkFunc;
+		SetWorkFunc(&terminateWorkItem, TerminateWorkFunc);
 	}
 
-	Thread					workerThread[MAX_WORKER_THREAD];
-	unsigned int			numWorkerThread = 0;
-	ArenaAllocator			workerArena;
+	WorkerThread			workerThread[MAX_WORKER_THREAD]; //0 is main thread
+	unsigned int			numWorkerThread = 0;		
 
 	MpmcFifo<WorkItem*, MAX_WORK_QUEUE_LEN>	workQueue;
 	Semaphore				workQueueSem;
 
 	WorkItem				terminateWorkItem;
 
-	FrameLock*				frameLock;
-	WorkItem				frameStartWorkItem;
-	WorkItem				frameEndWorkItem;
 };
 static WorkerSystem* gWorkerSystem;
+
+void SubmitWorkItem(WorkItem* item, WorkItem* dep[], int numDep)
+{
+	item->permits = -numDep;
+	for (int i = 0; i < numDep; i++)
+	{
+		item->dependList.PushBack(dep[i]);
+	}
+	if (numDep == 0)
+	{
+		gWorkerSystem->workQueue.Enqueue(item);
+		SignalSem(gWorkerSystem->workQueueSem);
+		return;
+	}
+	for (int i = 0; i < numDep; i++)
+	{
+		ScopedLock lock(dep[i]->lock);
+		
+		if (!dep[i]->isDone.load(std::memory_order_acquire))
+		{
+			dep[i]->permitList.PushBack(item); 
+		}
+		else
+		{
+			int prev = item->permits.fetch_add(1);
+			if (prev == -1)
+			{
+				gWorkerSystem->workQueue.Enqueue(item);
+				SignalSem(gWorkerSystem->workQueueSem);
+			}
+		}
+
+	}
+}
+
+void Complete(WorkItem* item, Array<WorkItem*>& permitList)
+{
+	item->lock.Lock();
+	item->isDone.store(true, std::memory_order_release);
+	permitList = item->permitList;
+	item->lock.Unlock();
+
+	for (int i = 0; i < permitList.Size(); i++)
+	{
+		WorkItem* p = permitList[i];
+		int prev = p->permits.fetch_add(1);
+
+		if (prev == -1)
+		{
+			gWorkerSystem->workQueue.Enqueue(p);
+			SignalSem(gWorkerSystem->workQueueSem);
+		}
+	}	
+
+	item->dbgFrameCount++;
+}
+
 ThreadReturn ThreadCall WorkerThreadFunc(ThreadContext context)
 {
 	Log("Worker thread started\n");
+	WorkerThread* worker = (WorkerThread*) context;
+
 	while (YuRunning())
 	{
 		WaitForSem(gWorkerSystem->workQueueSem); //TODO: eliminate gWorkerSystem here, should be passed in as parameter
 		WorkItem* item;
 		while (gWorkerSystem->workQueue.Dequeue(item))
 		{
-			item->func(item->constData, item->mutableData, nullptr, 0);
+			item->func(item);
+			worker->retiredItemPermitList.Clear();
+			Complete(item, worker->retiredItemPermitList);
 		}
 	}
 	Log("Worker thread exit\n");
 	return 0;
 }
 
-void SubmitWorkItem(WorkItem* item, WorkItem* dep, int numDep)
+bool WorkerFrameComplete();
+void MainThreadWorker()
 {
-	gWorkerSystem->workQueue.Enqueue(item);
-	SignalSem(gWorkerSystem->workQueueSem);
+	WorkerThread* worker = &gWorkerSystem->workerThread[0];
+	while (!WorkerFrameComplete())
+	{
+		//WaitForSem(gWorkerSystem->workQueueSem); //this is asymetric..., but if main thread wait here it could hang forever
+		WorkItem* item;
+		while (gWorkerSystem->workQueue.Dequeue(item))
+		{
+			item->func(item);
+			worker->retiredItemPermitList.Clear();
+			Complete(item, worker->retiredItemPermitList);
+		}
+	}
+}
+
+void ResetWorkItem(WorkItem* item)
+{
+	item->permitList.Clear();
+	item->dependList.Clear();
+	item->permits = 0;
+	item->isDone.store(false);
 }
 
 void SubmitTerminateWork()
 {
-	for (int i = 0; i < gWorkerSystem->numWorkerThread; i++)
+	for (unsigned int i = 0; i < gWorkerSystem->numWorkerThread; i++)
 	{
 		SubmitWorkItem(&gWorkerSystem->terminateWorkItem, nullptr, 0);
 	}
 }
 
-WorkItem* FrameStartWorkItem()
-{
-	return &gWorkerSystem->frameEndWorkItem;
-}
-
 void InitWorkerSystem()
 {
-	CPUInfo cpuInfo = System::GetCPUInfo();
-	gWorkerSystem = new WorkerSystem(cpuInfo.numLogicalProcessors);
+
+	gWorkerSystem = NewAligned<WorkerSystem>(gSysArena, CACHE_LINE);
+
+	//main thread
+	gWorkerSystem->workerThread[0].id = 0;
+	gWorkerSystem->workerThread[0].thread.handle = GetCurrentThreadHandle();
+	SetThreadAffinity(gWorkerSystem->workerThread[0].thread.handle, 1);
 	
-	for (int i = 0; i < gWorkerSystem->numWorkerThread; i++)
+	for (unsigned int i = 1; i < gWorkerSystem->numWorkerThread + 1; i++) //zero is main thread
 	{
-		gWorkerSystem->workerThread[i] = CreateThread(WorkerThreadFunc, nullptr, NormalPriority, 1 << (i+1));
+		gWorkerSystem->workerThread[i].id = i;
+		gWorkerSystem->workerThread[i].thread = CreateThread(WorkerThreadFunc, &gWorkerSystem->workerThread[i], NormalPriority, 1 << (i));
 	}
 }
 
 void FreeWorkerSystem()
 {
-	delete gWorkerSystem;
+	DeleteAligned(gSysArena, gWorkerSystem);
 }
 
 }
