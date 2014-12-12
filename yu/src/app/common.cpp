@@ -1,3 +1,4 @@
+#include "../core/platform.h"
 #include "../core/thread.h"
 #include "../core/worker.h"
 #include "../core/allocator.h"
@@ -110,6 +111,8 @@ void ProcessInput(Input& input, Output& output)
 
 		switch (event.type)
 		{
+		case InputEvent::UNKNOWN:
+		break;
 		case InputEvent::KEYBOARD:
 		{
 			Log("event time: %f ", ConvertToMs(eventTime - sysInitTime) / 1000.f);
@@ -133,6 +136,11 @@ void ProcessInput(Input& input, Output& output)
 			{
 				Log("event time: %f ", ConvertToMs(eventTime - sysInitTime) / 1000.f);
 				Log("right button down: %f, %f\n", event.mouseEvent.x, event.mouseEvent.y);
+			}
+			if (event.mouseEvent.type == InputEvent::MouseEvent::MOVE)
+			{
+				Log("event time: %f ", ConvertToMs(eventTime - sysInitTime) / 1000.f);
+				Log("mouse location: %f, %f\n", event.mouseEvent.x, event.mouseEvent.y);
 			}
 			if (event.mouseEvent.type == InputEvent::MouseEvent::WHEEL)
 			{

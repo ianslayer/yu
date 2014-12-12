@@ -8,46 +8,72 @@
 #include "../container/array.h"
 #include "../container/dequeue.h"
 
+namespace yu
+{
+void ExecWindowCommand(WindowThreadCmd& cmd)
+{
+	switch (cmd.type)
+	{
+		case (WindowThreadCmd::CREATE_WINDOW):
+		{
+			CreateWinParam* param = (CreateWinParam*)cmd.cmd.createWinParam;
+			param->winCreationCS.Lock();
+			Rect rect = param->rect;
+			Window window = {};
+
+
+			NSRect winrect;
+			winrect.origin.x = rect.x;
+			winrect.origin.y = rect.y;
+			winrect.size.width = rect.width;
+			winrect.size.height = rect.height;
+	
+			NSWindow* win = [[NSWindow alloc] initWithContentRect:winrect styleMask:NSTitledWindowMask|NSClosableWindowMask backing:NSBackingStoreBuffered defer:NO];
+	
+			[win setAcceptsMouseMovedEvents:YES];
+			[((NSWindow*)win) makeKeyAndOrderFront:nil];
+			[NSApp activateIgnoringOtherApps:YES];
+			
+			YuView* view = [[YuView alloc] initWithFrame:winrect];
+			[view setSystem:gSystem];
+			[win setContentView:view];
+			[win setAcceptsMouseMovedEvents:YES];
+			[win setDelegate:view];
+			
+			
+			window.win = win;
+
+			((SystemImpl*)(gSystem->sysImpl))->windowList.PushBack(window);
+			param->win = window;
+			param->winCreationCS.Unlock();
+
+			NotifyCondVar(param->winCreationCV);
+		}
+		break;
+
+
+	}
+}
+
+}
 
 @implementation YuApp
-@synthesize system;
+-(void) setSystem:(yu::System*) sys
+{
+	system = sys;
+}
 - (void) run
 {
 	 NSAutoreleasePool* pool = [[NSAutoreleasePool alloc] init];
 	 _running = YES;
 	
-    NSRect winrect;
-    winrect.origin.x = 0;
-    winrect.origin.y = 0;
-    winrect.size.width = 1280;
-    winrect.size.height = 720;
-	
-    NSWindow* win = [[NSWindow alloc] initWithContentRect:winrect styleMask:NSTitledWindowMask|NSClosableWindowMask backing:NSBackingStoreBuffered defer:NO];
-	
-	[win setAcceptsMouseMovedEvents:YES];
-	[((NSWindow*)win) makeKeyAndOrderFront:nil];
-	[NSApp activateIgnoringOtherApps:YES];
-	//[self mainWindow] = win;
-	
-    YuView* view = [[YuView alloc] initWithFrame:winrect];
-
-    [win setContentView:view];
-    [win setAcceptsMouseMovedEvents:YES];
-    [win setDelegate:view];
-    //[view setApp:pApp];
-    //Win = win;
-    //View = view;
-	
-	//[self mainWin] = win;
-	//[((NSWindow*)win) makeKeyAndOrderFront:nil];
-	[view release];
 	[self finishLaunching];
 	[pool drain];
 	
-	NSRunLoop* loop = [NSRunLoop currentRunLoop];
-	while([loop runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]])
+	//NSRunLoop* loop = [NSRunLoop currentRunLoop];
+	//while([loop runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]])
 
-//    while ([self isRunning])
+    while ([self isRunning])
     {
         pool = [[NSAutoreleasePool alloc] init];
         NSEvent* event = [self nextEventMatchingMask:NSAnyEventMask untilDate:nil inMode:NSDefaultRunLoopMode dequeue:YES];
@@ -56,6 +82,13 @@
             [self sendEvent:event];
         }
 		
+		yu::SystemImpl* sysImpl = system->sysImpl;
+		yu::WindowThreadCmd cmd;
+		while (sysImpl->winThreadCmdQueue.Dequeue(cmd))
+		{
+			ExecWindowCommand(cmd);
+		}
+		
         [pool drain];
     }
 }
@@ -63,6 +96,10 @@
 @end
 
 @implementation YuView
+-(void) setSystem:(yu::System*) sys
+{
+	system = sys;
+}
 -(BOOL) acceptsFirstResponder
 {
     return YES;
@@ -79,23 +116,105 @@
     return 1;
 }
 
-- (void)mouseDown:(NSEvent *)theEvent {
-
+- (void)mouseDown:(NSEvent *)theEvent
+{
+	NSPoint eventLocation = [theEvent locationInWindow];
+	yu::InputEvent ev = {};
+	ev.type = yu::InputEvent::MOUSE;
+	ev.timeStamp = yu::SampleTime().time;
+	
+	NSRect winrect = [self bounds];
+	
+	ev.mouseEvent.type = yu::InputEvent::MouseEvent::L_BUTTON_DOWN;
+	ev.mouseEvent.x = float(eventLocation.x);
+	ev.mouseEvent.y = float(winrect.size.height - eventLocation.y);
+	
+	system->sysImpl->inputQueue.Enqueue(ev);
 }
  
-- (void)mouseUp:(NSEvent *)theEvent {
+- (void)mouseUp:(NSEvent *)theEvent
+{
+	NSPoint eventLocation = [theEvent locationInWindow];
+	yu::InputEvent ev = {};
+	ev.type = yu::InputEvent::MOUSE;
+	ev.timeStamp = yu::SampleTime().time;
+	
+	NSRect winrect = [self bounds];
+	
+	ev.mouseEvent.type = yu::InputEvent::MouseEvent::L_BUTTON_UP;
+	ev.mouseEvent.x = float(eventLocation.x);
+	ev.mouseEvent.y = float(winrect.size.height - eventLocation.y);
+	
+	system->sysImpl->inputQueue.Enqueue(ev);
+}
+
+- (void)rightMouseDown:(NSEvent *)theEvent
+{
+	NSPoint eventLocation = [theEvent locationInWindow];
+	yu::InputEvent ev = {};
+	ev.type = yu::InputEvent::MOUSE;
+	ev.timeStamp = yu::SampleTime().time;
+	
+	NSRect winrect = [self bounds];
+	
+	ev.mouseEvent.type = yu::InputEvent::MouseEvent::R_BUTTON_DOWN;
+	ev.mouseEvent.x = float(eventLocation.x);
+	ev.mouseEvent.y = float(winrect.size.height - eventLocation.y);
+	
+	system->sysImpl->inputQueue.Enqueue(ev);
+}
+
+- (void)rightMouseUp:(NSEvent *)theEvent
+{
+	NSPoint eventLocation = [theEvent locationInWindow];
+	yu::InputEvent ev = {};
+	ev.type = yu::InputEvent::MOUSE;
+	ev.timeStamp = yu::SampleTime().time;
+	
+	NSRect winrect = [self bounds];
+	
+	ev.mouseEvent.type = yu::InputEvent::MouseEvent::R_BUTTON_UP;
+	ev.mouseEvent.x = float(eventLocation.x);
+	ev.mouseEvent.y = float(winrect.size.height - eventLocation.y);
+	
+	system->sysImpl->inputQueue.Enqueue(ev);
+}
+
+-(void)mouseMoved:(NSEvent *)theEvent
+{
+	NSPoint eventLocation = [theEvent locationInWindow];
+	yu::InputEvent ev = {};
+	ev.type = yu::InputEvent::MOUSE;
+	ev.timeStamp = yu::SampleTime().time;
+	
+	NSRect winrect = [self bounds];
+	
+	ev.mouseEvent.type = yu::InputEvent::MouseEvent::MOVE;
+	ev.mouseEvent.x = float(eventLocation.x);
+	ev.mouseEvent.y = float(winrect.size.height - eventLocation.y);
+	
+	system->sysImpl->inputQueue.Enqueue(ev);
+}
+
+-(void)keyDown:(NSEvent *)theEvent
+{
+
+}
+
+-(void)keyUp:(NSEvent *)theEvent
+{
 
 }
 
 @end
 
+extern YuApp* gYuApp;
 namespace yu
 {
 bool PlatformInitSystem()
 {
 	gSystem->sysImpl = new SystemImpl();
-	//YuApp* yuApp = (YuApp*)[NSApp sharedApplication];
-	//[yuApp setSystem: gSystem];
+	[gYuApp setSystem: gSystem];
 	return true;
 }
 
@@ -229,62 +348,38 @@ void System::SetDisplayMode(const Display& display, int modeIndex)
 
 Window	System::CreateWin(const Rect& rect)
 {
-	Window window = {};
+	SystemImpl* sys = (SystemImpl*)(this->sysImpl);
+	CreateWinParam param;
+	WindowThreadCmd cmd;
+	param.rect = rect;
 
-/*
-    NSRect winrect;
-    winrect.origin.x = rect.x;
-    winrect.origin.y = rect.y;
-    winrect.size.width = rect.width;
-    winrect.size.height = rect.height;
-	
-    NSWindow* win = [[NSWindow alloc] initWithContentRect:winrect styleMask:NSTitledWindowMask|NSClosableWindowMask backing:NSBackingStoreBuffered defer:NO];
-	
-	[win setAcceptsMouseMovedEvents:YES];
-	[((NSWindow*)win) makeKeyAndOrderFront:nil];
-	
-	window.win = win;
-	
-	//windowList.PushBack(window);
-	*/
-	return window;
-}
+	param.winCreationCS.Lock();
+	cmd.type = WindowThreadCmd::CREATE_WINDOW;
+	cmd.cmd.createWinParam = &param;
+
+	while (1)
+	{
+		if (sys->winThreadCmdQueue.Enqueue(cmd))
+		{
+			WaitForCondVar(param.winCreationCV, param.winCreationCS);
+			break;
+		}
+	}
+	param.winCreationCS.Unlock();
+
+	return param.win;}
 
 void System::CloseWin(yu::Window &win)
 {
-	//for(int i = 0; i < windowList.Size(); i++)
+	for(int i = 0; i < sysImpl->windowList.Size(); i++)
 	{
-	//	if(win.win == windowList[i].win)
+		if(win.win == sysImpl->windowList[i].win)
 		{
 			[win.win release];
-	//		windowList.Erase(i);
-	//		break;
+			sysImpl->windowList.Erase(i);
+			break;
 		}
 	}
 }
-
-/*
-void System::GetSysDisplayInfo()
-{
-	CGDirectDisplayID displayIds[16];
-	uint32_t numDisplay;
-	CGDirectDisplayID mainDisplayId;
-	
-	mainDisplayId = CGMainDisplayID();
-	CGGetOnlineDisplayList(16, displayIds, &numDisplay);
-	
-	for(unsigned int i = 0; i < numDisplay; i++)
-	{
-		Display display;
-		display.id = displayIds[i];
-		if(displayIds[i] == mainDisplayId)
-		{
-			mainDisplayIndex = i;
-		}
-		
-		displayList.PushBack(display);
-	}
-}*/
-
 
 }

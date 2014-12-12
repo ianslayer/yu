@@ -86,7 +86,8 @@ u64	GetThreadAffinity(ThreadHandle threadHandle)
 	u64 mask = 0;
 	for(unsigned int i = 0; i < infoCount; i++)
 	{
-		mask |= (1 << affinityTag[i].affinity_tag);
+		if(affinityTag[i].affinity_tag > 0)
+			mask |= (1 << (affinityTag[i].affinity_tag-1));
 	}
 	
 	return mask;

@@ -88,7 +88,7 @@ Array<T>::Array(int capacity, Allocator* _allocator) : pArray(0), mCapacity(0), 
 	if(capacity > 0)
 	{
 		mCapacity = (capacity + (DEFAULT_GRANULARITY - 1)) & (-DEFAULT_GRANULARITY);
-		pArray = (T*) allocator->Alloc(sizeof(T) * mCapacity);//new T[mCapacity];
+		pArray = (T*) allocator->Alloc(sizeof(T) * (size_t)mCapacity);//new T[mCapacity];
 	}
 	else
 	{
@@ -130,7 +130,7 @@ Array<T>& Array<T>::operator=(const Array<T>& rhs)
 	mGranularity = rhs.mGranularity;
 	EnsureCapacity(rhs.Size());
 	mSize = rhs.mSize;
-	copy_n(rhs.Begin(), rhs.Size(), pArray);
+	copy_n(rhs.Begin(), (size_t)rhs.Size(), pArray);
 
 	return *this;
 }
@@ -246,7 +246,7 @@ void Array<T>::EraseSwapBack(T* pAt)
 template <class T>
 void Array<T>::Clear()
 {
-	Destruct(pArray, mSize);
+	Destruct(pArray, (size_t)mSize);
 	mSize = 0;
 }
 
