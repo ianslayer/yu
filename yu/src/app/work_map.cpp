@@ -26,9 +26,9 @@ void SubmitWork(WorkMap* _workMap)
 {
 	SubmitWorkItem(_workMap->startWork, nullptr, 0);
 	SubmitWorkItem(_workMap->inputWork, &_workMap->startWork, 1);
-	SubmitWorkItem(_workMap->testRenderer, &_workMap->inputWork, 1);
+	//SubmitWorkItem(_workMap->testRenderer, &_workMap->inputWork, 1);
 
-	WorkItem* endDep[1] = { _workMap->testRenderer };
+	WorkItem* endDep[1] = { _workMap->inputWork };
 
 	SubmitWorkItem(_workMap->endWork, endDep, 1);
 
