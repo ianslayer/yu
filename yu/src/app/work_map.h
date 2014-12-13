@@ -2,6 +2,13 @@
 namespace yu
 {
 struct WorkItem;
+
+struct FrameWorkItemResult
+{
+	WorkItem* frameStartItem;
+	WorkItem* frameEndItem;
+};
+
 struct WorkMap
 {
 //pre-defined work

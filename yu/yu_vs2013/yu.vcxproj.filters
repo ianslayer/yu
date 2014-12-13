@@ -28,6 +28,9 @@
     <Filter Include="Source Files\app">
       <UniqueIdentifier>{9efb9b68-85f4-4ce8-a85f-7fdefc54041b}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\shaders">
+      <UniqueIdentifier>{2953a1d1-f4c5-454d-8483-9a028ec5406c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\core\allocator.cpp">
@@ -161,5 +164,16 @@
     <ClInclude Include="..\src\core\file.h">
       <Filter>Source Files\core</Filter>
     </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="..\..\data\shaders\passthrough.hlsl">
+      <Filter>Source Files\shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="..\..\data\shaders\flat_ps.hlsl">
+      <Filter>Source Files\shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="..\..\data\shaders\flat_vs.hlsl">
+      <Filter>Source Files\shaders</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

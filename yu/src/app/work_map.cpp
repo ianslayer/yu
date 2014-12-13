@@ -8,8 +8,7 @@ namespace yu
 WorkMap workMap;
 WorkMap* gWorkMap = &workMap;
 
-WorkItem* FrameStartWorkItem();
-WorkItem* FrameEndWorkItem();
+FrameWorkItemResult FrameWorkItem();
 WorkItem* InputWorkItem();
 WorkItem* TestRenderItem();
 
@@ -27,9 +26,9 @@ void SubmitWork(WorkMap* _workMap)
 {
 	SubmitWorkItem(_workMap->startWork, nullptr, 0);
 	SubmitWorkItem(_workMap->inputWork, &_workMap->startWork, 1);
-	//SubmitWorkItem(_workMap->testRenderer, &_workMap->inputWork, 1);
+	SubmitWorkItem(_workMap->testRenderer, &_workMap->inputWork, 1);
 
-	WorkItem* endDep[2] = { _workMap->startWork, _workMap->testRenderer };
+	WorkItem* endDep[1] = { _workMap->testRenderer };
 
 	SubmitWorkItem(_workMap->endWork, endDep, 1);
 
@@ -37,9 +36,10 @@ void SubmitWork(WorkMap* _workMap)
 
 void InitWorkMap()
 {
-	gWorkMap->startWork = FrameStartWorkItem();
+	FrameWorkItemResult frameWork = FrameWorkItem();
+	gWorkMap->startWork = frameWork.frameStartItem;
 	gWorkMap->inputWork = InputWorkItem();
-	gWorkMap->endWork = FrameEndWorkItem();
+	gWorkMap->endWork = frameWork.frameEndItem;
 	gWorkMap->testRenderer = TestRenderItem();
 }
 

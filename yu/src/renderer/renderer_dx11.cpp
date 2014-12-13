@@ -557,6 +557,7 @@ void ExecUpdateCameraCmd(RendererDx11* renderer, CameraHandle handle)
 	}
 
 	gDx11Device->d3d11DeviceContext->Unmap(dx11Data->constantBuffer, 0);
+	gDx11Device->d3d11DeviceContext->VSSetConstantBuffers(0, 1, &dx11Data->constantBuffer);
 }
 
 ID3D11VertexShader* vertexShader = nullptr;
@@ -586,7 +587,7 @@ static void ExecRenderCmd(RendererDx11* renderer, RenderQueue* queue, int render
 		gDx11Device->d3d11DeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		gDx11Device->d3d11DeviceContext->VSSetShader(vertexShader, nullptr, 0);
 		gDx11Device->d3d11DeviceContext->PSSetShader(pixelShader, nullptr, 0);
-		gDx11Device->d3d11DeviceContext->DrawIndexed(3, 0, 0);
+		gDx11Device->d3d11DeviceContext->DrawIndexed(list->cmd[i].numIndex, 0, 0);
 	}
 
 	gDx11Device->d3d11DeviceContext->Flush();
@@ -663,8 +664,8 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 
 	FrameLock* frameLock = AddFrameLock(); //TODO: seperate render thread kick from others, shoot and forget
 
-	ID3DBlob* vertexShaderBlob = CompileShaderFromFileDx11("data/shaders/flat.hlsl", "VS", "vs_5_0");
-	ID3DBlob* pixelShaderBlob = CompileShaderFromFileDx11("data/shaders/flat.hlsl", "PS", "ps_5_0");
+	ID3DBlob* vertexShaderBlob = CompileShaderFromFileDx11("data/shaders/flat_vs.hlsl", "main", "vs_5_0");
+	ID3DBlob* pixelShaderBlob = CompileShaderFromFileDx11("data/shaders/flat_ps.hlsl", "main", "ps_5_0");
 
 	if (vertexShaderBlob)
 	{
