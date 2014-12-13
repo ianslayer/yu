@@ -4,7 +4,6 @@
 
 namespace yu
 {
-int	BaseDoubleBufferData::constIndex = 0;
 
 Matrix4x4 CameraData::ViewMatrix() const
 {
