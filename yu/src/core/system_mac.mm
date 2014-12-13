@@ -100,6 +100,59 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 {
 	system = sys;
 }
+
+-(NSOpenGLContext*) openGLContext
+{
+	return openGLContext;
+}
+
+- (void) lockFocus
+{
+	[super lockFocus];
+	if ([openGLContext view] != self)
+		[openGLContext setView:self];
+}
+
+- (id) initWithFrame:(NSRect)frameRect
+{
+	[super initWithFrame:frameRect];
+	return self;
+}
+
+-(void) initOpenGL
+{
+    NSOpenGLPixelFormatAttribute attribs[] =
+    {
+	/*
+		kCGLPFAAccelerated,
+		kCGLPFANoRecovery,
+		kCGLPFADoubleBuffer,
+		kCGLPFAColorSize, 24,
+		kCGLPFADepthSize, 16,
+		0*/
+//        NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersion3_2Core,
+//        NSOpenGLPFAWindow,
+        NSOpenGLPFADoubleBuffer,
+        NSOpenGLPFADepthSize, 24,
+        0
+		
+    };
+	
+    pixelFormat = [[NSOpenGLPixelFormat alloc] initWithAttributes:attribs];
+	
+    if (!pixelFormat)
+		NSLog(@"No OpenGL pixel format");
+	
+	// NSOpenGLView does not handle context sharing, so we draw to a custom NSView instead
+	openGLContext = [[NSOpenGLContext alloc] initWithFormat:pixelFormat shareContext:nil];
+	
+		// Synchronize buffer swaps with vertical refresh rate
+	GLint swapInt = 0;
+	[openGLContext setValues:&swapInt forParameter:NSOpenGLCPSwapInterval];
+	
+	[openGLContext makeCurrentContext];
+}
+
 -(BOOL) acceptsFirstResponder
 {
     return YES;

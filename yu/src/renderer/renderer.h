@@ -42,25 +42,32 @@ struct MeshHandle
 	i32 id;
 };
 
-struct BaseDoubleBufferData
-{
-	static int	constIndex;
-};
-
 template<class T>
-struct DoubleBufferData : public BaseDoubleBufferData
+struct DoubleBufferData
 {
+	DoubleBufferData(T& _data)
+	{
+		data[0] = data[1] = _data;
+	}
+	
 	const T& GetConst() const
 	{
-		return data[constIndex];
+		return data[updateCount&1];
 	}
 
 	T& GetMutable() const
 	{
-		return data[1-constIndex];
+		return data[1-updateCount&1];
+	}
+	
+	void SetData(const T& _data)
+	{
+		updateCount++;
+		data[1-updateCount&1] = _data;
 	}
 
 	T	data[2];
+	u32 updateCount = 0;
 
 };
 

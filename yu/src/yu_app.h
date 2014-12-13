@@ -22,8 +22,11 @@ class System;
 @interface YuView : NSView<NSWindowDelegate>
 {
 	yu::System* system;
+	NSOpenGLContext *openGLContext;
+	NSOpenGLPixelFormat *pixelFormat;
 }
 -(void) setSystem:(yu::System*) sys;
+-(void) initOpenGL;
 @end
 
 #endif
