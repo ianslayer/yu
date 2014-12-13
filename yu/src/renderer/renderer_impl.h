@@ -4,13 +4,15 @@
 
 namespace yu
 {
+int	BaseDoubleBufferData::constIndex = 0;
+
 Matrix4x4 CameraData::ViewMatrix() const
 {
 	Vector3 down = Down();
-	return Matrix4x4(right.x, right.y, right.z, -position.x,
-					 down.x, down.y, down.z, -position.y,
-					 lookat.x, lookat.y, lookat.z, -position.z,
-					 0, 0, 0, 1);
+	return Matrix4x4(right.x, right.y, right.z,0,
+					 down.x, down.y, down.z, 0,
+					 lookat.x, lookat.y, lookat.z, 0,
+					 0, 0, 0, 1) * Translate(-position);
 }
 Matrix4x4 CameraData::InvViewMatrix() const
 {
@@ -31,7 +33,7 @@ void CameraData::SetXFov(float angleRad, float filmWidth, float filmHeight)
 
 void CameraData::DeriveProjectionParamter(float filmWidth, float filmHeight)
 {
-	r = n* tanf(xFov/2.f);
+	r = f* tanf(xFov/2.f);
 	t = r * filmHeight / filmHeight;
 
 	l = -r;
@@ -45,12 +47,12 @@ Matrix4x4 CameraData::PerspectiveMatrix() const
 	float height = t - b;
 
 	//use complementary z
-	float zNear = f;
-	float zFar = n;
+	float zNear = n;
+	float zFar =f;
 
 	float depth = zFar - zNear;
 
-	return Matrix4x4(2.f * zFar / width, 0.f, -(l + r) / width, 0.f,
+	return Scale(Vector3(1, -1, 1)) * Matrix4x4(2.f * zFar / width, 0.f, -(l + r) / width, 0.f,
 					0.f, 2.f * zFar / height, -(t + b) / height,0.f,
 					0.f, 0.f, zFar / depth, -(zFar * zNear) / depth,
 					0.f, 0.f, 1.f, 0.f);
@@ -115,6 +117,8 @@ struct RenderCmd
 {
 	CameraHandle	cam;
 	MeshHandle		mesh;
+	u32				startIndex = 0;
+	u32				numIndex = 0;
 };
 
 #define MAX_RENDER_CMD 256
@@ -299,8 +303,12 @@ void Render(RenderQueue* queue, CameraHandle cam, MeshHandle mesh)
 	}
 ListFound:
 	
+	MeshData* meshData = queue->renderer->meshList.Get(mesh.id);
+
 	list->cmd[list->cmdCount].cam = cam;
 	list->cmd[list->cmdCount].mesh = mesh;
+	list->cmd[list->cmdCount].startIndex = 0;
+	list->cmd[list->cmdCount].numIndex = meshData->numIndices;
 	list->cmdCount++;
 	
 	if (list->cmdCount == MAX_RENDER_CMD)

@@ -18,18 +18,12 @@ struct FrameLockData : public InputData
 	FrameLock*	frameLock;
 };
 
-struct FrameLockOutput : public OutputData
-{
-	FrameLock* frameLock;
-};
-
 std::atomic<bool> inFrame; //ugly ugly...
 
-FrameLock* FrameStart(FrameLock* lock)
+void FrameStart(FrameLock* lock)
 {	
 	WaitForKick(lock);
 	inFrame = true;
-	return lock;
 }
 
 void FrameEnd(FrameLock* lock)
@@ -48,39 +42,33 @@ bool WorkerFrameComplete()
 void FrameStartWorkFunc(WorkItem* item)
 {
 	FrameLockData* lock = (FrameLockData*)GetInputData(item);
-
-	FrameLockOutput* out = (FrameLockOutput*)GetOutputData(item);
-	out->frameLock = FrameStart(lock->frameLock);
+	FrameStart(lock->frameLock);
 	//Log("frame: %ld started\n", frame);
 }
 
 void FrameEndWorkFunc(WorkItem* item)
 {	
-	FrameLockOutput* lock = (FrameLockOutput*)GetDependOutputData(item, 0);
+	FrameLockData* lock = (FrameLockData*)GetInputData(item);
 	FrameEnd(lock->frameLock);
 	//Log("frame: %ld ended\n", frame);
 }
 
-WorkItem* FrameStartWorkItem()
+FrameWorkItemResult FrameWorkItem()
 {
+	FrameWorkItemResult item;
 	FrameLock* frameLock = AddFrameLock();
-	FrameLockData* frameLockData = New<FrameLockData> (gSysArena);
+	FrameLockData* frameLockData = New<FrameLockData>(gSysArena);
 	frameLockData->source = gSysArena;
 	frameLockData->frameLock = frameLock;
-	FrameLockOutput* frameLockOutput = New<FrameLockOutput>(gSysArena);
-	frameLockOutput->source = gSysArena;
-	WorkItem* item = NewWorkItem(gSysArena);
-	SetWorkFunc(item, FrameStartWorkFunc);
 
-	SetInputData(item, frameLockData);
-	SetOutputData(item, frameLockOutput);
-	return item;
-}
+	item.frameStartItem = NewWorkItem(gSysArena);
+	item.frameEndItem = NewWorkItem(gSysArena);
+	
+	SetWorkFunc(item.frameStartItem, FrameStartWorkFunc);
+	SetWorkFunc(item.frameEndItem, FrameEndWorkFunc);
+	SetInputData(item.frameStartItem, frameLockData);
+	SetInputData(item.frameEndItem, frameLockData);
 
-WorkItem* FrameEndWorkItem()
-{
-	WorkItem* item = NewWorkItem(gSysArena);
-	SetWorkFunc(item, FrameEndWorkFunc);
 	return item;
 }
 
@@ -139,8 +127,8 @@ void ProcessInput(Input& input, Output& output)
 			}
 			if (event.mouseEvent.type == InputEvent::MouseEvent::MOVE)
 			{
-				Log("event time: %f ", ConvertToMs(eventTime - sysInitTime) / 1000.f);
-				Log("mouse location: %f, %f\n", event.mouseEvent.x, event.mouseEvent.y);
+			//	Log("event time: %f ", ConvertToMs(eventTime - sysInitTime) / 1000.f);
+			//	Log("mouse location: %f, %f\n", event.mouseEvent.x, event.mouseEvent.y);
 			}
 			if (event.mouseEvent.type == InputEvent::MouseEvent::WHEEL)
 			{
@@ -184,6 +172,16 @@ struct TestRenderer : public InputData
 	RenderQueue* queue;
 };
 
+struct FirstPersonControllerInput : public InputData
+{
+	CameraHandle camera;
+};
+
+struct FirstPersonControllerOutput : public OutputData
+{
+	CameraData camData;
+};
+
 void Render(TestRenderer* render)
 {
 	/*
@@ -205,10 +203,10 @@ void Render(TestRenderer* render)
 	camData.SetXFov(3.14f / 2.f, 1280, 720);
 
 	UpdateCamera(render->queue, render->camera, camData);
-	Render(render->queue, render->camera, render->triangle);
+	//Render(render->queue, render->camera, render->triangle);
 	Render(render->queue, render->camera, render->square);
 	Flush(render->queue);
-	Swap(render->queue, false);
+	Swap(render->queue, true);
 }
 
 void TestRender(WorkItem* item)
@@ -233,6 +231,7 @@ WorkItem* TestRenderItem()
 	testRenderer->source = gSysArena;
 	testRenderer->renderer = renderer;
 	testRenderer->queue = CreateRenderQueue(renderer);
+
 	SetInputData(item, testRenderer);
 
 	testRenderer->triangle = CreateMesh(testRenderer->queue, 3, 3, MeshData::POSITION | MeshData::COLOR);
@@ -253,17 +252,34 @@ WorkItem* TestRenderItem()
 	testRenderer->square = CreateMesh(testRenderer->queue, 4, 6, MeshData::POSITION | MeshData::COLOR);
 	MeshData squareData = {};
 	squareData.channelMask = MeshData::POSITION | MeshData::COLOR;
-	Vector3 squarePos[4] = { Vector3(-10.f, -10.f, -0.1f), Vector3(-10.f, 10.f, -0.1f), Vector3(10.f, -10.f, -0.1f), Vector3(10.f, 10.f, -0.1f) };
+	Vector3 squarePos[4] = { Vector3(-10.f, -10.f, -5.f), Vector3(-10.f, 10.f, -5.f), Vector3(10.f, -10.f, -5.f), Vector3(10.f, 10.f, -5.f) };
 	Color squareColor[4] = {};
-	u32 squareIndices[6] = { 0, 1, 2, 2, 3, 1};
+	u32 squareIndices[6] = { 0, 1, 2, 2, 1, 3};
 
 	squareData.posList = squarePos;
 	squareData.colorList = squareColor;
 	squareData.indices = squareIndices;
 	squareData.numVertices = 4;
 	squareData.numIndices = 6;
+	UpdateMesh(testRenderer->queue, testRenderer->square, 0, 0, &squareData);
 
 	testRenderer->camera = CreateCamera(testRenderer->queue);
+	CameraData camData = CameraData();
+	camData.position = Vector3(20, 0, 0.f);
+	
+	camData.SetXFov(3.14f / 2.f, 1280, 720);
+	UpdateCamera(testRenderer->queue, testRenderer->camera, camData);
+
+	Matrix4x4 viewProjMatrix = camData.PerspectiveMatrix() * camData.ViewMatrix();
+	Matrix4x4 viewMatrix = camData.ViewMatrix();
+	Vector4 viewPos[4];
+	Vector4 projPos[4];
+	for (int i = 0; i < 4; i++)
+	{
+		viewPos[i] = viewMatrix * Vector4(squarePos[i], 1);
+		projPos[i] = viewProjMatrix * Vector4(squarePos[i], 1);
+		projPos[i] /= projPos[i].w;
+	}
 
 	return item;
 }
