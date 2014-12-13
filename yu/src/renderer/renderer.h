@@ -42,6 +42,28 @@ struct MeshHandle
 	i32 id;
 };
 
+struct BaseDoubleBufferData
+{
+	static int	constIndex;
+};
+
+template<class T>
+struct DoubleBufferData : public BaseDoubleBufferData
+{
+	const T& GetConst() const
+	{
+		return data[constIndex];
+	}
+
+	T& GetMutable() const
+	{
+		return data[1-constIndex];
+	}
+
+	T	data[2];
+
+};
+
 struct CameraData
 {
 	Matrix4x4 ViewMatrix() const;
@@ -69,14 +91,20 @@ struct CameraData
 	float   xFov = 3.14f / 2.f;
 
 	//projection
-	float    n = 0.1f;
-	float	 f = 3000.f;
+	float    n = 3000.f;
+	float	 f = 0.1f;
 
 	//following parameter is derived from fov, aspect ratio and near plane
 	float	 l;
 	float	 r;
 	float	 t;
 	float    b;
+};
+
+
+struct DoubleBufferCameraData : public DoubleBufferData < CameraData >
+{
+	
 };
 
 struct MeshData
