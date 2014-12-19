@@ -5,18 +5,8 @@
 
 namespace yu
 {
-class Vector2
+struct Vector2
 {
-public:
-	Vector2()
-	{}
-
-	Vector2(float _x, float _y)
-	{
-		x = _x;
-		y = _y;
-	}
-
 	float operator []  (int i) const;	
 	float& operator [](int i);
 
@@ -44,6 +34,14 @@ public:
 	float	x;
 	float	y;
 };
+
+YU_INLINE Vector2 _Vector2(float _x, float _y)
+{
+	Vector2 vec;
+	vec.x = _x;
+	vec.y = _y;
+	return vec;
+}
 
 YU_INLINE float Vector2::operator []  (int i)const
 {
@@ -120,7 +118,7 @@ YU_INLINE Vector2& Vector2::operator/=(float s)
 
 YU_INLINE Vector2 operator-(const Vector2& v)
 {
-    return Vector2(-v.x, -v.y);
+    return _Vector2(-v.x, -v.y);
 }
 
 template<class T> 
@@ -131,59 +129,59 @@ YU_INLINE void Vector2::Evaluate(const T& e){
 
 YU_INLINE Vector2 Max(const Vector2& a, const Vector2& b)
 {
-	return Vector2(yu::max(a.x, b.x), yu::max(a.y, b.y) );
+	return _Vector2(yu::max(a.x, b.x), yu::max(a.y, b.y) );
 }
 
 YU_INLINE Vector2 Min(const Vector2& a, const Vector2& b)
 {
-	return Vector2(yu::min(a.x, b.x), yu::min(a.y, b.y));
+	return _Vector2(yu::min(a.x, b.x), yu::min(a.y, b.y));
 }
 
 YU_INLINE const Vector2 operator + (const Vector2& a, const Vector2& b)
 {
-	return Vector2(a.x + b.x, a.y + b.y);	
+	return _Vector2(a.x + b.x, a.y + b.y);	
 }
 
 YU_INLINE const Vector2 operator + (float a, const Vector2& b)
 {
-	return Vector2(a + b.x, a + b.y);	
+	return _Vector2(a + b.x, a + b.y);	
 }	
 
 YU_INLINE const Vector2 operator + (Vector2& a, float b)
 {
-	return Vector2(a.x + b, a.y + b);	
+	return _Vector2(a.x + b, a.y + b);	
 }	
 
 YU_INLINE const Vector2 operator - (const Vector2& a, const Vector2& b)
 {
-	return Vector2(a.x - b.x, a.y - b.y);	
+	return _Vector2(a.x - b.x, a.y - b.y);	
 }
 
 YU_INLINE const Vector2 operator*(const Vector2& a, const Vector2& b)
 {
-	return Vector2(a.x * b.x, a.y * b.y);
+	return _Vector2(a.x * b.x, a.y * b.y);
 }
 
 YU_INLINE const Vector2 operator*(float a, const Vector2& b)
 {
-	return Vector2(a * b.x, a * b.y);
+	return _Vector2(a * b.x, a * b.y);
 }
 
 YU_INLINE const Vector2 operator*(const Vector2& a, float b)
 {
-	return Vector2(a.x * b, a.y * b);
+	return _Vector2(a.x * b, a.y * b);
 }		
 
 YU_INLINE const Vector2 operator/(const Vector2& a, const Vector2& b)
 {
 	//assert(b.x != 0 && b.y != 0 && b.z != 0);
-	return Vector2(a.x / b.x, a.y / b.y);
+	return _Vector2(a.x / b.x, a.y / b.y);
 }
 
 YU_INLINE const Vector2 operator / (const Vector2& v, float s)
 {
 	//assert(s != 0);
-	return Vector2(v.x / s, v.y / s);
+	return _Vector2(v.x / s, v.y / s);
 }
 
 YU_INLINE bool Vector2::operator == (const Vector2& rhs) const
@@ -196,12 +194,8 @@ YU_INLINE float cross(const Vector2& v1, const Vector2& v2)
 	return v1.x * v2.y - v1.y * v2.x;
 }
 
-class Vector3 {
+struct Vector3 {
 public:
-	Vector3();
-	explicit Vector3(float* _pVec);
-	explicit Vector3(float _xyz);
-	Vector3(float _x, float _y, float _z);
 
 	void Set(float x, float y, float z);
 	void Zero(void);
@@ -229,30 +223,29 @@ public:
 	float z;
 };
 
-
-YU_INLINE Vector3::Vector3()
+YU_INLINE Vector3 _Vector3(float* _pVec)
 {
-	//x = y = z = 0.f;
-	//mVec[0] = mVec[1] = mVec[2] = 0.f;
+	Vector3 vec;
+	vec.x = _pVec[0];
+	vec.y = _pVec[1];
+	vec.z = _pVec[2];
+	return vec;
 }
 
-YU_INLINE Vector3::Vector3(float* _pVec)
+YU_INLINE Vector3 _Vector3(float _xyz)
 {
-	x = _pVec[0];
-	y = _pVec[1];
-	z = _pVec[2];
+	Vector3 vec;
+	vec.x = vec.y = vec.z = _xyz;
+	return vec;
 }
 
-YU_INLINE Vector3::Vector3(float _xyz)
+YU_INLINE Vector3 _Vector3(float _x, float _y, float _z)
 {
-    x = y = z = _xyz;
-}
-
-YU_INLINE Vector3::Vector3(float _x, float _y, float _z)
-{
-	x = _x;
-	y = _y;
-	z = _z;
+	Vector3 vec;
+	vec.x = _x;
+	vec.y = _y;
+	vec.z = _z;
+	return vec;
 }
 
 YU_INLINE void Vector3::Set(float _x, float _y, float _z)
@@ -279,7 +272,7 @@ YU_INLINE float& Vector3::operator [](int i)
 
 YU_INLINE Vector3 operator-(const Vector3& v)
 {
-	return Vector3(-v.x, -v.y, -v.z);
+	return _Vector3(-v.x, -v.y, -v.z);
 }
 
 YU_INLINE Vector3& Vector3::operator+=(const Vector3& rhs)
@@ -374,54 +367,54 @@ YU_INLINE void Vector3::Normalize()
 
 YU_INLINE const Vector3 operator + (const Vector3& a, const Vector3& b)
 {
-	return Vector3(a.x + b.x, a.y + b.y, a.z + b.z);	
+	return _Vector3(a.x + b.x, a.y + b.y, a.z + b.z);	
 }
 
 YU_INLINE const Vector3 operator + (float a, const Vector3& b)
 {
-	return Vector3(a + b.x, a + b.y, a + b.z);	
+	return _Vector3(a + b.x, a + b.y, a + b.z);	
 }	
 
 YU_INLINE const Vector3 operator + (Vector3& a, float b)
 {
-	return Vector3(a.x + b, a.y + b, a.z + b);	
+	return _Vector3(a.x + b, a.y + b, a.z + b);	
 }	
 
 YU_INLINE const Vector3 operator - (const Vector3& a, const Vector3& b)
 {
-	return Vector3(a.x - b.x, a.y - b.y, a.z - b.z);	
+	return _Vector3(a.x - b.x, a.y - b.y, a.z - b.z);	
 }
 
 YU_INLINE const Vector3 operator*(const Vector3& a, const Vector3& b)
 {
-	return Vector3(a.x * b.x, a.y * b.y, a.z * b.z);
+	return _Vector3(a.x * b.x, a.y * b.y, a.z * b.z);
 }
 
 YU_INLINE const Vector3 operator*(float a, const Vector3& b)
 {
-	return Vector3(a * b.x, a * b.y, a * b.z);
+	return _Vector3(a * b.x, a * b.y, a * b.z);
 }
 
 YU_INLINE const Vector3 operator*(const Vector3& a, float b)
 {
-	return Vector3(a.x * b, a.y * b, a.z * b);
+	return _Vector3(a.x * b, a.y * b, a.z * b);
 }		
 
 YU_INLINE const Vector3 operator/(const Vector3& a, const Vector3& b)
 {
 	//assert(b.x != 0 && b.y != 0 && b.z != 0);
-	return Vector3(a.x / b.x, a.y / b.y, a.z / b.z);
+	return _Vector3(a.x / b.x, a.y / b.y, a.z / b.z);
 }
 
 YU_INLINE const Vector3 operator / (const Vector3& v, float s)
 {
 	//assert(s != 0);
-	return Vector3(v.x / s, v.y / s, v.z / s);
+	return _Vector3(v.x / s, v.y / s, v.z / s);
 }
 
 YU_INLINE Vector3 cross(const Vector3& a, const Vector3& b)
 {
-	return Vector3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+	return _Vector3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
 }
 
 YU_INLINE float dot(const Vector3& a, const Vector3& b)
@@ -436,12 +429,12 @@ YU_INLINE float ScalarTriple(const Vector3& a, const Vector3& b, const Vector3& 
 
 YU_INLINE Vector3 Max(const Vector3& a, const Vector3& b)
 {
-	return Vector3(yu::max(a.x, b.x), yu::max(a.y, b.y), yu::max(a.z, b.z) );
+	return _Vector3(yu::max(a.x, b.x), yu::max(a.y, b.y), yu::max(a.z, b.z) );
 }
 
 YU_INLINE Vector3 Min(const Vector3& a, const Vector3& b)
 {
-	return Vector3(yu::min(a.x, b.x), yu::min(a.y, b.y), yu::min(a.z, b.z));
+	return _Vector3(yu::min(a.x, b.x), yu::min(a.y, b.y), yu::min(a.z, b.z));
 }
 
 YU_INLINE Vector3 Normalize(const Vector3& a)
@@ -629,12 +622,12 @@ YU_INLINE void Vector4::Normalize()
 
 YU_INLINE Vector3 DivideW(const Vector4& _vec4)
 {
-	return Vector3(_vec4.x/_vec4.w, _vec4.y/_vec4.w, _vec4.z/_vec4.w);
+	return _Vector3(_vec4.x/_vec4.w, _vec4.y/_vec4.w, _vec4.z/_vec4.w);
 }
 
 YU_INLINE Vector3 DiscardW(const Vector4& _vec4)
 {
-	return Vector3(_vec4.x, _vec4.y, _vec4.z);
+	return _Vector3(_vec4.x, _vec4.y, _vec4.z);
 }
 
 YU_INLINE const Vector4 operator + (const Vector4& a, const Vector4& b)

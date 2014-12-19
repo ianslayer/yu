@@ -6,7 +6,6 @@
 #include "log.h"
 #include <string.h>
 #include <new>
-
 namespace yu
 {
 
@@ -49,7 +48,7 @@ StringBuilder::StringBuilder(char* buf, size_t _bufSize)
 StringBuilder::StringBuilder(char* buf, size_t _bufSize, size_t _strLen)
 	: strBuf(buf), bufSize(_bufSize), strLen(_strLen)
 {
-
+	assert(bufSize > strLen);
 }
 
 
@@ -90,13 +89,15 @@ bool StringBuilder::Cat(unsigned int i)
 	if(strLen + 1 + convertLen > bufSize)
 		return false;
 	
-	char* dest = strBuf + strLen;
+	char* dest = strBuf + strLen + convertLen;
+	*dest = 0;
 	li = i;
 	for(size_t catSize = 0; catSize < convertLen; catSize++)
 	{
-		*dest++ = ((li % 10) + '0');
+		*--dest = ((li % 10) + '0');
+		li /= 10;
 	}
-	*dest = 0;
+
 
 	strLen += convertLen;
 	return true;

@@ -51,6 +51,7 @@ public:
 	std::atomic<int> numAlloced;
 };
 
+
 }
 
 #endif

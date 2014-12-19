@@ -15,6 +15,7 @@ static CycleCount initCycle;
 static u64        cpuFrequency;
 	
 static Time initTime;
+static Time frameStartTime;
 static u64 timerFrequency;
 
 const CycleCount& PerfTimer::Duration() const

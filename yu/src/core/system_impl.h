@@ -44,9 +44,8 @@ struct WindowThreadCmd
 
 using InputQueue = SpscFifo < InputEvent, 256 > ;
 
-class SystemImpl : public System
+struct SystemImpl
 {
-public:
 	SpscFifo<WindowThreadCmd, 16>		winThreadCmdQueue; //yumain to window thread
 	InputQueue							inputQueue;			//window to yumain thread
 	Array<Window>						windowList;
@@ -97,6 +96,7 @@ bool InitSystem()
 
 void FreeSystem()
 {
+	Delete(gSysArena, gSystem->sysImpl);
 	Delete(gSysArena, gSystem);
 	gSystem = 0;
 }
@@ -232,7 +232,7 @@ CPUInfo System::GetCPUInfo()
 
 System::~System()
 { 
-	delete sysImpl;
+
 }
 
 void* System::GetInputQueue()

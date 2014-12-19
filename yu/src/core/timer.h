@@ -48,6 +48,8 @@ YU_INLINE Time operator-(Time t1, Time t2)
 Time SampleTime();
 Time SysStartTime();
 	
+Time FrameRelTime();
+
 class Timer
 {
 public:

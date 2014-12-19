@@ -1,0 +1,4 @@
+namespace yu
+{
+bool InitSound();
+}

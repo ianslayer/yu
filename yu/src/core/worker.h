@@ -1,45 +1,44 @@
 namespace yu
 {
-//TODO: need a fast per frame work item pool
-struct WorkItem;
-class Allocator;
+#define DECLARE_INPUT_TYPE(typeName)  static InputData* typeList;
+#define IMP_INPUT_TYPE(typeName) InputData* typeName::typeList;
 
 struct InputData
 {
-	Allocator* source = nullptr;
+	DECLARE_INPUT_TYPE(InputData)
 };
 
 struct OutputData
 {
-	Allocator* source = nullptr;
 };
 
-typedef void WorkFunc(WorkItem* item);
-typedef void Finalizer(WorkItem* item);
+struct WorkItem;
+WorkItem*	NewSysWorkItem();
+void		FreeSysWorkItem(WorkItem*);
 
-WorkItem*	NewWorkItem(Allocator* allocator);
-void		FreeWorkItem(WorkItem*);
+WorkItem*	NewFrameWorkItem();
 
-InputData*	AllocInputData(WorkItem* item, size_t size);
 InputData*	GetInputData(WorkItem* item);
 void		SetInputData(WorkItem* item, InputData* input);
-void		FreeInputData(WorkItem* item);
 
-OutputData* AllocOutputData(WorkItem* item, size_t size);
 OutputData*	GetOutputData(WorkItem* item);
 void		SetOutputData(WorkItem* item, OutputData* output);
 int			GetNumDepend(WorkItem* item);
 OutputData* GetDependOutputData(WorkItem* item, int i);
-void		FreeOutputData(WorkItem* item);
 
-void		SetWorkFunc(WorkItem* item, WorkFunc* func);
-void		SetFinalizer(WorkItem* item, Finalizer* func);
+typedef void WorkFunc(WorkItem* item);
+typedef void Finalizer(WorkItem* item);
+
+void		SetWorkFunc(WorkItem* item, WorkFunc* func, Finalizer* finalizer);
 
 void		SubmitWorkItem(WorkItem* item, WorkItem* dep[], int numDep);
 bool		IsDone(WorkItem*);
 void		ResetWorkItem(WorkItem* item);
 
 void		SubmitTerminateWork();
+
+struct WorkerThread* GetWorkerThread();
+int					GetWorkerThreadIdx();
 
 void MainThreadWorker();
 void InitWorkerSystem();
