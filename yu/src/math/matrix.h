@@ -84,7 +84,7 @@ inline Matrix2x2 Matrix2x2::operator * (float a) const
 
 inline Vector2 Matrix2x2::operator * (const Vector2& vec) const
 {
-	return Vector2(row[0].x * vec.x + row[0].y * vec.y, row[1].x * vec.x + row[1].y * vec.y);
+	return _Vector2(row[0].x * vec.x + row[0].y * vec.y, row[1].x * vec.x + row[1].y * vec.y);
 }
 
 inline Matrix2x2 Matrix2x2::operator * (const Matrix2x2& mat) const
@@ -188,7 +188,7 @@ inline Matrix3x3 Matrix3x3::operator * (float a) const
 
 inline Vector3 Matrix3x3::operator * (const Vector3& _vec) const
 {
-	return Vector3(
+	return _Vector3(
 		row[0].x * _vec.x + row[0].y * _vec.y + row[0].z * _vec.z,
 		row[1].x * _vec.x + row[1].y * _vec.y + row[1].z * _vec.z,
 		row[2].x * _vec.x + row[2].y * _vec.y + row[2].z * _vec.z
@@ -576,7 +576,7 @@ inline Matrix4x4 InverseAffine(const Matrix4x4& m)
               m[2][0], m[2][1], m[2][2]);
     
     Matrix3x3 invM = orien.Transpose();
-    Vector3 invTranslation = - (invM * Vector3(m[0][3], m[1][3], m[2][3]));
+    Vector3 invTranslation = - (invM * _Vector3(m[0][3], m[1][3], m[2][3]));
     
     return Matrix4x4(invM[0][0], invM[0][1], invM[0][2], invTranslation[0],
                      invM[1][0], invM[1][1], invM[1][2], invTranslation[1],

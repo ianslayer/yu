@@ -16,7 +16,7 @@ class StringBuilder
 {
 public:
 	StringBuilder(char* buf, size_t bufSize);
-	StringBuilder(char* str, size_t strLen, size_t bufSize);
+	StringBuilder(char* str, size_t bufSize, size_t strLen);
 	bool	Cat(const char* source, size_t len);
 	bool	Cat(const char* source);
 	bool	Cat(int i);

@@ -1,7 +1,20 @@
 #include "../core/log.h"
 #include "../core/file.h"
-#include <D3DCompiler.h>
-#pragma comment (lib, "D3dcompiler.lib ")
+#include "shader_dx11.h"
+
+typedef HRESULT WINAPI D3DCompileFunc( LPCVOID pSrcData,
+SIZE_T SrcDataSize,
+LPCSTR pSourceName,
+CONST D3D_SHADER_MACRO* pDefines,
+ID3DInclude* pInclude,
+LPCSTR pEntrypoint,
+LPCSTR pTarget,
+UINT Flags1,
+UINT Flags2,
+ID3DBlob** ppCode,
+ID3DBlob** ppErrorMsgs);
+
+D3DCompileFunc*  dllD3DCompile;
 
 #define SAFE_RELEASE(p) \
 		{\
@@ -25,11 +38,37 @@ struct D3DInputHandler : public ID3DInclude
 		LPCVOID *ppData,
 		UINT *pBytes)
 	{
-
 		return S_OK;
 	}
-
 };
+
+static void InitDx11Compiler()
+{
+	unsigned int maxVersion = 47;
+	unsigned int minVersion = 33;
+
+	for (unsigned int version = maxVersion; version >= minVersion; version--)
+	{
+		char dllNameBuffer[20] = "D3DCompiler_";
+		StringBuilder dllName(dllNameBuffer, 20, strlen(dllNameBuffer));
+
+		dllName.Cat(version);
+		dllName.Cat(".dll");
+
+		HMODULE compilerModule = LoadLibraryA(dllName.strBuf);
+
+		if (compilerModule)
+			dllD3DCompile = (D3DCompileFunc*)GetProcAddress(compilerModule, "D3DCompile");
+		else
+		{
+			Log("load d3d shader compiler version : %s failed\n", dllName.strBuf);
+		}
+		if (dllD3DCompile)
+			break;
+
+	}
+
+}
 
 ID3DBlob* CompileShaderDx11(const char* shaderSource, size_t sourceLen, const char* entryPoint, const char* profile)
 {
@@ -37,7 +76,16 @@ ID3DBlob* CompileShaderDx11(const char* shaderSource, size_t sourceLen, const ch
 	ID3DBlob* errorBlob = nullptr;
 	D3DInputHandler includeHandler;
 
-	HRESULT hr = D3DCompile(shaderSource, sourceLen, NULL, NULL, &includeHandler, entryPoint, profile, 0, 0, &shaderBlob, &errorBlob);
+	if (!dllD3DCompile)
+	{
+		InitDx11Compiler();
+	}
+	if (!dllD3DCompile)
+	{
+		Log("error, can't initialize d3d11 shader compiler\n");
+		exit(1);
+	}
+	HRESULT hr = dllD3DCompile(shaderSource, sourceLen, NULL, NULL, &includeHandler, entryPoint, profile, 0, 0, &shaderBlob, &errorBlob);
 
 	if (FAILED(hr))
 	{
@@ -64,8 +112,26 @@ ID3DBlob* CompileShaderFromFileDx11(const char* path, const char* entryPoint, co
 	delete[] shaderSource;
 
 	return shaderBlob;
+}
 
+VertexShaderAPIData CompileVSFromFile(const char* path)
+{
+	VertexShaderAPIData data;
+#if defined YU_DEBUG
+	data.sourcePath = InternStr(path);
+#endif
+	data.blob =  CompileShaderFromFileDx11(path, "main", "vs_5_0");
+	return data;
+}
 
+PixelShaderAPIData CompilePSFromFile(const char* path)
+{
+	PixelShaderAPIData data;
+#if defined YU_DEBUG
+	data.sourcePath = InternStr(path);
+#endif
+	data.blob = CompileShaderFromFileDx11(path, "main", "ps_5_0");
+	return data;
 }
 
 }

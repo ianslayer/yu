@@ -66,7 +66,7 @@ void* DefaultAllocator::Alloc(size_t size)
 
 void* DefaultAllocator::Realloc(void* oldPtr, size_t newSize)
 {
-	//return realloc(oldPtr, newSize); ??
+	//return realloc(oldPtr, newSize); //??
 
 	return malloc(newSize);
 
@@ -165,7 +165,7 @@ void* ArenaAllocator::Alloc(size_t size)
 
 void ArenaAllocator::Free(void* p)
 {
-	Log("warning, try to free memory from arena\n");
+	//Log("warning, try to free memory from arena\n");
 }
 
 void* ArenaAllocator::Realloc(void* oldPtr, size_t newSize)

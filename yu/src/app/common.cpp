@@ -7,6 +7,9 @@
 #include "../core/timer.h"
 #include "../container/dequeue.h"
 #include "../renderer/renderer.h"
+#include "../renderer/shader.h"
+
+
 #include "work_map.h"
 #include <new>
 
@@ -15,26 +18,31 @@ namespace yu
 
 struct FrameLockData : public InputData
 {
+	DECLARE_INPUT_TYPE(FrameLockData)
 	FrameLock*	frameLock;
 };
+IMP_INPUT_TYPE(FrameLockData)
 
-std::atomic<bool> inFrame; //ugly ugly...
+void RegisterFrameLockType()
+{
+	FrameLockData::typeList = InputData::typeList;
+	InputData::typeList = FrameLockData::typeList;
+}
+//IMP_INPUT_TYPE(FrameLockData)
 
 void FrameStart(FrameLock* lock)
 {	
 	WaitForKick(lock);
-	inFrame = true;
 }
 
 void FrameEnd(FrameLock* lock)
 {	
 	FrameComplete(lock);
-	inFrame = false;
 }
 
 bool WorkerFrameComplete()
 {
-	return (inFrame == false);
+	return IsDone(gWorkMap->endWork);
 }
 
 
@@ -58,14 +66,13 @@ FrameWorkItemResult FrameWorkItem()
 	FrameWorkItemResult item;
 	FrameLock* frameLock = AddFrameLock();
 	FrameLockData* frameLockData = New<FrameLockData>(gSysArena);
-	frameLockData->source = gSysArena;
 	frameLockData->frameLock = frameLock;
 
-	item.frameStartItem = NewWorkItem(gSysArena);
-	item.frameEndItem = NewWorkItem(gSysArena);
+	item.frameStartItem = NewSysWorkItem();
+	item.frameEndItem = NewSysWorkItem();
 	
-	SetWorkFunc(item.frameStartItem, FrameStartWorkFunc);
-	SetWorkFunc(item.frameEndItem, FrameEndWorkFunc);
+	SetWorkFunc(item.frameStartItem, FrameStartWorkFunc, nullptr);
+	SetWorkFunc(item.frameEndItem, FrameEndWorkFunc, nullptr);
 	SetInputData(item.frameStartItem, frameLockData);
 	SetInputData(item.frameEndItem, frameLockData);
 
@@ -73,21 +80,51 @@ FrameWorkItemResult FrameWorkItem()
 }
 
 #define MAX_INPUT 256
+#define MAX_KEYBOARD_STATE 256
 struct Input : public InputData
 {
 	SpscFifo<InputEvent, 256>* inputQueue;
 };
 
-struct Output : public OutputData
+struct KeyState
+{
+	u32 pressCount;
+	u32 pressed;
+};
+
+struct MouseState
+{
+	float x, y;
+	float dx, dy;
+	bool	 captured;
+	KeyState leftButton;
+	KeyState rightButton;
+};
+
+struct InputResult : public OutputData
 {
 	InputEvent	frameEvent[MAX_INPUT];
+	KeyState	keyboardState[MAX_KEYBOARD_STATE];
+	MouseState	mouseState;
 	int			numEvent;
 };
 
-void ProcessInput(Input& input, Output& output)
+void ProcessInput(Input& input, InputResult& output)
 {
+//	int	threadIdx =	GetWorkerThreadIdx();
+//	Log("thread id:%d\n", threadIdx);
+
 	output.numEvent = 0;
 	InputEvent event;
+
+	for (int i = 0; i < MAX_KEYBOARD_STATE; i++)
+	{
+		output.keyboardState[i].pressCount = 0;
+	}
+
+	output.mouseState.leftButton.pressCount = 0;
+	output.mouseState.rightButton.pressCount = 0;
+	output.mouseState.dx = output.mouseState.dy = 0.f;
 
 	while (input.inputQueue->Dequeue(event) && output.numEvent < MAX_INPUT)
 	{
@@ -103,38 +140,77 @@ void ProcessInput(Input& input, Output& output)
 		break;
 		case InputEvent::KEYBOARD:
 		{
-			Log("event time: %f ", ConvertToMs(eventTime - sysInitTime) / 1000.f);
+			//Log("event time: %f ", ConvertToMs(eventTime - sysInitTime) / 1000.f);
 			if (event.keyboardEvent.type == InputEvent::KeyboardEvent::DOWN)
 			{
-				Log("key down\n");
+				//Log("%c key down\n", event.keyboardEvent.key);
+				output.keyboardState[event.keyboardEvent.key].pressCount++;
+				output.keyboardState[event.keyboardEvent.key].pressed = 1;
 			}
 			else if (event.keyboardEvent.type == InputEvent::KeyboardEvent::UP)
 			{
-				Log("key up\n");
+				//Log("%c key up\n", event.keyboardEvent.key);
+				output.keyboardState[event.keyboardEvent.key].pressed = 0;
 			}
 		}break;
 		case InputEvent::MOUSE:
 		{
+			output.mouseState.captured = event.window.captured;
 			if (event.mouseEvent.type == InputEvent::MouseEvent::L_BUTTON_DOWN)
 			{
-				Log("event time: %f ", ConvertToMs(eventTime - sysInitTime) / 1000.f);
-				Log("left button down: %f, %f\n", event.mouseEvent.x, event.mouseEvent.y);
+				output.mouseState.leftButton.pressCount++;
+				output.mouseState.leftButton.pressed = 1;
+				//Log("event time: %f ", ConvertToMs(eventTime - sysInitTime) / 1000.f);
+				//Log("left button down: %f, %f\n", event.mouseEvent.x, event.mouseEvent.y);
 			}
+			else if (event.mouseEvent.type == InputEvent::MouseEvent::L_BUTTON_UP)
+			{
+				output.mouseState.leftButton.pressed = 0;
+			}
+
 			if (event.mouseEvent.type == InputEvent::MouseEvent::R_BUTTON_DOWN)
 			{
-				Log("event time: %f ", ConvertToMs(eventTime - sysInitTime) / 1000.f);
-				Log("right button down: %f, %f\n", event.mouseEvent.x, event.mouseEvent.y);
+				output.mouseState.rightButton.pressCount++;
+				output.mouseState.rightButton.pressed = 1;
+				//Log("event time: %f ", ConvertToMs(eventTime - sysInitTime) / 1000.f);
+				//Log("right button down: %f, %f\n", event.mouseEvent.x, event.mouseEvent.y);
 			}
+			else if (event.mouseEvent.type == InputEvent::MouseEvent::R_BUTTON_UP)
+			{
+				output.mouseState.rightButton.pressed = 0;
+			}
+
+
 			if (event.mouseEvent.type == InputEvent::MouseEvent::MOVE)
 			{
-			//	Log("event time: %f ", ConvertToMs(eventTime - sysInitTime) / 1000.f);
-			//	Log("mouse location: %f, %f\n", event.mouseEvent.x, event.mouseEvent.y);
+				
+				if (event.window.mode == Window::MOUSE_FREE)
+				{
+					output.mouseState.dx += (event.mouseEvent.x - output.mouseState.x);
+					output.mouseState.x = event.mouseEvent.x;
+
+					output.mouseState.dy += (event.mouseEvent.y - output.mouseState.y);
+					output.mouseState.y = event.mouseEvent.y;
+
+				}
+				else if (event.window.mode == Window::MOUSE_CAPTURE)
+				{
+					output.mouseState.dx += event.mouseEvent.x;
+					output.mouseState.x = 0;
+
+					output.mouseState.dy += event.mouseEvent.y;
+					output.mouseState.y = 0;
+				}
+				//Log("event time: %f ", ConvertToMs(eventTime - sysInitTime) / 1000.f);
+				//Log("mouse location: %f, %f\n", event.mouseEvent.x, event.mouseEvent.y);
+				//Log("mouse dx dy: %f, %f\n", output.mouseState.dx, output.mouseState.dy);
 			}
 			if (event.mouseEvent.type == InputEvent::MouseEvent::WHEEL)
 			{
-				Log("event time: %f ", ConvertToMs(eventTime - sysInitTime) / 1000.f);
-				Log("scroll: %f\n", event.mouseEvent.scroll);
+				//Log("event time: %f ", ConvertToMs(eventTime - sysInitTime) / 1000.f);
+				//Log("scroll: %f\n", event.mouseEvent.scroll);
 			}
+
 		}break;
 		}
 	}
@@ -144,43 +220,148 @@ void ProcessInput(Input& input, Output& output)
 //-----glue code------
 void InputWorkFunc(WorkItem* item)
 {
-	Output* output = (Output*)GetOutputData(item);
+	InputResult* result = (InputResult*)GetOutputData(item);
 	Input* input = (Input*)GetInputData(item);
-	ProcessInput(*input, *output);
+	ProcessInput(*input, *result);
 }
 
 WorkItem* InputWorkItem()
 {
-	WorkItem* item = NewWorkItem(gSysArena);
-	SetWorkFunc(item, InputWorkFunc);
-	Output* output = New<Output>(gSysArena);
-	output->source = gSysArena;
+	WorkItem* item = NewSysWorkItem();
+	SetWorkFunc(item, InputWorkFunc, nullptr);
+	InputResult* result = New<InputResult>(gSysArena);
+	memset(result->keyboardState, 0, sizeof(result->keyboardState));
+	memset(&result->mouseState, 0, sizeof(result->mouseState));
 	Input* input = New<Input>(gSysArena);
-	input->source = gSysArena;
 	input->inputQueue = (SpscFifo<InputEvent, 256>*) gSystem->GetInputQueue();
+	SetInputData(item, input);
+	SetOutputData(item, result);
+	return item;
+}
+
+struct CameraControllerInput : public InputData
+{
+	InputResult* inputResult;
+	RenderQueue* queue;
+	CameraHandle camera;
+	float		moveSpeed;
+	float		turnSpeed;
+};
+
+
+struct CameraControllerOutput : public OutputData
+{
+	CameraData		updatedCamera;
+};
+
+void CameraControl(const CameraControllerInput& input, CameraControllerOutput& output)
+{
+	//int	threadIdx = GetWorkerThreadIdx();
+	//Log("thread id:%d\n", threadIdx);
+
+	CameraData data = GetCameraData(input.queue, input.camera);
+
+	Vector3 lookAt = data.lookat;
+	Vector3 right = data.right;
+	Vector3 position = data.position;
+	Vector3 up = -data.Down();
+
+	if (input.inputResult->mouseState.captured || input.inputResult->mouseState.rightButton.pressed == 1)
+	{
+		Matrix3x3 yaw = Matrix3x3::RotateAxis(up, -input.inputResult->mouseState.dx * input.turnSpeed);
+		data.lookat = yaw * lookAt;
+		data.right = yaw * right;
+
+		Matrix3x3 pitch = Matrix3x3::RotateAxis(right, -input.inputResult->mouseState.dy * input.turnSpeed);
+		data.lookat = pitch * data.lookat;
+
+		data.right.z = 0;
+		data.right.Normalize();
+		data.lookat = cross(data.right, data.Down());
+		data.lookat.Normalize();
+	}
+
+	lookAt = data.lookat;
+	right = data.right;
+
+	if (input.inputResult->keyboardState['W'].pressed == 1)
+	{
+		position += lookAt * input.moveSpeed;	
+	}
+	if (input.inputResult->keyboardState['S'].pressed == 1)
+	{
+		position -= lookAt * input.moveSpeed;
+	}
+	if (input.inputResult->keyboardState['D'].pressed == 1)
+	{
+		position += right * input.moveSpeed;
+	}
+	if (input.inputResult->keyboardState['A'].pressed == 1)
+	{
+		position -= right * input.moveSpeed;
+	}
+
+
+	data.position = position;
+	UpdateCamera(input.queue, input.camera, data);
+	output.updatedCamera = data;
+
+}
+
+void CameraControlWorkItem(WorkItem* item)
+{
+	CameraControllerInput* input = (CameraControllerInput*)GetInputData(item);
+	CameraControllerOutput* output = (CameraControllerOutput*)GetOutputData(item);
+	CameraControl(*input, *output);
+}
+
+WorkItem* CameraControlItem(WorkItem* inputWorkItem, RenderQueue* queue, CameraHandle camHandle)
+{
+	InputResult* result = (InputResult*)GetOutputData(inputWorkItem);
+
+	WorkItem* item = NewSysWorkItem();
+
+	CameraControllerInput* input = New<CameraControllerInput>(gSysArena);
+	input->inputResult = result;
+	input->queue = queue;
+	input->camera = camHandle;
+	input->moveSpeed = 0.1f;
+	input->turnSpeed = 0.01f;
+	CameraControllerOutput* output = New<CameraControllerOutput>(gSysArena);
+	SetWorkFunc(item, CameraControlWorkItem, nullptr);
 	SetInputData(item, input);
 	SetOutputData(item, output);
 	return item;
 }
 
+
 struct TestRenderer : public InputData
 {
 	Renderer* renderer;
 	CameraHandle camera;
+
+	CameraControllerOutput* updatedCam;
+
 	MeshHandle	triangle;
 	MeshHandle square;
 	RenderQueue* queue;
+
+	PipelineHandle		pipeline;
+	VertexShaderHandle	vs;
+	PixelShaderHandle	ps;
 };
 
-struct FirstPersonControllerInput : public InputData
+CameraHandle GetCamera(WorkItem* renderItem)
 {
-	CameraHandle camera;
-};
+	TestRenderer* renderer = (TestRenderer*)GetInputData(renderItem);
+	return renderer->camera;
+}
 
-struct FirstPersonControllerOutput : public OutputData
+RenderQueue* GetRenderQueue(WorkItem* renderItem)
 {
-	CameraData camData;
-};
+	TestRenderer* renderer = (TestRenderer*)GetInputData(renderItem);
+	return renderer->queue;
+}
 
 void Render(TestRenderer* render)
 {
@@ -199,12 +380,15 @@ void Render(TestRenderer* render)
 
 	UpdateMesh(render->queue, render->mesh, 0, 0, &updateData);
 	*/
-	CameraData camData = GetCameraData(render->queue, render->camera);
-	camData.SetXFov(3.14f / 2.f, 1280, 720);
+	
+	//CameraData camData = GetCameraData(render->queue, render->camera);
+	//camData.SetXFov(3.14f / 2.f, 1280, 720);
+	//camData.position = _Vector3(50, 0, 0.f);
+	//UpdateCamera(render->queue, render->camera, camData);
 
-	UpdateCamera(render->queue, render->camera, camData);
-	//Render(render->queue, render->camera, render->triangle);
-	Render(render->queue, render->camera, render->square);
+	Render(render->queue, render->camera, render->triangle, render->pipeline);
+	//for (int i = 0; i < 1000; i++)
+	Render(render->queue, render->camera, render->square, render->pipeline);
 	Flush(render->queue);
 	Swap(render->queue, true);
 }
@@ -223,12 +407,10 @@ void FreeTestRender(WorkItem* item)
 
 WorkItem* TestRenderItem()
 {
-	WorkItem* item = NewWorkItem(gSysArena);
-	SetWorkFunc(item, TestRender);
-	SetFinalizer(item, FreeTestRender);
+	WorkItem* item = NewSysWorkItem();
+	SetWorkFunc(item, TestRender, FreeTestRender);
 	Renderer* renderer = CreateRenderer();
 	TestRenderer* testRenderer = New<TestRenderer>(gSysArena);
-	testRenderer->source = gSysArena;
 	testRenderer->renderer = renderer;
 	testRenderer->queue = CreateRenderQueue(renderer);
 
@@ -237,9 +419,9 @@ WorkItem* TestRenderItem()
 	testRenderer->triangle = CreateMesh(testRenderer->queue, 3, 3, MeshData::POSITION | MeshData::COLOR);
 	MeshData triangleData = {};
 	triangleData.channelMask = MeshData::POSITION | MeshData::COLOR;
-	Vector3 trianglePos[3] = { Vector3(0, 0.5, 0.5), Vector3(0.5, -0.5, 0.5), Vector3(-0.5, -0.5, 0.5) };
+	Vector3 trianglePos[3] = { _Vector3(0, 5, 5), _Vector3(5, -5, 5), _Vector3(-5, -5, 5) };
 	Color color[3] = {};
-	u32 indices[3] = {0, 1, 2};
+	u32 indices[3] = {0, 2, 1};
 
 	triangleData.posList = trianglePos;
 	triangleData.colorList = color;
@@ -252,7 +434,7 @@ WorkItem* TestRenderItem()
 	testRenderer->square = CreateMesh(testRenderer->queue, 4, 6, MeshData::POSITION | MeshData::COLOR);
 	MeshData squareData = {};
 	squareData.channelMask = MeshData::POSITION | MeshData::COLOR;
-	Vector3 squarePos[4] = { Vector3(-10.f, -10.f, -5.f), Vector3(-10.f, 10.f, -5.f), Vector3(10.f, -10.f, -5.f), Vector3(10.f, 10.f, -5.f) };
+	Vector3 squarePos[4] = { _Vector3(-10.f, -10.f, -5.f), _Vector3(-10.f, 10.f, -5.f), _Vector3(10.f, -10.f, -5.f), _Vector3(10.f, 10.f, -5.f) };
 	Color squareColor[4] = {};
 	u32 squareIndices[6] = { 0, 1, 2, 2, 1, 3};
 
@@ -263,9 +445,21 @@ WorkItem* TestRenderItem()
 	squareData.numIndices = 6;
 	UpdateMesh(testRenderer->queue, testRenderer->square, 0, 0, &squareData);
 
+	VertexShaderAPIData vsData = CompileVSFromFile("data/shaders/flat_vs.hlsl");
+	PixelShaderAPIData psData = CompilePSFromFile("data/shaders/flat_ps.hlsl");
+
+	testRenderer->vs = CreateVertexShader(testRenderer->queue, vsData);
+	testRenderer->ps = CreatePixelShader(testRenderer->queue, psData);
+	PipelineData pipelineData;
+	pipelineData.vs = testRenderer->vs;
+	pipelineData.ps = testRenderer->ps;
+
+	testRenderer->pipeline = CreatePipeline(testRenderer->queue, pipelineData);
+
+
 	testRenderer->camera = CreateCamera(testRenderer->queue);
-	CameraData camData = CameraData();
-	camData.position = Vector3(20, 0, 0.f);
+	CameraData camData = DefaultCamera();
+	camData.position = _Vector3(50, 0, 0.f);
 	
 	camData.SetXFov(3.14f / 2.f, 1280, 720);
 	UpdateCamera(testRenderer->queue, testRenderer->camera, camData);

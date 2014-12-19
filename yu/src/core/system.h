@@ -33,7 +33,15 @@ struct Window
 #elif defined YU_OS_MAC
 	NSWindow*	win;
 #endif
+	bool		captured = false;
+	bool		focused = false;
 
+	enum MouseMode
+	{
+		MOUSE_CAPTURE,
+		MOUSE_FREE,
+	}; 
+	MouseMode	mode = MOUSE_CAPTURE;
 };
 
 struct InputEvent
@@ -130,9 +138,8 @@ struct GPUInfo
 
 };
 
-class System
+struct System
 {
-public:
 	System() : sysImpl(0) {}
 	virtual ~System();
 	static int			NumDisplays();
@@ -154,7 +161,7 @@ public:
 	friend bool			InitSystem();
 
 	Window				mainWindow;
-	class SystemImpl*	sysImpl;
+	struct SystemImpl*	sysImpl;
 
 };
 

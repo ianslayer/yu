@@ -14,8 +14,9 @@ struct WorkMap
 //pre-defined work
 	WorkItem* startWork;
 	WorkItem* inputWork;
-	WorkItem* endWork;
+	WorkItem* cameraControllerWork;
 	WorkItem* testRenderer;
+	WorkItem* endWork;
 };
 extern WorkMap* gWorkMap;
 
