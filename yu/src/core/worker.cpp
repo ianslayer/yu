@@ -8,8 +8,18 @@
 #include <atomic>
 namespace yu
 {
+InputData* InputData::typeList;
+
 #define MAX_WORKER_THREAD 32
 #define MAX_WORK_QUEUE_LEN 4096
+
+struct WorkLink
+{
+	WorkLink(Allocator* allocator) : dependList(4, allocator), permitList(16, allocator)
+	{	}
+	Array<WorkItem*>		dependList;
+	Array<WorkItem*>		permitList;
+};
 
 YU_PRE_ALIGN(CACHE_LINE)
 struct WorkItem
@@ -19,8 +29,9 @@ struct WorkItem
 	{
 		permits = 0;
 		isDone = false;
-
+#if defined YU_DEBUG
 		dbgFrameCount = 0;
+#endif
 	}
 
 	~WorkItem()
@@ -31,6 +42,8 @@ struct WorkItem
 
 	Array<WorkItem*>		dependList;
 	Array<WorkItem*>		permitList;
+
+	//WorkLink*				link;
 
 	Mutex					lock;
 
@@ -43,7 +56,9 @@ struct WorkItem
 	std::atomic<int>		permits;
 	std::atomic<bool>		isDone;
 
+#if defined YU_DEBUG
 	std::atomic<u64>		dbgFrameCount;
+#endif
 } YU_POST_ALIGN(CACHE_LINE);
 
 
@@ -56,19 +71,14 @@ struct WorkerThread
 	Array<WorkItem*>		retiredItemPermitList; //TODO: move this into retired function, this should use a stack allocator (alloca)
 } YU_POST_ALIGN(CACHE_LINE);
 
-WorkItem* NewWorkItem(Allocator* allocator)
-{
-	return new(allocator->AllocAligned(sizeof(WorkItem), CACHE_LINE)) WorkItem(allocator);
-}
 
-void FreeWorkItem(WorkItem* item)
+void FreeSysWorkItem(WorkItem* item)
 {
-	Allocator* allocator = item->dependList.GetAllocator();
 	if (item->finalizer)
 	{
 		item->finalizer(item);
 	}
-
+	/*
 	if (item->inputData)
 	{
 		FreeInputData(item);
@@ -78,11 +88,16 @@ void FreeWorkItem(WorkItem* item)
 	{
 		FreeOutputData(item);
 	}
-
+	*/
 	item->~WorkItem();
-	allocator->FreeAligned(item);
 }
 
+WorkItem* NewSysWorkItem()
+{
+	return new(gSysArena->AllocAligned(sizeof(WorkItem), CACHE_LINE)) WorkItem(gSysArena);
+}
+
+/*
 InputData* AllocInputData(WorkItem* item, size_t size)
 {
 	InputData* data = (InputData*) gDefaultAllocator->Alloc(size);
@@ -97,6 +112,7 @@ void FreeInputData(WorkItem* item)
 	allocator->Free(item->inputData);
 	item->inputData = nullptr;
 }
+*/
 
 InputData* GetInputData(WorkItem* item)
 {
@@ -108,6 +124,7 @@ void SetInputData(WorkItem* item, InputData* input)
 	item->inputData = input;
 }
 
+/*
 OutputData* AllocOutputData(WorkItem* item, size_t size)
 {
 	OutputData* data = (OutputData*)gDefaultAllocator->Alloc(size);
@@ -122,6 +139,7 @@ void FreeOutputData(WorkItem* item)
 	allocator->Free(item->outputData);
 	item->outputData = nullptr;
 }
+*/
 
 OutputData* GetOutputData(WorkItem* item)
 {
@@ -145,14 +163,10 @@ OutputData* GetDependOutputData(WorkItem* item, int i)
 	return GetOutputData(item->dependList[i]);
 }
 
-void SetWorkFunc(WorkItem* item, WorkFunc* func)
+void SetWorkFunc(WorkItem* item, WorkFunc* func, Finalizer* finalizer)
 {
 	item->func = func;
-}
-
-void SetFinalizer(WorkItem* item, Finalizer* func)
-{
-	item->finalizer = func;
+	item->finalizer = finalizer;
 }
 
 void TerminateWorkFunc(WorkItem* item) {}
@@ -166,7 +180,7 @@ struct WorkerSystem
 		CPUInfo cpuInfo = System::GetCPUInfo();
 		numWorkerThread = cpuInfo.numLogicalProcessors - 2;
 	
-		SetWorkFunc(&terminateWorkItem, TerminateWorkFunc);
+		SetWorkFunc(&terminateWorkItem, TerminateWorkFunc, nullptr);
 	}
 
 	WorkerThread			workerThread[MAX_WORKER_THREAD]; //0 is main thread
@@ -179,9 +193,21 @@ struct WorkerSystem
 
 };
 static WorkerSystem* gWorkerSystem;
+YU_THREAD_LOCAL WorkerThread* worker;
+
+WorkerThread* GetWorkerThread()
+{
+	return worker;
+}
+
+int GetWorkerThreadIdx()
+{
+	return worker->id;
+}
 
 void SubmitWorkItem(WorkItem* item, WorkItem* dep[], int numDep)
 {
+	WorkerThread* worker = GetWorkerThread();
 	item->permits = -numDep;
 	for (int i = 0; i < numDep; i++)
 	{
@@ -232,14 +258,15 @@ void Complete(WorkItem* item, Array<WorkItem*>& permitList)
 			SignalSem(gWorkerSystem->workQueueSem);
 		}
 	}	
-
+#if defined YU_DEBUG
 	item->dbgFrameCount++;
+#endif
 }
 
 ThreadReturn ThreadCall WorkerThreadFunc(ThreadContext context)
 {
-	Log("Worker thread started\n");
-	WorkerThread* worker = (WorkerThread*) context;
+	worker = (WorkerThread*)context;
+	Log("Worker thread:%d started\n", worker->id);
 
 	while (YuRunning())
 	{
@@ -252,14 +279,17 @@ ThreadReturn ThreadCall WorkerThreadFunc(ThreadContext context)
 			Complete(item, worker->retiredItemPermitList);
 		}
 	}
-	Log("Worker thread exit\n");
+	Log("Worker thread:%d exit\n", worker->id);
 	return 0;
 }
 
 bool WorkerFrameComplete();
+void GetMainThreadWorker()
+{
+	worker = &gWorkerSystem->workerThread[0];
+}
 void MainThreadWorker()
 {
-	WorkerThread* worker = &gWorkerSystem->workerThread[0];
 	while (!WorkerFrameComplete())
 	{
 		//WaitForSem(gWorkerSystem->workQueueSem); //this is asymetric..., but if main thread wait here it could hang forever
@@ -280,6 +310,12 @@ void ResetWorkItem(WorkItem* item)
 	item->permits = 0;
 	item->isDone.store(false);
 }
+
+bool IsDone(WorkItem* item)
+{
+	return item->isDone.load(std::memory_order_acquire);
+}
+
 
 void SubmitTerminateWork()
 {
@@ -304,6 +340,8 @@ void InitWorkerSystem()
 		gWorkerSystem->workerThread[i].id = (int)i;
 		gWorkerSystem->workerThread[i].thread = CreateThread(WorkerThreadFunc, &gWorkerSystem->workerThread[i], NormalPriority, 1 << (i));
 	}
+
+	GetMainThreadWorker(); //init main thread worker tls
 }
 
 void FreeWorkerSystem()

@@ -5,6 +5,7 @@
 #include "core/thread.h"
 #include "core/worker.h"
 #include "renderer/renderer.h"
+#include "sound/sound.h"
 #include "app/work_map.h"
 
 #include "yu.h"
@@ -30,10 +31,6 @@ void InitYu()
 	InitWorkerSystem();
 	InitSystem();
 
-	InitWorkMap();
-
-	gYuInitialized = 1;
-	
 	Rect rect;
 	rect.x = 128;
 	rect.y = 128;
@@ -51,7 +48,11 @@ void InitYu()
 	frameBufferDesc.sampleCount = 1;
 	
 	InitRenderThread(gSystem->mainWindow, frameBufferDesc);
+	InitSound();
 
+	InitWorkMap();
+
+	gYuInitialized = 1;
 }
 
 void FreeYu()

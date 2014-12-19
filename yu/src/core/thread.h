@@ -12,6 +12,12 @@
 	#include <semaphore.h>
 #endif
 
+#if defined YU_CC_MSVC
+#	define YU_THREAD_LOCAL __declspec(thread)
+#elif defined (YU_CC_CLANG) || defined (YU_CC_GNU)
+#	define YU_THREAD_LOCAL __thread
+#endif
+
 #include <atomic>
 
 namespace yu

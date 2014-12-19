@@ -49,7 +49,7 @@
 //force inline
 #if defined(YU_CC_MSVC)
 #	define YU_INLINE __forceinline
-#elif defined(YU_CC_GNU)
+#elif defined(YU_CC_GNU) || defined(YU_CC_CLANG)
 #	define YU_INLINE inline __attribute__((always_inline))
 #else 
 #	define YU_INLINE inline
@@ -58,7 +58,7 @@
 //no inline
 #if defined(YU_CC_MSVC)
 #	define YU_NO_INLINE __declspec(noinline)
-#elif defined(YU_CC_GNU)
+#elif defined(YU_CC_GNU) || defined(YU_CC_CLANG)
 #	define YU_NO_INLINE __attribute__((noinline))
 #else
 #	define YU_NO_INLINE
@@ -84,10 +84,25 @@
 #	error yu need to define CACHE_LINE	
 #endif
 
-#if defined YU_OS_WIN32
+#if defined YU_CC_MSVC
 #	define COMPILER_BARRIER() _ReadWriteBarrier()
-#elif defined YU_OS_MAC
+#elif defined(YU_CC_GNU) || defined(YU_CC_CLANG)
 #	define COMPILER_BARRIER() asm volatile("" ::: "memory")
+#endif
+
+#if defined YU_CC_MSVC
+#	if defined _DEBUG
+#		define YU_DEBUG
+#	endif
+#endif
+
+//graphics api TODO: should I place api selector here?
+#if defined YU_OS_WIN32
+#	define YU_DX11
+#	define YU_GRAPHICS_API YU_DX11
+#elif defined YU_OS_MAC
+#	define YU_GL
+#	define YU_GRAPHICS_API YU_GL
 #endif
 
 #include <stdint.h>
