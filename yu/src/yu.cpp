@@ -28,7 +28,7 @@ void InitYu()
 	InitSysAllocator();
 	InitSysStrTable();
 	InitThreadRuntime();
-	InitWorkerSystem();
+
 	InitSystem();
 
 	Rect rect;
@@ -46,10 +46,11 @@ void InitYu()
 	frameBufferDesc.height = (int) rect.height;
 	frameBufferDesc.refreshRate = 60;
 	frameBufferDesc.sampleCount = 1;
-	
+
 	InitRenderThread(gSystem->mainWindow, frameBufferDesc);
 	InitSound();
 
+	InitWorkerSystem();
 	InitWorkMap();
 
 	gYuInitialized = 1;
