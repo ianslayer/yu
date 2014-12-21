@@ -1,11 +1,15 @@
 #include "../core/log.h"
 #include "../core/thread.h"
+#include "../core/timer.h"
+#include "sound.h"
 #include <math.h>
 #include <MMDeviceAPI.h>
 #include <AudioClient.h>
 #include <AudioPolicy.h>
 #include <functiondiscoverykeys.h>
-
+#include <Mmsystem.h>
+#include <avrt.h>
+#pragma comment(lib, "avrt.lib")
 #define SAFE_RELEASE(p) \
 				{\
 		ULONG testRef = 0;\
@@ -24,10 +28,10 @@ struct SoundDeviceWasapi
 
 	HANDLE	audioSamplesReadyEvent;
 
-	u8		*soundBuffer;
+	short	*soundBuffer;
 	size_t	soundBufferSize;
 
-	int		desiredLatencyMs = 10;
+	int		desiredLatencyMs = 5;
 	int		exclusiveModeBitsPerSample;
 	int		exclusiveModeHertz;
 	unsigned int exclusiveModeFramesToWrite;
@@ -37,50 +41,50 @@ struct SoundDeviceWasapi
 	int		targetHerz = 48000;
 };
 static SoundDeviceWasapi gSoundDevice;
+SoundSamples gFrameSamples[2];
+
 static Thread audioThread;
 bool YuRunning();
 
 #define Pi32 3.14159265359f
 ThreadReturn ThreadCall AudioThreadFunc(ThreadContext context)
 {
+	HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+	timeBeginPeriod(1);
+	if (FAILED(hr))
+	{
+		Log("Unable to initialize COM in render thread: %x\n", hr);
+		return hr;
+	}
+	
+	HANDLE mmcssHandle = NULL;
+	DWORD mmcssTaskIndex = 0;
+
+	mmcssHandle = AvSetMmThreadCharacteristicsA("Pro Audio", &mmcssTaskIndex);
+	if (mmcssHandle == NULL)
+	{
+		Log("Unable to enable MMCSS on render thread: %d\n", GetLastError());
+	}
+
 	SoundDeviceWasapi* soundDevice = (SoundDeviceWasapi*)context;
 	HANDLE waitArray[] = { gSoundDevice.audioSamplesReadyEvent };
 	static float sinT = 0.f;
 	float midTone = 440.f;
 
+
 	soundDevice->soundBufferSize = soundDevice->exclusiveModeFramesToWrite * (soundDevice->exclusiveModeBitsPerSample / 8) * soundDevice->numChannels;
-	soundDevice->soundBuffer = new u8[soundDevice->soundBufferSize];
-	memset(soundDevice->soundBuffer, 0, soundDevice->soundBufferSize);
+	soundDevice->soundBuffer = new short[soundDevice->exclusiveModeFramesToWrite * soundDevice->numChannels];
 
-
-	while (YuRunning())
+	BYTE* bufferToWrite;
+	
+	for (int frame = 0; frame < 1; frame++)
 	{
-		HRESULT hr;
-		DWORD waitResult = WaitForMultipleObjects(1, waitArray, FALSE, INFINITE);
-		BYTE* bufferToWrite;
-		switch (waitResult) 
+		hr = soundDevice->renderClient->GetBuffer(soundDevice->exclusiveModeFramesToWrite, &bufferToWrite);
+		if (FAILED(hr))
 		{
-		case WAIT_OBJECT_0:
-			hr = soundDevice->renderClient->GetBuffer(soundDevice->exclusiveModeFramesToWrite, &bufferToWrite);
-			if (FAILED(hr))
-			{
-				printf("Failed to get buffer: %x.\n", hr);
-			}
-			else
-			{
-				memcpy(bufferToWrite, soundDevice->soundBuffer, soundDevice->soundBufferSize);
-				hr = soundDevice->renderClient->ReleaseBuffer(soundDevice->exclusiveModeFramesToWrite, 0);
-				if (!SUCCEEDED(hr))
-				{
-					Log("Unable to release buffer: %x\n", hr);
-				}
-			}
-			
-
-			break;
+			Log("Failed to get buffer: %x.\n", hr);
 		}
-
-		short* samples = (short*)soundDevice->soundBuffer;
+		short* samples = (short*)bufferToWrite;
 		for (unsigned int i = 0; i < soundDevice->exclusiveModeFramesToWrite; i++)
 		{
 			float period = soundDevice->exclusiveModeHertz / midTone;
@@ -96,15 +100,111 @@ ThreadReturn ThreadCall AudioThreadFunc(ThreadContext context)
 				sinT -= 2.f * Pi32;
 			}
 		}
+		hr = soundDevice->renderClient->ReleaseBuffer(soundDevice->exclusiveModeFramesToWrite, 0);
+		if (!SUCCEEDED(hr))
+		{
+			Log("Unable to release buffer: %x\n", hr);
+		}
+	}
+	
 
-		assert((u8*)samples == (soundDevice->soundBuffer + soundDevice->soundBufferSize));
+	hr = gSoundDevice.audioClient->Start();
 
+	if (FAILED(hr))
+	{
+		Log("Unable to start render client: %x.\n", hr);
+		return false;
+	}
+		UINT framesToWrite;
+		soundDevice->audioClient->GetBufferSize(&framesToWrite);
+
+#define PACKET 240
+	while (YuRunning())
+	{
+		HRESULT hr;
+		PerfTimer waitTimer;
+		waitTimer.Start();
+		DWORD waitResult = WaitForMultipleObjects(1, waitArray, FALSE, soundDevice->desiredLatencyMs / 2);
+		waitTimer.Finish();
+
+		//Log("audio frame wait time: %lf\n", waitTimer.DurationInMs());
+		UINT numFramesPadding;
+		REFERENCE_TIME refTime;
+		soundDevice->audioClient->GetStreamLatency(&refTime);
+
+		UINT latencyMs = UINT(refTime * 100 / 1000000);
+
+		//Log("audio latency: %d ms\n", latencyMs);
+
+		BYTE* bufferToWrite;
+		UINT framesAvailable;
+		switch (waitResult) 
+		{
+		case WAIT_OBJECT_0:
+			break;
+		case WAIT_TIMEOUT:
+	
+			hr = soundDevice->audioClient->GetCurrentPadding(&numFramesPadding);
+			if (FAILED(hr))
+			{
+				Log("Failed to get padding: %x.\n", hr);
+				continue;
+			}
+			//Log("audio buffer padding: %d\n", numFramesPadding);
+			framesAvailable = framesToWrite - numFramesPadding;
+
+			if (framesAvailable < PACKET)
+				continue;
+
+			hr = soundDevice->renderClient->GetBuffer(PACKET, &bufferToWrite);
+
+
+			if (SUCCEEDED(hr))
+			{
+				short* samples = (short*)bufferToWrite;
+				for (unsigned int i = 0; i < PACKET; i++)
+				{
+					float period = soundDevice->exclusiveModeHertz / midTone;
+					float sound = sinf(sinT);
+
+					*samples++ = short(sound * 256.f);
+					*samples++ = short(sound * 256.f);
+
+					sinT += (2.f * Pi32 / (float)period);
+
+					if (sinT > 2.f * Pi32)
+					{
+						sinT -= 2.f * Pi32;
+					}
+				}
+				hr = soundDevice->renderClient->ReleaseBuffer(PACKET, 0);
+				if (!SUCCEEDED(hr))
+				{
+					//Log("Unable to release buffer: %x\n", hr);
+				}
+			
+			}
+			else
+			{
+			//	hr = soundDevice->renderClient->ReleaseBuffer(480, 0);
+			//	if (!SUCCEEDED(hr))
+				{
+			//		Log("Unable to release buffer: %x\n", hr);
+				}
+			}
+
+			break;
+		default:
+			Log("error, audio thread wait failed\n");
+			//assert(0);
+			break;
+		}
 
 	}
 	return 0;
 }
 
-bool InitSound()
+bool InitSound(float desiredFrameTime)
 {
 	//
 	//  A GUI application should use COINIT_APARTMENTTHREADED instead of COINIT_MULTITHREADED.
@@ -235,18 +335,20 @@ bool InitSound()
 		supportExclusiveMode = true;
 		Log("obtained exclusive mode audio\n");
 	}
-	REFERENCE_TIME bufferDuration = (REFERENCE_TIME)gSoundDevice.desiredLatencyMs * 10000;
+	REFERENCE_TIME bufferDuration = gSoundDevice.desiredLatencyMs * 10000 ;
+	REFERENCE_TIME periodicity = gSoundDevice.desiredLatencyMs * 10000;
+
 	bool initExclusiveModeSuccess = false;
 	if (supportExclusiveMode)
 	{
-
 		gSoundDevice.exclusiveModeHertz = mixFormat->nSamplesPerSec;
 		gSoundDevice.exclusiveModeBitsPerSample = mixFormat->wBitsPerSample;
+		gSoundDevice.numChannels = mixFormat->nChannels;
 
 		hr = gSoundDevice.audioClient->Initialize(AUDCLNT_SHAREMODE_EXCLUSIVE,
-			AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_NOPERSIST,
+			AUDCLNT_STREAMFLAGS_NOPERSIST,// | AUDCLNT_STREAMFLAGS_EVENTCALLBACK ,,
 			bufferDuration,
-			bufferDuration,
+			periodicity,
 			mixFormat,
 			NULL);
 		//
@@ -291,9 +393,9 @@ bool InitSound()
 			}
 
 			hr = gSoundDevice.audioClient->Initialize(AUDCLNT_SHAREMODE_EXCLUSIVE,
-				AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_NOPERSIST,
+				AUDCLNT_STREAMFLAGS_NOPERSIST,// | AUDCLNT_STREAMFLAGS_EVENTCALLBACK ,
 				bufferDuration,
-				bufferDuration,
+				0,
 				mixFormat,
 				NULL);
 			if (FAILED(hr))
@@ -308,15 +410,16 @@ bool InitSound()
 			goto exclusive_mode_failed;
 		}
 
-		UINT bufferSize;
-		hr = gSoundDevice.audioClient->GetBufferSize(&bufferSize);
+		UINT frameSize;
+		hr = gSoundDevice.audioClient->GetBufferSize(&frameSize);
 		if (FAILED(hr))
 		{
 			Log("Unable to get audio client buffer: %x. \n", hr);
 			goto exclusive_mode_failed;
 		}
 		initExclusiveModeSuccess = true;
-		gSoundDevice.exclusiveModeFramesToWrite = bufferSize;
+		gSoundDevice.exclusiveModeFramesToWrite = frameSize;
+
 
 		gSoundDevice.audioSamplesReadyEvent = CreateEventEx(NULL, NULL, 0, EVENT_MODIFY_STATE | SYNCHRONIZE);
 		if (gSoundDevice.audioSamplesReadyEvent == NULL)
@@ -324,13 +427,15 @@ bool InitSound()
 			Log("Unable to create samples ready event: %d.\n", GetLastError());
 			return false;
 		}
-
+		/*
 		hr = gSoundDevice.audioClient->SetEventHandle(gSoundDevice.audioSamplesReadyEvent);
 		if (FAILED(hr))
 		{
 			Log("Unable to get set event handle: %x.\n", hr);
 			return false;
 		}
+		*/
+
 
 		hr = gSoundDevice.audioClient->GetService(IID_PPV_ARGS(&gSoundDevice.renderClient));
 		if (FAILED(hr))
@@ -339,14 +444,8 @@ bool InitSound()
 			return false;
 		}
 
-		hr = gSoundDevice.audioClient->Start();
+		
 		audioThread = CreateThread(AudioThreadFunc, &gSoundDevice);
-
-		if (FAILED(hr))
-		{
-			printf("Unable to start render client: %x.\n", hr);
-			return false;
-		}
 
 		return true;
 
@@ -355,6 +454,8 @@ exclusive_mode_failed:
 	//TODO: try shared mode
 
 	return false;
+
+
 
 }
 
