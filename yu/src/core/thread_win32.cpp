@@ -34,7 +34,9 @@ ThreadReturn ThreadCall ThreadRunner(ThreadContext context)
 	runnerContext->threadCreationCS.Lock();
 
 	ThreadHandle threadHandle= GetCurrentThreadHandle();
-	SetThreadAffinity(threadHandle, runnerContext->affinityMask);
+	if (runnerContext->affinityMask)
+		SetThreadAffinity(threadHandle, runnerContext->affinityMask);
+
 	RegisterThread(threadHandle);
 
 	//subtle, but this two must be copied before notify,, else runnerContext my be destroied before they can be executed
@@ -66,7 +68,7 @@ Thread CreateThread(ThreadFunc func, ThreadContext context, ThreadPriority prior
 	DWORD threadId;
 	::CreateThread(NULL, 0, ThreadRunner, &runnerContext, 0, &threadId);
 	thread.handle = threadId;
-	SetThreadAffinity(thread.handle, affinityMask);
+
 	WaitForCondVar(runnerContext.threadCreationCV, runnerContext.threadCreationCS);
 	runnerContext.threadCreationCS.Unlock();
 
