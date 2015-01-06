@@ -3,7 +3,7 @@
 
 namespace yu
 {
-class Logger;
+struct Logger;
 void InitSysLog();
 void FreeSysLog();
 void Log(char const *fmt, ...);

@@ -44,13 +44,6 @@ private:
 };
 extern ArenaAllocator* gSysArena;
 
-/*
-class VmArenaAllocator : public ArenaAllocator
-{
-
-};
-*/
-
 class StackAllocator : public Allocator
 {
 public:

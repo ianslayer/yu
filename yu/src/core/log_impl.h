@@ -1,6 +1,3 @@
-#include "platform.h"
-#include "string.h"
-#include "thread.h"
 #include <stdio.h>
 #include <stdarg.h>
 

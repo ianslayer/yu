@@ -1,5 +1,4 @@
 #include "../math/vector.h"
-#include <d3d11.h>
 #include "../container/dequeue.h"
 #include "../core/allocator.h"
 #include "../core/system.h"
@@ -10,7 +9,9 @@
 #include "resource_ptr_dx.h"
 #include "shader_dx11.h"
 #include "renderer_impl.h"
+
 #include <new>
+#include <d3d11.h>
 
 typedef HRESULT WINAPI  LPCREATEDXGIFACTORY(REFIID, void ** );
 typedef HRESULT WINAPI  LPD3D11CREATEDEVICE(IDXGIAdapter*, D3D_DRIVER_TYPE, HMODULE, UINT32, D3D_FEATURE_LEVEL*, UINT, UINT32, ID3D11Device**, D3D_FEATURE_LEVEL*, ID3D11DeviceContext** );
@@ -232,7 +233,7 @@ static bool InitDX11(const Window& win, const FrameBufferDesc& desc)
 		return false;
 	}
 
-	Display mainDisplay = System::GetMainDisplay();
+	Display mainDisplay = SystemInfo::GetMainDisplay();
 
 	IDXGIAdapter1* adapter = NULL;
 

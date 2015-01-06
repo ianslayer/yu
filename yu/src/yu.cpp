@@ -1,15 +1,12 @@
-#include "core/log.h"
 #include "core/system.h"
-#include "core/allocator.h"
 #include "core/timer.h"
-#include "core/thread.h"
-#include "core/worker.h"
+
 #include "renderer/renderer.h"
 #include "sound/sound.h"
 #include "app/work_map.h"
 
 #include "yu.h"
-
+#include <atomic>
 namespace yu
 {
 
@@ -29,7 +26,7 @@ void InitYu()
 	InitSysStrTable();
 	InitThreadRuntime();
 
-	InitSystem();
+	InitWindowManager();
 
 	Rect rect;
 	rect.x = 128;
@@ -37,7 +34,7 @@ void InitYu()
 	rect.width = 1280;
 	rect.height = 720;
 
-	gSystem->mainWindow = gSystem->CreateWin(rect);
+	gWindowManager->mainWindow = gWindowManager->CreateWin(rect);
 	
 	FrameBufferDesc frameBufferDesc;
 	frameBufferDesc.format = TEX_FORMAT_R8G8B8A8_UNORM;
@@ -47,7 +44,7 @@ void InitYu()
 	frameBufferDesc.refreshRate = 60;
 	frameBufferDesc.sampleCount = 1;
 
-	InitRenderThread(gSystem->mainWindow, frameBufferDesc);
+	InitRenderThread(gWindowManager->mainWindow, frameBufferDesc);
 	InitSound();
 
 	InitWorkerSystem();
@@ -60,13 +57,15 @@ void FreeYu()
 {
 	SubmitTerminateWork();
 
+	//gWindowManager->CloseWin(gWindowManager->mainWindow);
+
 	while (!AllThreadsExited())
 	{
 		FakeKickStart();//make sure all thread proceed to exit
 	}
 
 	FreeWorkMap();
-	FreeSystem();
+	FreeWindowManager();
 	FreeWorkerSystem();
 	FreeThreadRuntime();
 	FreeSysStrTable();

@@ -133,15 +133,8 @@ struct CPUInfo
 	u32		numLogicalProcessorsPerCore = 0;
 };
 	
-struct GPUInfo
+struct SystemInfo
 {
-
-};
-
-struct System
-{
-	System() : sysImpl(0) {}
-	virtual ~System();
 	static int			NumDisplays();
 	static Display		GetDisplay(int index);
 	static Display		GetMainDisplay();
@@ -150,25 +143,27 @@ struct System
 	static DisplayMode	GetDisplayMode(const Display& display, int modeIndex);
 	static DisplayMode	GetCurrentDisplayMode(const Display& display);
 	//static void			SetDisplayMode(const Display& display, int modeIndex);
+	static CPUInfo		GetCPUInfo();
+};
+
+struct WindowManager
+{
+	WindowManager() : mgrImpl(0) {}
 
 	Window				CreateWin(const Rect& rect);
 	void				CloseWin(Window& win);
 	
-	static CPUInfo		GetCPUInfo();
-
 	void*				GetInputQueue(); //hack, ... I don't want include dequeue.h
 
-	friend bool			InitSystem();
-
 	Window				mainWindow;
-	struct SystemImpl*	sysImpl;
+	struct WindowManagerImpl*	mgrImpl;
 
 };
 
-bool	InitSystem();
-void	FreeSystem();
+bool	InitWindowManager();
+void	FreeWindowManager();
 
-extern System* gSystem;
+extern WindowManager* gWindowManager;
 
 }
 

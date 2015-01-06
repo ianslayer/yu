@@ -1,4 +1,3 @@
-#include "platform.h"
 #if defined YU_OS_WIN32
 	#include <malloc.h>
 	#include <stdlib.h>
@@ -6,12 +5,8 @@
 	#include <malloc/malloc.h>
 #endif
 
-#include <assert.h>
-
-#include "../container/array.h"
 #include "bit.h"
 #include "allocator.h"
-#include "log.h"
 
 namespace yu
 {

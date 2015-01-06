@@ -1,11 +1,12 @@
 #include "../core/log.h"
 #include "../core/thread.h"
 #include "../core/timer.h"
+#include "../math/yu_math.h"
 #include "sound.h"
 #include <math.h>
 #include <MMDeviceAPI.h>
 #include <AudioClient.h>
-#include <AudioPolicy.h>
+//#include <AudioPolicy.h>
 #include <functiondiscoverykeys.h>
 #include <Mmsystem.h>
 #include <avrt.h>
@@ -31,14 +32,15 @@ struct SoundDeviceWasapi
 	short	*soundBuffer;
 	size_t	soundBufferSize;
 
-	int		desiredLatencyMs = 5;
-	int		exclusiveModeBitsPerSample;
-	int		exclusiveModeHertz;
-	unsigned int exclusiveModeFramesToWrite;
+	WAVEFORMATEX* mixFormat;
 
-	int		numChannels = 2;
+	int		latencyMs = 10;
+	unsigned int framesToWrite;
+
 	int		targetBitsPerSample = 16;
-	int		targetHerz = 48000;
+	int		targetFreq = 48000;
+
+	bool	preferExclusive = false;
 };
 static SoundDeviceWasapi gSoundDevice;
 SoundSamples gFrameSamples[2];
@@ -49,6 +51,7 @@ bool YuRunning();
 #define Pi32 3.14159265359f
 ThreadReturn ThreadCall AudioThreadFunc(ThreadContext context)
 {
+	Log("audio thread started\n");
 	HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
 	timeBeginPeriod(1);
 	if (FAILED(hr))
@@ -72,40 +75,8 @@ ThreadReturn ThreadCall AudioThreadFunc(ThreadContext context)
 	float midTone = 440.f;
 
 
-	soundDevice->soundBufferSize = soundDevice->exclusiveModeFramesToWrite * (soundDevice->exclusiveModeBitsPerSample / 8) * soundDevice->numChannels;
-	soundDevice->soundBuffer = new short[soundDevice->exclusiveModeFramesToWrite * soundDevice->numChannels];
-
-	BYTE* bufferToWrite;
-	
-	for (int frame = 0; frame < 1; frame++)
-	{
-		hr = soundDevice->renderClient->GetBuffer(soundDevice->exclusiveModeFramesToWrite, &bufferToWrite);
-		if (FAILED(hr))
-		{
-			Log("Failed to get buffer: %x.\n", hr);
-		}
-		short* samples = (short*)bufferToWrite;
-		for (unsigned int i = 0; i < soundDevice->exclusiveModeFramesToWrite; i++)
-		{
-			float period = soundDevice->exclusiveModeHertz / midTone;
-			float sound = sinf(sinT);
-
-			*samples++ = short(sound * 256.f);
-			*samples++ = short(sound * 256.f);
-
-			sinT += (2.f * Pi32 / (float)period);
-
-			if (sinT > 2.f * Pi32)
-			{
-				sinT -= 2.f * Pi32;
-			}
-		}
-		hr = soundDevice->renderClient->ReleaseBuffer(soundDevice->exclusiveModeFramesToWrite, 0);
-		if (!SUCCEEDED(hr))
-		{
-			Log("Unable to release buffer: %x\n", hr);
-		}
-	}
+	soundDevice->soundBufferSize = soundDevice->framesToWrite * (soundDevice->mixFormat->wBitsPerSample / 8) * soundDevice->mixFormat->nChannels;
+	soundDevice->soundBuffer = new short[soundDevice->framesToWrite * soundDevice->mixFormat->nChannels];
 	
 
 	hr = gSoundDevice.audioClient->Start();
@@ -115,26 +86,27 @@ ThreadReturn ThreadCall AudioThreadFunc(ThreadContext context)
 		Log("Unable to start render client: %x.\n", hr);
 		return false;
 	}
-		UINT framesToWrite;
-		soundDevice->audioClient->GetBufferSize(&framesToWrite);
+	UINT framesToWrite;
+	soundDevice->audioClient->GetBufferSize(&framesToWrite);
 
-#define PACKET 240
+	REFERENCE_TIME refTime;
+	soundDevice->audioClient->GetStreamLatency(&refTime);
+
+	UINT latencyMs = UINT(refTime * 100 / 1000000);
+	UINT maxLatencyMs = max(latencyMs, UINT(gSoundDevice.latencyMs));
+	UINT minLatencyMs = min(latencyMs, UINT(gSoundDevice.latencyMs));
+
+	unsigned int Packet = (soundDevice->mixFormat->nSamplesPerSec * maxLatencyMs / 1000);
 	while (YuRunning())
 	{
 		HRESULT hr;
 		PerfTimer waitTimer;
 		waitTimer.Start();
-		DWORD waitResult = WaitForMultipleObjects(1, waitArray, FALSE, soundDevice->desiredLatencyMs / 2);
+		DWORD waitResult = WaitForMultipleObjects(1, waitArray, FALSE, minLatencyMs / 2);
 		waitTimer.Finish();
 
 		//Log("audio frame wait time: %lf\n", waitTimer.DurationInMs());
 		UINT numFramesPadding;
-		REFERENCE_TIME refTime;
-		soundDevice->audioClient->GetStreamLatency(&refTime);
-
-		UINT latencyMs = UINT(refTime * 100 / 1000000);
-
-		//Log("audio latency: %d ms\n", latencyMs);
 
 		BYTE* bufferToWrite;
 		UINT framesAvailable;
@@ -147,24 +119,25 @@ ThreadReturn ThreadCall AudioThreadFunc(ThreadContext context)
 			hr = soundDevice->audioClient->GetCurrentPadding(&numFramesPadding);
 			if (FAILED(hr))
 			{
-				Log("Failed to get padding: %x.\n", hr);
+				//Log("Failed to get padding: %x.\n", hr);
 				continue;
 			}
 			//Log("audio buffer padding: %d\n", numFramesPadding);
+			assert(framesToWrite >= numFramesPadding);
 			framesAvailable = framesToWrite - numFramesPadding;
 
-			if (framesAvailable < PACKET)
+			if (framesAvailable < Packet)
 				continue;
 
-			hr = soundDevice->renderClient->GetBuffer(PACKET, &bufferToWrite);
+			hr = soundDevice->renderClient->GetBuffer(Packet, &bufferToWrite);
 
 
 			if (SUCCEEDED(hr))
 			{
 				short* samples = (short*)bufferToWrite;
-				for (unsigned int i = 0; i < PACKET; i++)
+				for (unsigned int i = 0; i < Packet; i++)
 				{
-					float period = soundDevice->exclusiveModeHertz / midTone;
+					float period = soundDevice->mixFormat->nSamplesPerSec / midTone;
 					float sound = sinf(sinT);
 
 					*samples++ = short(sound * 256.f);
@@ -177,19 +150,19 @@ ThreadReturn ThreadCall AudioThreadFunc(ThreadContext context)
 						sinT -= 2.f * Pi32;
 					}
 				}
-				hr = soundDevice->renderClient->ReleaseBuffer(PACKET, 0);
+				hr = soundDevice->renderClient->ReleaseBuffer(Packet, 0);
 				if (!SUCCEEDED(hr))
 				{
-					//Log("Unable to release buffer: %x\n", hr);
+					Log("Unable to release buffer: %x\n", hr);
 				}
 			
 			}
 			else
 			{
-			//	hr = soundDevice->renderClient->ReleaseBuffer(480, 0);
-			//	if (!SUCCEEDED(hr))
+				hr = soundDevice->renderClient->ReleaseBuffer(Packet, 0);
+				if (!SUCCEEDED(hr))
 				{
-			//		Log("Unable to release buffer: %x\n", hr);
+					Log("Unable to release buffer: %x\n", hr);
 				}
 			}
 
@@ -202,6 +175,237 @@ ThreadReturn ThreadCall AudioThreadFunc(ThreadContext context)
 
 	}
 	return 0;
+}
+
+bool ConvertToSupportFormat(SoundDeviceWasapi* soundDevice, WAVEFORMATEX* mixFormat, AUDCLNT_SHAREMODE shareMode)
+{
+	HRESULT hr;
+
+	mixFormat->wBitsPerSample = soundDevice->targetBitsPerSample;
+	mixFormat->nBlockAlign = (mixFormat->wBitsPerSample / 8) * mixFormat->nChannels;
+	mixFormat->nAvgBytesPerSec = mixFormat->nBlockAlign * mixFormat->nSamplesPerSec;
+
+	bool formatSupported = false;
+	WAVEFORMATEX* closestMatchedFormat;
+	hr = gSoundDevice.audioClient->IsFormatSupported(shareMode, mixFormat, &closestMatchedFormat);
+
+	if (hr == AUDCLNT_E_UNSUPPORTED_FORMAT)
+	{
+		Log("Device does not natively support the mix format, converting to PCM.\n");
+		//
+		//  If the mix format is a float format, just try to convert the format to PCM.
+		//
+		if (mixFormat->wFormatTag == WAVE_FORMAT_IEEE_FLOAT)
+		{
+			mixFormat->wFormatTag = WAVE_FORMAT_PCM;
+			mixFormat->wBitsPerSample = soundDevice->targetBitsPerSample;
+			mixFormat->nBlockAlign = (mixFormat->wBitsPerSample / 8) * mixFormat->nChannels;
+			mixFormat->nAvgBytesPerSec = mixFormat->nSamplesPerSec*mixFormat->nBlockAlign;
+		}
+		else if (mixFormat->wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
+			reinterpret_cast<WAVEFORMATEXTENSIBLE *>(mixFormat)->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT)
+		{
+			WAVEFORMATEXTENSIBLE *waveFormatExtensible = reinterpret_cast<WAVEFORMATEXTENSIBLE *>(mixFormat);
+			waveFormatExtensible->SubFormat = KSDATAFORMAT_SUBTYPE_PCM;
+			waveFormatExtensible->Format.wBitsPerSample = soundDevice->targetBitsPerSample;
+			waveFormatExtensible->Format.nBlockAlign = (mixFormat->wBitsPerSample / 8) * mixFormat->nChannels;
+			waveFormatExtensible->Format.nAvgBytesPerSec = waveFormatExtensible->Format.nSamplesPerSec*waveFormatExtensible->Format.nBlockAlign;
+			waveFormatExtensible->Samples.wValidBitsPerSample = soundDevice->targetBitsPerSample;
+		}
+		else
+		{
+			Log("Mix format is not a floating point format.\n");
+		}
+
+		hr = gSoundDevice.audioClient->IsFormatSupported(shareMode, mixFormat, &closestMatchedFormat);
+
+		if (SUCCEEDED(hr))
+		{
+			formatSupported = true;
+			Log("Successfully convert to supported mix format\n");
+		}
+		else
+		{
+			Log("Format is not supported \n");
+		}
+	}
+	else if (SUCCEEDED(hr))
+	{
+		formatSupported = true;
+		Log("Mix format is supported\n");
+	}
+	else
+	{
+		Log("Format is not supported \n");
+	}
+
+	return formatSupported;
+}
+
+bool InitWasapiExclusive(WAVEFORMATEX *mixFormat)
+{
+	HRESULT hr;
+	
+	bool supportMixFormat = false;
+
+	supportMixFormat = ConvertToSupportFormat(&gSoundDevice, mixFormat, AUDCLNT_SHAREMODE_EXCLUSIVE);
+
+	if (supportMixFormat)
+	{
+
+		REFERENCE_TIME bufferDuration = gSoundDevice.latencyMs * 10000;
+		REFERENCE_TIME periodicity = gSoundDevice.latencyMs * 10000;
+
+		hr = gSoundDevice.audioClient->Initialize(AUDCLNT_SHAREMODE_EXCLUSIVE,
+			AUDCLNT_STREAMFLAGS_NOPERSIST,// | AUDCLNT_STREAMFLAGS_EVENTCALLBACK ,,
+			bufferDuration,
+			periodicity,
+			mixFormat,
+			NULL);
+		//
+		//  When rendering in exclusive mode event driven, the HDAudio specification requires that the buffers handed to the device must 
+		//  be aligned on a 128 byte boundary.  When the buffer is initialized and the resulting buffer size would not be 128 byte aligned,
+		//  we need to "swizzle" the periodicity of the engine to ensure that the buffers are properly aligned.
+		//
+		if (hr == AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED)
+		{
+			UINT32 bufferSize;
+			Log("Buffers not aligned. Aligning the buffers... \n");
+			//
+			//  Retrieve the buffer size for the audio client.  The buffer size returned is aligned to the nearest 128 byte
+			//  boundary given the input buffer duration.
+			//
+			hr = gSoundDevice.audioClient->GetBufferSize(&bufferSize);
+			if (FAILED(hr))
+			{
+				Log("Unable to get audio client buffer: %x. \n", hr);
+				return false;
+			}
+
+			//
+			//  Calculate the new aligned periodicity.  We do that by taking the buffer size returned (which is in frames),
+			//  multiplying it by the frames/second in the render format (which gets us seconds per buffer), then converting the 
+			//  seconds/buffer calculation into a REFERENCE_TIME.
+			//
+			bufferDuration = (REFERENCE_TIME)(10000.0 *                         // (REFERENCE_TIME / ms) *
+				1000 *                            // (ms / s) *
+				bufferSize /                      // frames /
+				mixFormat->nSamplesPerSec +      // (frames / s)
+				0.5);                             // rounding
+
+			//
+			//  Now reactivate an IAudioClient object on our preferred endpoint and reinitialize AudioClient
+			//
+			hr = gSoundDevice.immDevice->Activate(__uuidof(IAudioClient), CLSCTX_INPROC_SERVER, NULL, reinterpret_cast<void **>(&gSoundDevice.audioClient));
+			if (FAILED(hr))
+			{
+				Log("Unable to activate audio client: %x.\n", hr);
+				return false;
+			}
+
+			hr = gSoundDevice.audioClient->Initialize(AUDCLNT_SHAREMODE_EXCLUSIVE,
+				AUDCLNT_STREAMFLAGS_NOPERSIST,// | AUDCLNT_STREAMFLAGS_EVENTCALLBACK ,
+				bufferDuration,
+				0,
+				mixFormat,
+				NULL);
+			if (FAILED(hr))
+			{
+				Log("Unable to reinitialize audio client: %x \n", hr);
+				return false;
+			}
+		}
+		else if (FAILED(hr))
+		{
+			Log("Unable to initialize audio client in exclusive mode: %x.\n", hr);
+			return false;
+		}
+
+		UINT frameSize;
+		hr = gSoundDevice.audioClient->GetBufferSize(&frameSize);
+		if (FAILED(hr))
+		{
+			Log("Unable to get audio client buffer: %x. \n", hr);
+			return false;
+		}
+		gSoundDevice.framesToWrite = frameSize;
+
+
+		gSoundDevice.audioSamplesReadyEvent = CreateEventEx(NULL, NULL, 0, EVENT_MODIFY_STATE | SYNCHRONIZE);
+		if (gSoundDevice.audioSamplesReadyEvent == NULL)
+		{
+			Log("Unable to create samples ready event: %d.\n", GetLastError());
+			return false;
+		}
+		/*
+		hr = gSoundDevice.audioClient->SetEventHandle(gSoundDevice.audioSamplesReadyEvent);
+		if (FAILED(hr))
+		{
+		Log("Unable to get set event handle: %x.\n", hr);
+		return false;
+		}
+		*/
+
+		hr = gSoundDevice.audioClient->GetService(IID_PPV_ARGS(&gSoundDevice.renderClient));
+		if (FAILED(hr))
+		{
+			Log("Unable to get new render client: %x.\n", hr);
+			return false;
+		}
+
+		return true;
+
+	}
+
+	return false;
+}
+
+bool InitWasapiShared(WAVEFORMATEX *mixFormat)
+{
+	HRESULT hr;
+	bool supportMixFormat = ConvertToSupportFormat(&gSoundDevice, mixFormat, AUDCLNT_SHAREMODE_SHARED);
+
+	if (supportMixFormat)
+	{
+		REFERENCE_TIME bufferDuration = gSoundDevice.latencyMs * 10000;
+		REFERENCE_TIME periodicity = gSoundDevice.latencyMs * 10000;
+		hr = gSoundDevice.audioClient->Initialize(AUDCLNT_SHAREMODE_SHARED,
+			AUDCLNT_STREAMFLAGS_NOPERSIST,
+			bufferDuration,
+			periodicity,
+			mixFormat,
+			NULL);
+
+		if (FAILED(hr))
+		{
+			Log("Unable to initialize audio client : %x.\n", hr);
+			return false;
+		}
+
+		hr = gSoundDevice.audioClient->GetBufferSize(&gSoundDevice.framesToWrite);
+		if (FAILED(hr))
+		{
+			Log("Unable to get audio client buffer: %x. \n", hr);
+			return false;
+		}
+
+		hr = gSoundDevice.audioClient->GetService(IID_PPV_ARGS(&gSoundDevice.renderClient));
+		if (FAILED(hr))
+		{
+			Log("Unable to get new render client: %x.\n", hr);
+			return false;
+		}
+
+		gSoundDevice.audioSamplesReadyEvent = CreateEventEx(NULL, NULL, 0, EVENT_MODIFY_STATE | SYNCHRONIZE);
+		if (gSoundDevice.audioSamplesReadyEvent == NULL)
+		{
+			Log("Unable to create samples ready event: %d.\n", GetLastError());
+			return false;
+		}
+
+		return true;
+	}
+	return false;
 }
 
 bool InitSound(float desiredFrameTime)
@@ -287,173 +491,25 @@ bool InitSound(float desiredFrameTime)
 	if (FAILED(hr))
 	{
 		Log("Unable to get mix format on audio client: %x.\n", hr);
+		return false;
+	}
+	gSoundDevice.mixFormat = mixFormat;
+
+	bool initSucceed = false;
+	if (gSoundDevice.preferExclusive)
+	{
+		initSucceed = InitWasapiExclusive(mixFormat);
+	}
+	
+	if (!initSucceed)
+	{
+		initSucceed = InitWasapiShared(mixFormat);
 	}
 
-	hr = gSoundDevice.audioClient->IsFormatSupported(AUDCLNT_SHAREMODE_EXCLUSIVE, mixFormat, NULL);
-	bool supportExclusiveMode = false;
-	if (hr == AUDCLNT_E_UNSUPPORTED_FORMAT)
-	{
-		Log("Device does not natively support the mix format, converting to PCM.\n");
-		//
-		//  If the mix format is a float format, just try to convert the format to PCM.
-		//
-		if (mixFormat->wFormatTag == WAVE_FORMAT_IEEE_FLOAT)
-		{
-			mixFormat->wFormatTag = WAVE_FORMAT_PCM;
-			mixFormat->wBitsPerSample = 16;
-			mixFormat->nBlockAlign = (mixFormat->wBitsPerSample / 8) * mixFormat->nChannels;
-			mixFormat->nAvgBytesPerSec = mixFormat->nSamplesPerSec*mixFormat->nBlockAlign;
-		}
-		else if (mixFormat->wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
-			reinterpret_cast<WAVEFORMATEXTENSIBLE *>(mixFormat)->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT)
-		{
-			WAVEFORMATEXTENSIBLE *waveFormatExtensible = reinterpret_cast<WAVEFORMATEXTENSIBLE *>(mixFormat);
-			waveFormatExtensible->SubFormat = KSDATAFORMAT_SUBTYPE_PCM;
-			waveFormatExtensible->Format.wBitsPerSample = 16;
-			waveFormatExtensible->Format.nBlockAlign = (mixFormat->wBitsPerSample / 8) * mixFormat->nChannels;
-			waveFormatExtensible->Format.nAvgBytesPerSec = waveFormatExtensible->Format.nSamplesPerSec*waveFormatExtensible->Format.nBlockAlign;
-			waveFormatExtensible->Samples.wValidBitsPerSample = 16;
-		}
-		else
-		{
-			Log("Mix format is not a floating point format.\n");
-		}
-
-		hr = gSoundDevice.audioClient->IsFormatSupported(AUDCLNT_SHAREMODE_EXCLUSIVE, mixFormat, NULL);
-		if (FAILED(hr))
-		{
-			Log("Format is not supported \n");
-		}
-		else
-		{
-			supportExclusiveMode = true;
-			Log("obtained exclusive mode audio\n");
-		}
-	}
-	else
-	{
-		supportExclusiveMode = true;
-		Log("obtained exclusive mode audio\n");
-	}
-	REFERENCE_TIME bufferDuration = gSoundDevice.desiredLatencyMs * 10000 ;
-	REFERENCE_TIME periodicity = gSoundDevice.desiredLatencyMs * 10000;
-
-	bool initExclusiveModeSuccess = false;
-	if (supportExclusiveMode)
-	{
-		gSoundDevice.exclusiveModeHertz = mixFormat->nSamplesPerSec;
-		gSoundDevice.exclusiveModeBitsPerSample = mixFormat->wBitsPerSample;
-		gSoundDevice.numChannels = mixFormat->nChannels;
-
-		hr = gSoundDevice.audioClient->Initialize(AUDCLNT_SHAREMODE_EXCLUSIVE,
-			AUDCLNT_STREAMFLAGS_NOPERSIST,// | AUDCLNT_STREAMFLAGS_EVENTCALLBACK ,,
-			bufferDuration,
-			periodicity,
-			mixFormat,
-			NULL);
-		//
-		//  When rendering in exclusive mode event driven, the HDAudio specification requires that the buffers handed to the device must 
-		//  be aligned on a 128 byte boundary.  When the buffer is initialized and the resulting buffer size would not be 128 byte aligned,
-		//  we need to "swizzle" the periodicity of the engine to ensure that the buffers are properly aligned.
-		//
-		if (hr == AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED)
-		{
-			UINT32 bufferSize;
-			Log("Buffers not aligned. Aligning the buffers... \n");
-			//
-			//  Retrieve the buffer size for the audio client.  The buffer size returned is aligned to the nearest 128 byte
-			//  boundary given the input buffer duration.
-			//
-			hr = gSoundDevice.audioClient->GetBufferSize(&bufferSize);
-			if (FAILED(hr))
-			{
-				Log("Unable to get audio client buffer: %x. \n", hr);
-				goto exclusive_mode_failed;
-			}
-
-			//
-			//  Calculate the new aligned periodicity.  We do that by taking the buffer size returned (which is in frames),
-			//  multiplying it by the frames/second in the render format (which gets us seconds per buffer), then converting the 
-			//  seconds/buffer calculation into a REFERENCE_TIME.
-			//
-			bufferDuration = (REFERENCE_TIME)(10000.0 *                         // (REFERENCE_TIME / ms) *
-				1000 *                            // (ms / s) *
-				bufferSize /                      // frames /
-				mixFormat->nSamplesPerSec +      // (frames / s)
-				0.5);                             // rounding
-
-			//
-			//  Now reactivate an IAudioClient object on our preferred endpoint and reinitialize AudioClient
-			//
-			hr = gSoundDevice.immDevice->Activate(__uuidof(IAudioClient), CLSCTX_INPROC_SERVER, NULL, reinterpret_cast<void **>(&gSoundDevice.audioClient));
-			if (FAILED(hr))
-			{
-				Log("Unable to activate audio client: %x.\n", hr);
-				goto exclusive_mode_failed;
-			}
-
-			hr = gSoundDevice.audioClient->Initialize(AUDCLNT_SHAREMODE_EXCLUSIVE,
-				AUDCLNT_STREAMFLAGS_NOPERSIST,// | AUDCLNT_STREAMFLAGS_EVENTCALLBACK ,
-				bufferDuration,
-				0,
-				mixFormat,
-				NULL);
-			if (FAILED(hr))
-			{
-				Log("Unable to reinitialize audio client: %x \n", hr);
-				goto exclusive_mode_failed;
-			}
-		}
-		else if (FAILED(hr))
-		{
-			Log("Unable to initialize audio client in exclusive mode: %x.\n", hr);
-			goto exclusive_mode_failed;
-		}
-
-		UINT frameSize;
-		hr = gSoundDevice.audioClient->GetBufferSize(&frameSize);
-		if (FAILED(hr))
-		{
-			Log("Unable to get audio client buffer: %x. \n", hr);
-			goto exclusive_mode_failed;
-		}
-		initExclusiveModeSuccess = true;
-		gSoundDevice.exclusiveModeFramesToWrite = frameSize;
-
-
-		gSoundDevice.audioSamplesReadyEvent = CreateEventEx(NULL, NULL, 0, EVENT_MODIFY_STATE | SYNCHRONIZE);
-		if (gSoundDevice.audioSamplesReadyEvent == NULL)
-		{
-			Log("Unable to create samples ready event: %d.\n", GetLastError());
-			return false;
-		}
-		/*
-		hr = gSoundDevice.audioClient->SetEventHandle(gSoundDevice.audioSamplesReadyEvent);
-		if (FAILED(hr))
-		{
-			Log("Unable to get set event handle: %x.\n", hr);
-			return false;
-		}
-		*/
-
-
-		hr = gSoundDevice.audioClient->GetService(IID_PPV_ARGS(&gSoundDevice.renderClient));
-		if (FAILED(hr))
-		{
-			Log("Unable to get new render client: %x.\n", hr);
-			return false;
-		}
-
-		
+	if (initSucceed)
 		audioThread = CreateThread(AudioThreadFunc, &gSoundDevice);
 
-		return true;
-
-	}
-exclusive_mode_failed:
-	//TODO: try shared mode
-
-	return false;
+	return initSucceed;
 
 
 
