@@ -1,9 +1,5 @@
-#include "platform.h"
-#include "allocator.h"
-#include "thread.h"
 #include "crc32.h"
 #include "string.h"
-#include "log.h"
 #include <string.h>
 #include <new>
 namespace yu

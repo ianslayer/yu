@@ -35,13 +35,11 @@ void		SubmitWorkItem(WorkItem* item, WorkItem* dep[], int numDep);
 bool		IsDone(WorkItem*);
 void		ResetWorkItem(WorkItem* item);
 
-void		SubmitTerminateWork();
-
 struct WorkerThread* GetWorkerThread();
 int					GetWorkerThreadIdx();
 
 void MainThreadWorker();
 void InitWorkerSystem();
 void FreeWorkerSystem();
-
+void SubmitTerminateWork();
 }

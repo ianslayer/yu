@@ -135,16 +135,9 @@
   <ItemGroup>
     <ClCompile Include="..\src\app\common.cpp" />
     <ClCompile Include="..\src\app\work_map.cpp" />
-    <ClCompile Include="..\src\core\allocator.cpp" />
+    <ClCompile Include="..\src\core\core_win32.cpp" />
     <ClCompile Include="..\src\core\crc32.cpp" />
-    <ClCompile Include="..\src\core\file_win32.cpp" />
-    <ClCompile Include="..\src\core\log.cpp" />
-    <ClCompile Include="..\src\core\string.cpp" />
-    <ClCompile Include="..\src\core\system_win32.cpp" />
-    <ClCompile Include="..\src\core\thread_win32.cpp" />
-    <ClCompile Include="..\src\core\timer.cpp" />
-    <ClCompile Include="..\src\core\worker.cpp" />
-    <ClCompile Include="..\src\main.cpp" />
+    <ClCompile Include="..\src\main_win32.cpp" />
     <ClCompile Include="..\src\renderer\renderer_dx11.cpp" />
     <ClCompile Include="..\src\renderer\shader_compiler_dx11.cpp" />
     <ClCompile Include="..\src\sound\sound_wasapi.cpp" />
@@ -156,14 +149,17 @@
     <ClInclude Include="..\src\container\dequeue.h" />
     <ClInclude Include="..\src\container\hash.h" />
     <ClInclude Include="..\src\core\allocator.h" />
+    <ClInclude Include="..\src\core\allocator_impl.h" />
     <ClInclude Include="..\src\core\bit.h" />
     <ClInclude Include="..\src\core\crc32.h" />
     <ClInclude Include="..\src\core\file.h" />
     <ClInclude Include="..\src\core\free_list.h" />
     <ClInclude Include="..\src\core\log.h" />
+    <ClInclude Include="..\src\core\log_impl.h" />
     <ClInclude Include="..\src\core\platform.h" />
     <ClInclude Include="..\src\core\refcount.h" />
     <ClInclude Include="..\src\core\string.h" />
+    <ClInclude Include="..\src\core\string_impl.h" />
     <ClInclude Include="..\src\core\system.h" />
     <ClInclude Include="..\src\core\system_impl.h" />
     <ClInclude Include="..\src\core\thread.h" />
@@ -171,6 +167,7 @@
     <ClInclude Include="..\src\core\timer.h" />
     <ClInclude Include="..\src\core\type.h" />
     <ClInclude Include="..\src\core\worker.h" />
+    <ClInclude Include="..\src\core\worker_impl.h" />
     <ClInclude Include="..\src\math\matrix.h" />
     <ClInclude Include="..\src\math\vector.h" />
     <ClInclude Include="..\src\math\yu_math.h" />
