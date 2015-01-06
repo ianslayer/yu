@@ -1,4 +1,7 @@
-#include "yu.h"
+namespace yu
+{
+	int YuMain();
+}
 
 int main()
 {

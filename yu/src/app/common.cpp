@@ -233,7 +233,7 @@ WorkItem* InputWorkItem()
 	memset(result->keyboardState, 0, sizeof(result->keyboardState));
 	memset(&result->mouseState, 0, sizeof(result->mouseState));
 	Input* input = New<Input>(gSysArena);
-	input->inputQueue = (SpscFifo<InputEvent, 256>*) gSystem->GetInputQueue();
+	input->inputQueue = (SpscFifo<InputEvent, 256>*) gWindowManager->GetInputQueue();
 	SetInputData(item, input);
 	SetOutputData(item, result);
 	return item;

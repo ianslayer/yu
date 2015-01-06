@@ -1,10 +1,6 @@
 #include "system.h"
-#include "timer.h"
 #include "thread.h"
-#include "string.h"
 #include "log.h"
-#include "../container/dequeue.h"
-#include "../container/array.h"
 
 #if defined YU_OS_WIN32
 	#include <intrin.h>
@@ -24,27 +20,34 @@ struct CreateWinParam
 	Mutex	winCreationCS;
 };
 
+struct CloseWinParam
+{
+	Window	win;
+	CondVar	winCloseCV;
+	Mutex	winCloseCS;
+};
 
 struct WindowThreadCmd
 {
 	enum CommandType
 	{
 		CREATE_WINDOW,
+		CLOSE_WINDOW,
 	};
 
-	union Command
+	union
 	{
 		CreateWinParam*	createWinParam;
+		CloseWinParam* closeWinParam;
 	};
 
 	CommandType	type;
-	Command		cmd;
 };
 
 
 using InputQueue = SpscFifo < InputEvent, 256 > ;
 
-struct SystemImpl
+struct WindowManagerImpl
 {
 	SpscFifo<WindowThreadCmd, 16>		winThreadCmdQueue; //yumain to window thread
 	InputQueue							inputQueue;			//window to yumain thread
@@ -52,40 +55,40 @@ struct SystemImpl
 	Thread								windowThread;
 };
 
-System* gSystem = 0;
+WindowManager* gWindowManager = 0;
 
 bool PlatformInitSystem();
 
-bool InitSystem()
+bool InitWindowManager()
 {
-	gSystem = New<System>(gSysArena);
+	gWindowManager = New<WindowManager>(gSysArena);
 
 	if(!PlatformInitSystem())
 	{
 		return false;
 	}
 	
-	Display mainDisplay = System::GetMainDisplay();
+	Display mainDisplay = SystemInfo::GetMainDisplay();
 	
 	Log("main display modes:\n");
 	
-	int numDisplayMode = System::NumDisplayMode(mainDisplay);
+	int numDisplayMode = SystemInfo::NumDisplayMode(mainDisplay);
 	
 	for(int i = 0; i < numDisplayMode; i++)
 	{
-		DisplayMode mode = System::GetDisplayMode(mainDisplay, i);
+		DisplayMode mode = SystemInfo::GetDisplayMode(mainDisplay, i);
 		Log("width: %lu, height: %lu, refresh rate: %lf\n", mode.width, mode.height, mode.refreshRate);
 	}
 	
-	DisplayMode currentDisplayMode = System::GetCurrentDisplayMode(mainDisplay);
+	DisplayMode currentDisplayMode = SystemInfo::GetCurrentDisplayMode(mainDisplay);
 	Log("current mode width: %lu, height: %lu, refresh rate: %lf\n", currentDisplayMode.width, currentDisplayMode.height, currentDisplayMode.refreshRate);
 	
-	int numDisplay = System::NumDisplays();
+	int numDisplay = SystemInfo::NumDisplays();
 	
 	Log("display num: %d\n", numDisplay);
 	
 
-	CPUInfo cpuInfo = System::GetCPUInfo();
+	CPUInfo cpuInfo = SystemInfo::GetCPUInfo();
 
 	Log("CPU info: \n");
 	Log("Vender: %s\n", cpuInfo.vender);
@@ -94,11 +97,11 @@ bool InitSystem()
 	return true;
 }
 
-void FreeSystem()
+void FreeWindowManager()
 {
-	Delete(gSysArena, gSystem->sysImpl);
-	Delete(gSysArena, gSystem);
-	gSystem = 0;
+	Delete(gSysArena, gWindowManager->mgrImpl);
+	Delete(gSysArena, gWindowManager);
+	gWindowManager = 0;
 }
 
 #if defined (YU_CPU_X86) || defined (YU_CPU_X86_64)
@@ -125,7 +128,7 @@ void cpuid(u32 info[4], u32 cmdEax, u32 cmdEcx = 0)
 #endif
 }
 
-CPUInfo System::GetCPUInfo()
+CPUInfo SystemInfo::GetCPUInfo()
 {
 /*
 	int mib[2];
@@ -230,14 +233,10 @@ CPUInfo System::GetCPUInfo()
 
 #endif
 
-System::~System()
-{ 
 
-}
-
-void* System::GetInputQueue()
+void* WindowManager::GetInputQueue()
 {
-	return &sysImpl->inputQueue;
+	return &mgrImpl->inputQueue;
 }
 
 }

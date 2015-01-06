@@ -96,15 +96,6 @@
 #	endif
 #endif
 
-//graphics api TODO: should I place api selector here?
-#if defined YU_OS_WIN32
-#	define YU_DX11
-#	define YU_GRAPHICS_API YU_DX11
-#elif defined YU_OS_MAC
-#	define YU_GL
-#	define YU_GRAPHICS_API YU_GL
-#endif
-
 #include <stdint.h>
 
 namespace yu

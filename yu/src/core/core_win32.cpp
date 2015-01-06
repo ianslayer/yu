@@ -1,6 +1,18 @@
+#include "../container/dequeue.h"
+#include "../container/array.h"
+
+#include "timer.h"
 #include "system_impl.h"
+#include "thread_impl.h"
+#include "worker_impl.h"
+#include "log_impl.h"
+#include "allocator_impl.h"
+#include "string_impl.h"
+
 #include "../renderer/renderer.h"
 #include <Mmsystem.h>
+#pragma comment(lib, "Winmm.lib")
+
 namespace yu
 {
 void SetYuExit();
@@ -85,7 +97,7 @@ static void GetMousePos(const Window& win)
 	ev.mouseEvent.x = float(dx);
 	ev.mouseEvent.y = float(dy);
 	
-	gSystem->sysImpl->inputQueue.Enqueue(ev);
+	gWindowManager->mgrImpl->inputQueue.Enqueue(ev);
 }
 
 #define GETX(l) (int(l & 0xFFFF))
@@ -99,10 +111,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	GetClientRect(hWnd, &clientRect);
 
 	Window* win = nullptr;
-	for (int i = 0; i < gSystem->sysImpl->windowList.Size(); i++)
+	for (int i = 0; i < gWindowManager->mgrImpl->windowList.Size(); i++)
 	{
-		if (gSystem->sysImpl->windowList[i].hwnd == hWnd)
-			win = &gSystem->sysImpl->windowList[i];
+		if (gWindowManager->mgrImpl->windowList[i].hwnd == hWnd)
+			win = &gWindowManager->mgrImpl->windowList[i];
 	}
 
 	if (!win)
@@ -258,7 +270,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	}
 
 	if (ev.type != InputEvent::UNKNOWN)
-		gSystem->sysImpl->inputQueue.Enqueue(ev);
+		gWindowManager->mgrImpl->inputQueue.Enqueue(ev);
 	return 0;
 }
 
@@ -268,7 +280,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 	{
 		case (WindowThreadCmd::CREATE_WINDOW):
 		{
-			CreateWinParam* param = (CreateWinParam*)cmd.cmd.createWinParam;
+			CreateWinParam* param = cmd.createWinParam;
 			param->winCreationCS.Lock();
 			Rect rect = param->rect;
 			Window window = {};
@@ -293,14 +305,31 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 				CaptureMouse(window);
 			}
 
-			((SystemImpl*)(gSystem->sysImpl))->windowList.PushBack(window);
+			gWindowManager->mgrImpl->windowList.PushBack(window);
 			param->win = window;
 			param->winCreationCS.Unlock();
 
 			NotifyCondVar(param->winCreationCV);
 		}
 		break;
-
+		
+		case(WindowThreadCmd::CLOSE_WINDOW) :
+		{
+			CloseWinParam* param = cmd.closeWinParam;
+			param->winCloseCS.Lock();
+			for (int i = 0; i < gWindowManager->mgrImpl->windowList.Size(); i++)
+			{
+				if (gWindowManager->mgrImpl->windowList[i].hwnd == param->win.hwnd)
+				{
+					gWindowManager->mgrImpl->windowList.EraseSwapBack(&gWindowManager->mgrImpl->windowList[i]);
+					break;
+				}
+			}
+			CloseWindow(param->win.hwnd);
+			param->winCloseCS.Unlock();
+			NotifyCondVar(param->winCloseCV);
+		}
+		break;
 
 	}
 }
@@ -308,7 +337,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 
 ThreadReturn ThreadCall WindowThreadFunc(ThreadContext context)
 {
-	SystemImpl* sysImpl = (SystemImpl*)context;
+	WindowManagerImpl* mgrImpl = (WindowManagerImpl*)context;
 
 	MSG msg = { 0 };
 
@@ -321,7 +350,7 @@ ThreadReturn ThreadCall WindowThreadFunc(ThreadContext context)
 		{
 
 			WindowThreadCmd cmd;
-			while (sysImpl->winThreadCmdQueue.Dequeue(cmd))
+			while (mgrImpl->winThreadCmdQueue.Dequeue(cmd))
 			{
 				ExecWindowCommand(cmd);
 			}
@@ -331,25 +360,69 @@ ThreadReturn ThreadCall WindowThreadFunc(ThreadContext context)
 
 		}
 
-		for (int i = 0; i < gSystem->sysImpl->windowList.Size(); i++)
+		for (int i = 0; i < mgrImpl->windowList.Size(); i++)
 		{
-			if (gSystem->sysImpl->windowList[i].mode == Window::MOUSE_CAPTURE && gSystem->sysImpl->windowList[i].focused)
+			if (mgrImpl->windowList[i].mode == Window::MOUSE_CAPTURE && mgrImpl->windowList[i].focused)
 			{
-				CaptureMouse(gSystem->sysImpl->windowList[i]);
-				GetMousePos(gSystem->sysImpl->windowList[i]);
+				CaptureMouse(mgrImpl->windowList[i]);
+				GetMousePos(mgrImpl->windowList[i]);
 			}
 		}
 
 		Sleep(1);
 	}
 	
-	for (int i = 0; i < ((SystemImpl*)(gSystem->sysImpl))->windowList.Size(); i++)
-	{
-		gSystem->CloseWin(((SystemImpl*)(gSystem->sysImpl))->windowList[i]);
-	}
-
 	OutputDebugStringA("exit window thread\n");
 	return 0;
+}
+
+Window WindowManager::CreateWin(const Rect& rect)
+{
+	WindowManagerImpl* mgrImpl = this->mgrImpl;
+	CreateWinParam param;
+	WindowThreadCmd cmd;
+	param.rect = rect;
+
+	param.winCreationCS.Lock();
+	cmd.type = WindowThreadCmd::CREATE_WINDOW;
+	cmd.createWinParam = &param;
+
+	while (1)
+	{
+		BOOL success = PostThreadMessage(mgrImpl->windowThread.handle, WM_APP, 0, 0);//wake window thread
+		if (mgrImpl->winThreadCmdQueue.Enqueue(cmd))
+		{
+			success = PostThreadMessage(mgrImpl->windowThread.handle, WM_APP, 0, 0);
+			WaitForCondVar(param.winCreationCV, param.winCreationCS);
+			break;
+		}
+	}
+	param.winCreationCS.Unlock();
+
+	return param.win;
+}
+
+void WindowManager::CloseWin(Window& win)
+{
+	WindowManagerImpl* mgrImpl = this->mgrImpl;
+	CloseWinParam param;
+	WindowThreadCmd cmd;
+	param.win = win;
+
+	param.winCloseCS.Lock();
+	cmd.type = WindowThreadCmd::CLOSE_WINDOW;
+	cmd.closeWinParam = &param;
+	while (1)
+	{
+		BOOL success = PostThreadMessage(mgrImpl->windowThread.handle, WM_APP, 0, 0);//wake window thread
+		if (mgrImpl->winThreadCmdQueue.Enqueue(cmd))
+		{
+			success = PostThreadMessage(mgrImpl->windowThread.handle, WM_APP, 0, 0);
+			WaitForCondVar(param.winCloseCV, param.winCloseCS);
+			break;
+		}
+	}
+	param.winCloseCS.Unlock();
 }
 
 bool PlatformInitSystem()
@@ -372,10 +445,10 @@ bool PlatformInitSystem()
 
 	RegisterClassEx(&wcex);
 
-	SystemImpl* sysImpl = New<SystemImpl>(gSysArena);
-	gSystem->sysImpl = sysImpl;
-	sysImpl->windowThread = CreateThread(WindowThreadFunc, sysImpl);
-	SetThreadName(sysImpl->windowThread.handle, "Window Thread");
+	WindowManagerImpl* mgrImpl = New<WindowManagerImpl>(gSysArena);
+	gWindowManager->mgrImpl = mgrImpl;
+	mgrImpl->windowThread = CreateThread(WindowThreadFunc, mgrImpl);
+	SetThreadName(mgrImpl->windowThread.handle, "Window Thread");
 	return true;
 }
 
@@ -417,7 +490,7 @@ BOOL CALLBACK GetMainDisplayEnumProc(
 	return getMonResult;
 }
 
-Display System::GetMainDisplay()
+Display SystemInfo::GetMainDisplay()
 {
 	Display mainDisplay={};
 	
@@ -457,7 +530,7 @@ Display System::GetMainDisplay()
 	return mainDisplay;
 }
 
-DisplayMode System::GetDisplayMode(const Display& display, int modeIndex)
+DisplayMode SystemInfo::GetDisplayMode(const Display& display, int modeIndex)
 {
 	DisplayMode mode={};
 
@@ -506,7 +579,7 @@ DisplayMode System::GetDisplayMode(const Display& display, int modeIndex)
 	return mode;
 }
 
-DisplayMode System::GetCurrentDisplayMode(const Display& display)
+DisplayMode SystemInfo::GetCurrentDisplayMode(const Display& display)
 {
 	DisplayMode mode = {};
 
@@ -548,7 +621,7 @@ DisplayMode System::GetCurrentDisplayMode(const Display& display)
 	return mode;
 }
 
-int System::NumDisplayMode(const Display& display)
+int SystemInfo::NumDisplayMode(const Display& display)
 {
 
 	DEVMODE devMode={};
@@ -570,7 +643,7 @@ int System::NumDisplayMode(const Display& display)
 	return supportedIndex;
 }
 
-int System::NumDisplays()
+int SystemInfo::NumDisplays()
 {
 	int index = 0;
 	int numDisplay = 0;
@@ -598,7 +671,7 @@ int System::NumDisplays()
 	return numDisplay;
 }
 
-Display System::GetDisplay(int index)
+Display SystemInfo::GetDisplay(int index)
 {
 	Display display={};
 
@@ -638,49 +711,348 @@ Display System::GetDisplay(int index)
 	return display;
 }
 
-Window System::CreateWin(const Rect& rect)
+struct ThreadRunnerContext
 {
-	SystemImpl* sys = (SystemImpl*)(this->sysImpl);
-	CreateWinParam param;
-	WindowThreadCmd cmd;
-	param.rect = rect;
+	ThreadPriority	priority;
+	u64				affinityMask;
+	ThreadFunc*		func;
+	ThreadContext	context;
 
-	param.winCreationCS.Lock();
-	cmd.type = WindowThreadCmd::CREATE_WINDOW;
-	cmd.cmd.createWinParam = &param;
+	CondVar			threadCreationCV;
+	Mutex			threadCreationCS;
+};
+void RegisterThread(ThreadHandle thread);
+void ThreadExit(ThreadHandle handle);
 
+ThreadHandle GetCurrentThreadHandle()
+{
+	DWORD threadId = GetThreadId(GetCurrentThread());
 
-	SystemImpl* sysImpl = (SystemImpl*)gSystem->sysImpl;
+	return threadId;
 
-	//sysImpl->windowThread = CreateThread(WindowThreadFunc, sysImpl);
-	//SetThreadName(sysImpl->windowThread.threadHandle, "Window Thread");
-
-	while (1)
-	{
-		BOOL success = PostThreadMessage(sysImpl->windowThread.handle, WM_APP, 0, 0);//wake window thread
-		if (sys->winThreadCmdQueue.Enqueue(cmd))
-		{
-			success = PostThreadMessage(sysImpl->windowThread.handle, WM_APP, 0, 0);
-			WaitForCondVar(param.winCreationCV, param.winCreationCS);
-			break;
-		}
-	}
-	param.winCreationCS.Unlock();
-
-	return param.win;
+	/*
+	DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &threadHandle,
+	DUPLICATE_SAME_ACCESS, FALSE, DUPLICATE_SAME_ACCESS);
+	*/
 }
 
-void System::CloseWin(Window& win)
+ThreadReturn ThreadCall ThreadRunner(ThreadContext context)
 {
-	for(int i = 0; i < ((SystemImpl*)sysImpl)->windowList.Size(); i++)
+	ThreadRunnerContext* runnerContext = (ThreadRunnerContext*)context;
+	runnerContext->threadCreationCS.Lock();
+
+	ThreadHandle threadHandle = GetCurrentThreadHandle();
+	if (runnerContext->affinityMask)
+		SetThreadAffinity(threadHandle, runnerContext->affinityMask);
+
+	RegisterThread(threadHandle);
+
+	//subtle, but this two must be copied before notify,, else runnerContext my be destroied before they can be executed
+	ThreadFunc* func = runnerContext->func;
+	ThreadContext threadContext = runnerContext->context;
+
+	runnerContext->threadCreationCS.Unlock();
+	NotifyCondVar(runnerContext->threadCreationCV);
+
+	ThreadReturn ret;
+	ret = func(threadContext);
+
+	ThreadExit(threadHandle);
+
+	return ret;
+}
+
+Thread CreateThread(ThreadFunc func, ThreadContext context, ThreadPriority priority, u64 affinityMask)
+{
+	Thread thread;
+
+	ThreadRunnerContext runnerContext;
+	runnerContext.threadCreationCS.Lock();
+	runnerContext.priority = priority;
+	runnerContext.affinityMask = affinityMask;
+	runnerContext.func = func;
+	runnerContext.context = context;
+
+	DWORD threadId;
+	::CreateThread(NULL, 0, ThreadRunner, &runnerContext, 0, &threadId);
+	thread.handle = threadId;
+
+	WaitForCondVar(runnerContext.threadCreationCV, runnerContext.threadCreationCS);
+	runnerContext.threadCreationCS.Unlock();
+
+	return thread;
+}
+
+u64 GetThreadAffinity(ThreadHandle threadHandle)
+{
+	GROUP_AFFINITY groupAffinity = {};
+	HANDLE realHandle = OpenThread(THREAD_ALL_ACCESS, FALSE, threadHandle);
+	if (realHandle)
 	{
-		if (((SystemImpl*)sysImpl)->windowList[i].hwnd == win.hwnd)
+		::GetThreadGroupAffinity(realHandle, &groupAffinity);
+		CloseHandle(realHandle);
+		return groupAffinity.Mask;
+	}
+	return 0;
+}
+
+void SetThreadAffinity(ThreadHandle threadHandle, u64 affinityMask)
+{
+	if (affinityMask)
+	{
+		HANDLE realHandle = OpenThread(THREAD_ALL_ACCESS, FALSE, threadHandle);
+		if (realHandle)
 		{
-			((SystemImpl*)sysImpl)->windowList.EraseSwapBack(&((SystemImpl*)sysImpl)->windowList[i]);
-			break;
+			::SetThreadAffinityMask(realHandle, affinityMask);
+			CloseHandle(realHandle);
 		}
 	}
-	CloseWindow(win.hwnd);
+}
+
+const DWORD MS_VC_EXCEPTION = 0x406D1388;
+
+#pragma pack(push,8)
+typedef struct tagTHREADNAME_INFO
+{
+	DWORD dwType; // Must be 0x1000.
+	LPCSTR szName; // Pointer to name (in user addr space).
+	DWORD dwThreadID; // Thread ID (-1=caller thread).
+	DWORD dwFlags; // Reserved for future use, must be zero.
+} THREADNAME_INFO;
+#pragma pack(pop)
+
+void SetThreadName(ThreadHandle threadHandle, const char* name)
+{
+	THREADNAME_INFO info;
+	info.dwType = 0x1000;
+	info.szName = name;
+	info.dwThreadID = threadHandle;
+	info.dwFlags = 0;
+
+	__try
+	{
+		RaiseException(MS_VC_EXCEPTION, 0, sizeof(info) / sizeof(ULONG_PTR), (ULONG_PTR*)&info);
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+	}
+}
+
+Mutex::Mutex()
+{
+	InitializeCriticalSectionAndSpinCount(&m, 1000);
+}
+
+Mutex::~Mutex()
+{
+	DeleteCriticalSection(&m);
+}
+
+void Mutex::Lock()
+{
+	EnterCriticalSection(&m);
+}
+
+void Mutex::Unlock()
+{
+	LeaveCriticalSection(&m);
+}
+
+CondVar::CondVar()
+{
+	InitializeConditionVariable(&cv);
+}
+
+CondVar::~CondVar()
+{
+	WakeConditionVariable(&cv);
+}
+
+void WaitForCondVar(CondVar& cv, Mutex& m)
+{
+	SleepConditionVariableCS(&cv.cv, &m.m, INFINITE);
+}
+
+void NotifyCondVar(CondVar& cv)
+{
+	WakeConditionVariable(&cv.cv);
+}
+
+void NotifyAllCondVar(CondVar& cv)
+{
+	WakeAllConditionVariable(&cv.cv);
+}
+
+Semaphore::Semaphore(int initCount, int maxCount)
+{
+	sem = CreateSemaphore(nullptr, initCount, maxCount, nullptr);
+}
+
+Semaphore::~Semaphore()
+{
+	CloseHandle(sem);
+}
+
+void WaitForSem(Semaphore& sem)
+{
+	WaitForSingleObject(sem.sem, INFINITE);
+}
+
+void SignalSem(Semaphore& sem)
+{
+	LONG prevCount;
+	BOOL result = ReleaseSemaphore(sem.sem, 1, &prevCount);
+	if (!result)
+	{
+		Log("error, sem signal failed");
+	}
+
+}
+
+size_t FileSize(const char* path)
+{
+	HANDLE fileHandle = CreateFileA(path, GENERIC_READ, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+	LARGE_INTEGER fileSize;
+	BOOL getSizeSuccess = GetFileSizeEx(fileHandle, &fileSize);
+	CloseHandle(fileHandle);
+	if (getSizeSuccess)
+	{
+		return fileSize.QuadPart;
+	}
+	return 0;
+}
+
+
+size_t ReadFile(const char* path, void* buffer, size_t bufferLen)
+{
+
+	size_t fileSize = FileSize(path);
+
+	HANDLE fileHandle = CreateFileA(path, GENERIC_READ, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+	DWORD readSize;
+	BOOL readSuccess = ::ReadFile(fileHandle, buffer, (DWORD)min(fileSize, bufferLen), &readSize, nullptr);
+	CloseHandle(fileHandle);
+
+	return readSize;
+}
+
+
+static CycleCount initCycle;
+static u64        cpuFrequency;
+
+static Time initTime;
+static Time frameStartTime;
+static u64 timerFrequency;
+
+const CycleCount& PerfTimer::Duration() const
+{
+	return cycleCounter;
+}
+
+f64 PerfTimer::DurationInMs() const
+{
+	return ConvertToMs(cycleCounter);
+}
+
+Time SampleTime()
+{
+	Time time;
+	LARGE_INTEGER perfCount;
+	QueryPerformanceCounter(&perfCount);
+	time.time = perfCount.QuadPart;
+
+	return time;
+}
+
+Time SysStartTime()
+{
+	return initTime;
+}
+
+void Timer::Start()
+{
+	time = SampleTime();
+}
+
+void Timer::Finish()
+{
+	Time finishTime = SampleTime();
+	time.time = finishTime.time - time.time;
+}
+
+const Time& Timer::Duration() const
+{
+	return time;
+}
+
+f64 Timer::DurationInMs() const
+{
+	return ConvertToMs(time);
+}
+
+void InitSysTime()
+{
+	LARGE_INTEGER frequency;
+	QueryPerformanceFrequency(&frequency);
+	timerFrequency = frequency.QuadPart;
+
+	initCycle = SampleCycle();
+	cpuFrequency = EstimateCPUFrequency();
+
+	initTime = SampleTime();
+
+	Log("estimated cpu freq: %llu\n", cpuFrequency);
+	Log("timer freq: %llu\n", timerFrequency);
+}
+
+u64 EstimateCPUFrequency()
+{
+	ThreadHandle currentThreadHandle = GetCurrentThreadHandle();
+	u64 originAffinity = GetThreadAffinity(currentThreadHandle);
+	SetThreadAffinity(currentThreadHandle, 1);
+
+	Time startCount = SampleTime();
+	Time duration = {};
+
+	PerfTimer timer;
+	timer.Start();
+	while (ConvertToMs(duration) < 1000)
+	{
+		Time curTime = SampleTime();
+		duration = curTime - startCount;
+	}
+	timer.Finish();
+	SetThreadAffinity(currentThreadHandle, originAffinity);
+
+	return timer.Duration().cycle;
+}
+
+f64 ConvertToMs(const CycleCount& cycles)
+{
+	i64 time = (i64)(cycles.cycle / cpuFrequency);  // unsigned->sign conversion should be safe here
+	i64 timeFract = (i64)(cycles.cycle % cpuFrequency);  // unsigned->sign conversion should be safe here
+	f64 ret = (time)+(f64)timeFract / (f64)((i64)cpuFrequency);
+	return ret * 1000.0;
+}
+
+f64 ConvertToMs(const Time& time)
+{
+	u64 timeInMs = time.time * 1000;
+	return (f64)timeInMs / (f64)timerFrequency;
+}
+
+void DummyWorkLoad(double timeInMs)
+{
+	Time startTime = SampleTime();
+	double deltaT = 0;
+	while (1)
+	{
+		if (deltaT >= timeInMs)
+			break;
+		Time endTime = SampleTime();
+
+		deltaT = ConvertToMs(endTime - startTime);
+	}
 }
 
 }

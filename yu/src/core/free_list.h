@@ -5,9 +5,8 @@
 namespace yu
 {
 
-template<class T, int num> class FreeList
+template<class T, int num> struct FreeList
 {
-public:
 	FreeList() : numAlloced(0)
 	{
 		for (int i = 0; i < num; i++)

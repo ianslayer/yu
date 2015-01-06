@@ -1,8 +1,4 @@
 #include "thread.h"
-#include "timer.h"
-#include "allocator.h"
-#include <atomic>
-#include <new>
 
 namespace yu
 {

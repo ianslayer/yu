@@ -33,38 +33,14 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\src\core\allocator.cpp">
-      <Filter>Source Files\core</Filter>
-    </ClCompile>
     <ClCompile Include="..\src\core\crc32.cpp">
-      <Filter>Source Files\core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\core\string.cpp">
-      <Filter>Source Files\core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\core\system_win32.cpp">
-      <Filter>Source Files\core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\core\timer.cpp">
       <Filter>Source Files\core</Filter>
     </ClCompile>
     <ClCompile Include="..\src\renderer\renderer_dx11.cpp">
       <Filter>Source Files\renderer</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\main.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\src\yu.cpp">
       <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\core\worker.cpp">
-      <Filter>Source Files\core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\core\thread_win32.cpp">
-      <Filter>Source Files\core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\core\log.cpp">
-      <Filter>Source Files\core</Filter>
     </ClCompile>
     <ClCompile Include="..\src\renderer\shader_compiler_dx11.cpp">
       <Filter>Source Files\renderer</Filter>
@@ -75,11 +51,14 @@
     <ClCompile Include="..\src\app\common.cpp">
       <Filter>Source Files\app</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\core\file_win32.cpp">
-      <Filter>Source Files\core</Filter>
-    </ClCompile>
     <ClCompile Include="..\src\sound\sound_wasapi.cpp">
       <Filter>Source Files\sound</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\core\core_win32.cpp">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\main_win32.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -175,6 +154,18 @@
     </ClInclude>
     <ClInclude Include="..\src\sound\sound.h">
       <Filter>Source Files\sound</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\core\worker_impl.h">
+      <Filter>Source Files\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\core\log_impl.h">
+      <Filter>Source Files\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\core\allocator_impl.h">
+      <Filter>Source Files\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\core\string_impl.h">
+      <Filter>Source Files\core</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

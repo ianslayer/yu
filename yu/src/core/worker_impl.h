@@ -1,11 +1,5 @@
-#include "../container/array.h"
-#include "../container/dequeue.h"
-#include "allocator.h"
-#include "thread.h"
 #include "worker.h"
-#include "system.h"
-#include "log.h"
-#include <atomic>
+
 namespace yu
 {
 InputData* InputData::typeList;
@@ -177,7 +171,7 @@ struct WorkerSystem
 {
 	WorkerSystem() :workQueueSem(0, MAX_WORK_QUEUE_LEN)
 	{
-		CPUInfo cpuInfo = System::GetCPUInfo();
+		CPUInfo cpuInfo = SystemInfo::GetCPUInfo();
 		numWorkerThread = cpuInfo.numLogicalProcessors - 2;
 	
 		SetWorkFunc(&terminateWorkItem, TerminateWorkFunc, nullptr);
