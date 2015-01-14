@@ -55,6 +55,7 @@ public:
 
 	void			Rewind();
 	void			Rewind(size_t oldWaterMark);
+	size_t			Available();
 
 	void*			buffer;
 	Allocator*		allocator;

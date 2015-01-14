@@ -13,13 +13,42 @@
 #include <Mmsystem.h>
 #pragma comment(lib, "Winmm.lib")
 
+#include <xinput.h>
+
+#define X_INPUT_GET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_STATE* pState)
+typedef X_INPUT_GET_STATE(XInputGetStateFuncPtr);
+X_INPUT_GET_STATE(XInputGetStateStub)
+{
+	return ERROR_DEVICE_NOT_CONNECTED;
+}
+
+XInputGetStateFuncPtr* dllXInputGetState = XInputGetStateStub;
+
 namespace yu
 {
 void SetYuExit();
 bool YuRunning();
-void ResizeBackBuffer(unsigned int width, unsigned int height, TexFormat fmt);
+void ResizeBackBuffer(unsigned int width, unsigned int height, TextureFormat fmt);
 
-static void CaptureMouse(Window& win)
+YU_INTERNAL void InitXInput()
+{
+	HMODULE xinputDll = LoadLibraryA("xinput1_4.dll");
+	if (!xinputDll)
+	{
+		xinputDll = LoadLibraryA("xinput9_1_0.dll");
+	}
+	if (!xinputDll)
+	{
+		xinputDll = LoadLibraryA("xinput1_3.dll");
+	}
+
+	if (xinputDll)
+	{
+		dllXInputGetState = (XInputGetStateFuncPtr*)GetProcAddress(xinputDll, "XInputGetState");
+	}
+}
+
+YU_INTERNAL void CaptureMouse(Window& win)
 {
 	if (win.captured)
 		return; 
@@ -53,7 +82,7 @@ static void CaptureMouse(Window& win)
 
 }
 
-static void DecaptureMouse()
+YU_INTERNAL void DecaptureMouse()
 {
 	ClipCursor(NULL);
 	ReleaseCapture();
@@ -61,7 +90,13 @@ static void DecaptureMouse()
 		;
 }
 
-static void GetMousePos(const Window& win)
+YU_INTERNAL void EnqueueEvent(InputEvent& ev)
+{
+	ev.timeStamp = SampleTime().time;
+	gWindowManager->mgrImpl->inputQueue.Enqueue(ev);
+}
+
+YU_INTERNAL void GetMousePos(const Window& win)
 {
 	POINT	currentPos;
 	GetCursorPos(&currentPos);
@@ -97,15 +132,14 @@ static void GetMousePos(const Window& win)
 	ev.mouseEvent.x = float(dx);
 	ev.mouseEvent.y = float(dy);
 	
-	gWindowManager->mgrImpl->inputQueue.Enqueue(ev);
+	EnqueueEvent(ev);
 }
 
 #define GETX(l) (int(l & 0xFFFF))
 #define GETY(l) (int(l) >> 16)
-LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+YU_INTERNAL LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	InputEvent ev = {};
-	ev.timeStamp = SampleTime().time;
 
 	RECT clientRect;
 	GetClientRect(hWnd, &clientRect);
@@ -244,7 +278,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		RECT windowRect;
 		GetWindowRect(hWnd, &windowRect);
-		ResizeBackBuffer(width, height, TexFormat::TEX_FORMAT_R8G8B8A8_UNORM);
+		ResizeBackBuffer(width, height, TextureFormat::TEX_FORMAT_R8G8B8A8_UNORM);
 		break;
 	case WM_MOUSEACTIVATE:
 	case WM_ACTIVATE:
@@ -262,6 +296,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
 		win->focused = false;
 		win->captured = false;
+		ev.type = InputEvent::KILL_FOCUS;
+
 		DecaptureMouse();
 	}
 	break;
@@ -270,11 +306,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	}
 
 	if (ev.type != InputEvent::UNKNOWN)
-		gWindowManager->mgrImpl->inputQueue.Enqueue(ev);
+		EnqueueEvent(ev);
 	return 0;
 }
 
-void ExecWindowCommand(WindowThreadCmd& cmd)
+YU_INTERNAL void ExecWindowCommand(WindowThreadCmd& cmd)
 {
 	switch (cmd.type)
 	{
@@ -333,20 +369,84 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 
 	}
 }
+YU_INTERNAL u32 TranslateButton(WORD xInputButton, DWORD xInputButtonId, InputEvent::JoyEvent::BUTTON_ID buttonId)
+{
+	u32 button;
+	button = (xInputButton & xInputButtonId) ? buttonId : 0;
+	return button;
+}
 
+#define XINPUT_MAX_AXIS 32767
+#define XINPUT_MIN_AXIS (-32768)
+YU_INTERNAL float TranslateAxis(SHORT rawValue, float deadZone)
+{
+	float value = 0.f;
 
-ThreadReturn ThreadCall WindowThreadFunc(ThreadContext context)
+	if (rawValue> deadZone || rawValue < -deadZone)
+	{
+		value = clip(rawValue, (SHORT)XINPUT_MIN_AXIS, (SHORT)XINPUT_MAX_AXIS);
+		if (value >= 0)
+			value = (value - deadZone) / ((float)XINPUT_MAX_AXIS - deadZone);
+		else
+			value = -(-value - deadZone) / ((float)-XINPUT_MIN_AXIS - deadZone);
+	}
+	return value;
+}
+
+YU_INTERNAL void ProcessXInput(int controllerIdx, const XINPUT_STATE& state, const XINPUT_STATE& oldState)
+{
+	InputEvent ev = {};
+	ev.type = InputEvent::JOY;
+
+	ev.joyEvent.type |= InputEvent::JoyEvent::AXIS;
+	ev.joyEvent.leftX = state.Gamepad.sThumbLX;
+	ev.joyEvent.controllerIdx = controllerIdx;
+
+	ev.joyEvent.leftX = TranslateAxis(state.Gamepad.sThumbLX, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+	ev.joyEvent.leftY = TranslateAxis(state.Gamepad.sThumbLY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+	ev.joyEvent.rightX = TranslateAxis(state.Gamepad.sThumbRX, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
+	ev.joyEvent.rightY = TranslateAxis(state.Gamepad.sThumbRY, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
+
+	if (state.Gamepad.wButtons != oldState.Gamepad.wButtons)
+	{
+		ev.joyEvent.type |= InputEvent::JoyEvent::BUTTON;
+		WORD xInputButton = state.Gamepad.wButtons;
+		u32 button = 0;
+		button |= TranslateButton(xInputButton, XINPUT_GAMEPAD_DPAD_UP, InputEvent::JoyEvent::BUTTON_UP);
+		button |= TranslateButton(xInputButton, XINPUT_GAMEPAD_DPAD_DOWN, InputEvent::JoyEvent::BUTTON_DOWN);
+		button |= TranslateButton(xInputButton, XINPUT_GAMEPAD_DPAD_LEFT, InputEvent::JoyEvent::BUTTON_LEFT);
+		button |= TranslateButton(xInputButton, XINPUT_GAMEPAD_DPAD_RIGHT, InputEvent::JoyEvent::BUTTON_RIGHT);
+
+		button |= TranslateButton(xInputButton, XINPUT_GAMEPAD_A, InputEvent::JoyEvent::BUTTON_A);
+		button |= TranslateButton(xInputButton, XINPUT_GAMEPAD_B, InputEvent::JoyEvent::BUTTON_B);
+		button |= TranslateButton(xInputButton, XINPUT_GAMEPAD_X, InputEvent::JoyEvent::BUTTON_X);
+		button |= TranslateButton(xInputButton, XINPUT_GAMEPAD_Y, InputEvent::JoyEvent::BUTTON_Y);
+
+		button |= TranslateButton(xInputButton, XINPUT_GAMEPAD_LEFT_THUMB, InputEvent::JoyEvent::BUTTON_LEFT_THUMB);
+		button |= TranslateButton(xInputButton, XINPUT_GAMEPAD_RIGHT_THUMB, InputEvent::JoyEvent::BUTTON_RIGHT_THUMB);
+
+		button |= TranslateButton(xInputButton, XINPUT_GAMEPAD_LEFT_SHOULDER, InputEvent::JoyEvent::BUTTON_LEFT_SHOULDER);
+		button |= TranslateButton(xInputButton, XINPUT_GAMEPAD_RIGHT_SHOULDER, InputEvent::JoyEvent::BUTTON_RIGHT_SHOULDER);
+
+		ev.joyEvent.buttonState = button;
+	}
+
+	EnqueueEvent(ev);
+}
+
+YU_INTERNAL ThreadReturn ThreadCall WindowThreadFunc(ThreadContext context)
 {
 	WindowManagerImpl* mgrImpl = (WindowManagerImpl*)context;
 
 	MSG msg = { 0 };
 
 	timeBeginPeriod(1);
-	while ( YuRunning())
+	DWORD xInputPacket = 0;
+	XINPUT_STATE oldState = {};
+	while (YuRunning())
 	{
-
 		while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
-		//while (GetMessage(&msg, NULL, 0, 0))
+			//while (GetMessage(&msg, NULL, 0, 0))
 		{
 
 			WindowThreadCmd cmd;
@@ -368,6 +468,31 @@ ThreadReturn ThreadCall WindowThreadFunc(ThreadContext context)
 				GetMousePos(mgrImpl->windowList[i]);
 			}
 		}
+
+		DWORD result;
+		for (int i = 0; i < XUSER_MAX_COUNT; i++)
+		{
+			XINPUT_STATE state;
+			yu::memset(&state, 0, sizeof(state));
+			result = dllXInputGetState(i, &state);
+
+			if (result == ERROR_SUCCESS)
+			{
+				if (state.dwPacketNumber != xInputPacket)
+				{
+					xInputPacket = state.dwPacketNumber;
+					//Log(" xinput input packet: %d\n", xInputPacket);
+					ProcessXInput(i, state, oldState);
+					oldState = state;
+				}
+			}
+			else
+			{
+
+			}
+
+		}
+
 
 		Sleep(1);
 	}
@@ -449,10 +574,13 @@ bool PlatformInitSystem()
 	gWindowManager->mgrImpl = mgrImpl;
 	mgrImpl->windowThread = CreateThread(WindowThreadFunc, mgrImpl);
 	SetThreadName(mgrImpl->windowThread.handle, "Window Thread");
+
+	InitXInput();
+
 	return true;
 }
 
-BOOL CALLBACK MyMonitorEnumProc(
+YU_INTERNAL BOOL CALLBACK MyMonitorEnumProc(
 	_In_  HMONITOR hMonitor,
 	_In_  HDC hdcMonitor,
 	_In_  LPRECT lprcMonitor,
@@ -467,7 +595,7 @@ BOOL CALLBACK MyMonitorEnumProc(
 	return getMonResult;
 }
 
-BOOL CALLBACK GetMainDisplayEnumProc(
+YU_INTERNAL BOOL CALLBACK GetMainDisplayEnumProc(
 	_In_  HMONITOR hMonitor,
 	_In_  HDC hdcMonitor,
 	_In_  LPRECT lprcMonitor,
@@ -937,12 +1065,12 @@ size_t ReadFile(const char* path, void* buffer, size_t bufferLen)
 }
 
 
-static CycleCount initCycle;
-static u64        cpuFrequency;
+YU_GLOBAL CycleCount initCycle;
+YU_GLOBAL u64        cpuFrequency;
 
-static Time initTime;
-static Time frameStartTime;
-static u64 timerFrequency;
+YU_GLOBAL Time initTime;
+YU_GLOBAL Time frameStartTime;
+YU_GLOBAL u64 timerFrequency;
 
 const CycleCount& PerfTimer::Duration() const
 {
@@ -974,7 +1102,7 @@ void Timer::Start()
 	time = SampleTime();
 }
 
-void Timer::Finish()
+void Timer::Stop()
 {
 	Time finishTime = SampleTime();
 	time.time = finishTime.time - time.time;
@@ -1021,7 +1149,7 @@ u64 EstimateCPUFrequency()
 		Time curTime = SampleTime();
 		duration = curTime - startCount;
 	}
-	timer.Finish();
+	timer.Stop();
 	SetThreadAffinity(currentThreadHandle, originAffinity);
 
 	return timer.Duration().cycle;

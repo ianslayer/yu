@@ -11,8 +11,8 @@ namespace yu
 template <class T>
 class Array
 {
-static const int DEFAULT_CAPACITY = 16;
-static const int DEFAULT_GRANULARITY = 16; //we assume granularity is multiple of power of 2
+YU_GLOBAL const int DEFAULT_CAPACITY = 16;
+YU_GLOBAL const int DEFAULT_GRANULARITY = 16; //we assume granularity is multiple of power of 2
 
 public:
 	Array (Allocator* _allocator = gDefaultAllocator);

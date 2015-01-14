@@ -1,11 +1,8 @@
 namespace yu
 {
-#define DECLARE_INPUT_TYPE(typeName)  static InputData* typeList;
-#define IMP_INPUT_TYPE(typeName) InputData* typeName::typeList;
-
 struct InputData
 {
-	DECLARE_INPUT_TYPE(InputData)
+
 };
 
 struct OutputData

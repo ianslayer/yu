@@ -62,6 +62,17 @@ struct PixelShaderDx11
 	DxResourcePtr<ID3D11PixelShader> shader;
 };
 
+struct Texture2DDx11
+{
+	DxResourcePtr<ID3D11Texture2D> texture;
+	DxResourcePtr<ID3D11ShaderResourceView> textureSRV;
+};
+
+struct SamplerDx11
+{
+	DxResourcePtr<ID3D11SamplerState> sampler;
+};
+
 struct PipelineDx11
 {
 	DxResourcePtr<ID3D11VertexShader> vs;
@@ -75,9 +86,12 @@ struct RendererDx11 : public Renderer
 	VertexShaderDx11	dx11VertexShaderList[MAX_SHADER];
 	PixelShaderDx11		dx11PixelShaderList[MAX_SHADER];
 	PipelineDx11		dx11PipelineList[MAX_PIPELINE];
+	Texture2DDx11		dx11TextureList[MAX_TEXTURE];
+	SamplerDx11			dx11SamplerList[MAX_SAMPLER];
+	UINT prevNumPSSRV = 0;
 };
 
-RendererDx11* gRenderer;
+YU_GLOBAL RendererDx11* gRenderer;
 
 Renderer* CreateRenderer()
 {
@@ -107,22 +121,23 @@ struct RenderDeviceDx11
 	bool					goingFullScreen = false;
 
 	FrameBufferDesc			frameBufferDesc;
+	OvrController			ovrController;
 };
 
-static RenderDeviceDx11* gDx11Device;
+YU_GLOBAL RenderDeviceDx11* gDx11Device;
 
-DXGI_FORMAT DXGIFormat(TexFormat fmt)
+YU_INTERNAL DXGI_FORMAT DXGIFormat(TextureFormat fmt)
 {
 	switch(fmt)
 	{
 		case TEX_FORMAT_R8G8B8A8_UNORM: return DXGI_FORMAT_R8G8B8A8_UNORM;
 		case TEX_FORMAT_R8G8B8A8_UNORM_SRGB: return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
 	}
-
+	Log("error, unknown format\n");
 	return DXGI_FORMAT_UNKNOWN;
 }
 
-TexFormat TexFormatFromDxgi(DXGI_FORMAT fmt)
+YU_INTERNAL TextureFormat TextureFormatFromDxgi(DXGI_FORMAT fmt)
 {
 	switch (fmt)
 	{
@@ -141,7 +156,7 @@ struct InitDX11Param
 	Mutex			initDx11CS;
 };
 
-static bool SetFullScreen(const FrameBufferDesc& desc)
+YU_INTERNAL bool SetFullScreen(const FrameBufferDesc& desc)
 {
 	if (desc.fullScreen)
 	{
@@ -184,7 +199,7 @@ static bool SetFullScreen(const FrameBufferDesc& desc)
 	return false;
 }
 
-static bool InitDX11(const Window& win, const FrameBufferDesc& desc)
+YU_INTERNAL bool InitDX11(const Window& win, const FrameBufferDesc& desc)
 {
 	gDx11Device = new RenderDeviceDx11();
 
@@ -278,7 +293,11 @@ static bool InitDX11(const Window& win, const FrameBufferDesc& desc)
 					D3D_DRIVER_TYPE_UNKNOWN,
 					//driverType, 
 					0,
-					D3D11_CREATE_DEVICE_DEBUG, //desc.directXDebugInfo == true?D3D11_CREATE_DEVICE_DEBUG:0, 
+					#if defined (YU_DEBUG)
+						D3D11_CREATE_DEVICE_DEBUG,
+					#else
+						0,
+					#endif
 					FeatureLevels,
 					1,
 					D3D11_SDK_VERSION,
@@ -329,6 +348,8 @@ static bool InitDX11(const Window& win, const FrameBufferDesc& desc)
 				SetFullScreen(desc);
 			}
 
+			InitOvr(gDx11Device->ovrController);
+
 			return true;
 		}
 
@@ -340,7 +361,7 @@ static bool InitDX11(const Window& win, const FrameBufferDesc& desc)
 	return false;
 }
 
-void FreeDX11()
+YU_INTERNAL void FreeDX11()
 {
 	OutputDebugStringA("free dx11\n");
 	ULONG refCount;
@@ -356,7 +377,7 @@ void FreeDX11()
 	delete gDx11Device;
 }
 
-void ResizeBackBuffer(unsigned int width, unsigned int height, TexFormat fmt)
+void ResizeBackBuffer(unsigned int width, unsigned int height, TextureFormat fmt)
 {
 	if (!gDx11Device)
 		return;
@@ -375,7 +396,7 @@ void ResizeBackBuffer(unsigned int width, unsigned int height, TexFormat fmt)
 	
 }
 
-void ExecResizeBackBufferCmd(unsigned int width, unsigned int height, TexFormat fmt)
+YU_INTERNAL void ExecResizeBackBufferCmd(unsigned int width, unsigned int height, TextureFormat fmt)
 {
 
 	ID3D10Texture2D* pTex;
@@ -393,7 +414,7 @@ void ExecResizeBackBufferCmd(unsigned int width, unsigned int height, TexFormat 
 
 }
 
-static void ExecSwapFrameBufferCmd(bool vsync)
+YU_INTERNAL void ExecSwapFrameBufferCmd(bool vsync)
 {
 	gDx11Device->dxgiSwapChain->Present(vsync ? 1 : 0, 0);
 }
@@ -401,7 +422,7 @@ static void ExecSwapFrameBufferCmd(bool vsync)
 ID3DBlob* CompileShaderDx11(const char* shaderSource, size_t sourceLen, const char* entryPoint, const char* profile);
 ID3DBlob* CompileShaderFromFileDx11(const char* path, const char* entryPoint, const char* profile);
 
-ID3D11InputLayout* CreateInputLayout(D3D11_INPUT_ELEMENT_DESC* desc, UINT numElem)
+YU_INTERNAL ID3D11InputLayout* CreateInputLayout(D3D11_INPUT_ELEMENT_DESC* desc, UINT numElem)
 {
 	char shaderBuf[4096];
 	StringBuilder shaderStr(shaderBuf, 4096);
@@ -429,7 +450,7 @@ ID3D11InputLayout* CreateInputLayout(D3D11_INPUT_ELEMENT_DESC* desc, UINT numEle
 	return inputLayout;
 }
 
-static void ExecUpdateMeshCmd(RendererDx11* renderer, MeshHandle handle)
+YU_INTERNAL void ExecUpdateMeshCmd(RendererDx11* renderer, MeshHandle handle)
 {
 	MeshData* data = renderer->meshList.Get(handle.id);
 	MeshDataDx11* dx11Data = &renderer->dx11MeshList[handle.id];
@@ -529,7 +550,7 @@ static void ExecUpdateMeshCmd(RendererDx11* renderer, MeshHandle handle)
 	}
 }
 
-static void ExecUpdateCameraCmd(RendererDx11* renderer, CameraHandle handle, const CameraData& updateData)
+YU_INTERNAL void ExecUpdateCameraCmd(RendererDx11* renderer, CameraHandle handle, const CameraData& updateData)
 {
 	renderer->cameraList.Get(handle.id)->UpdateData(updateData);
 	CameraData* data = &renderer->cameraList.Get(handle.id)->GetMutable();
@@ -576,7 +597,8 @@ static void ExecUpdateCameraCmd(RendererDx11* renderer, CameraHandle handle, con
 	gDx11Device->d3d11DeviceContext->VSSetConstantBuffers(0, 1, &constantBuffer);
 }
 
-static void ExecCreateVertexShaderCmd(RendererDx11* renderer, VertexShaderHandle handle, VertexShaderAPIData& data)
+//TODO: remove shader blob delete from this, memory should be managed by caller
+YU_INTERNAL void ExecCreateVertexShaderCmd(RendererDx11* renderer, VertexShaderHandle handle, VertexShaderAPIData& data)
 {
 	if (data.blob)
 	{
@@ -607,7 +629,7 @@ static void ExecCreateVertexShaderCmd(RendererDx11* renderer, VertexShaderHandle
 	}
 }
 
-static void ExecCreatePixelShaderCmd(RendererDx11* renderer, PixelShaderHandle handle, PixelShaderAPIData& data)
+YU_INTERNAL void ExecCreatePixelShaderCmd(RendererDx11* renderer, PixelShaderHandle handle, PixelShaderAPIData& data)
 {
 	if (data.blob)
 	{
@@ -638,7 +660,7 @@ static void ExecCreatePixelShaderCmd(RendererDx11* renderer, PixelShaderHandle h
 	}
 }
 
-static void ExecCreatePipelineCmd(RendererDx11* renderer, PipelineHandle handle, PipelineData& data)
+YU_INTERNAL void ExecCreatePipelineCmd(RendererDx11* renderer, PipelineHandle handle, const PipelineData& data)
 {
 	PipelineDx11& pipeline = renderer->dx11PipelineList[handle.id];
 
@@ -669,6 +691,97 @@ static void ExecCreatePipelineCmd(RendererDx11* renderer, PipelineHandle handle,
 	}
 }
 
+YU_INTERNAL void ExecCreateTextureCmd(RendererDx11* renderer, TextureHandle handle, const TextureDesc& texDesc, const TextureMipData* initData)
+{
+	CD3D11_TEXTURE2D_DESC dx11TexDesc(DXGIFormat(texDesc.format), (UINT)texDesc.width, (UINT)texDesc.height, 1, UINT(texDesc.mipLevels),
+		D3D11_BIND_SHADER_RESOURCE);
+
+	D3D11_SUBRESOURCE_DATA* dx11TexData = nullptr;
+	D3D11_SUBRESOURCE_DATA dx11SubResourceData[16 * 6] = {};
+	if (initData)
+	{
+		dx11TexData = dx11SubResourceData;
+		for (int i = 0; i < texDesc.mipLevels; i++)
+		{
+			dx11SubResourceData[i].pSysMem = initData[i].texels;
+			dx11SubResourceData[i].SysMemPitch = (UINT)initData[i].texDataSize;
+		}
+	}
+	ID3D11Texture2D* createdTexture;
+	HRESULT hr = gDx11Device->d3d11Device->CreateTexture2D(&dx11TexDesc, dx11TexData, &createdTexture);
+	if (SUCCEEDED(hr))
+	{
+		Texture2DDx11& dx11Texture = renderer->dx11TextureList[handle.id];
+		dx11Texture.texture = createdTexture;
+
+		CD3D11_SHADER_RESOURCE_VIEW_DESC srvDesc(D3D11_SRV_DIMENSION_TEXTURE2D, DXGIFormat(texDesc.format));
+		ID3D11ShaderResourceView* createSRV;
+		hr = gDx11Device->d3d11Device->CreateShaderResourceView(createdTexture, &srvDesc, &createSRV);
+		if (SUCCEEDED(hr))
+		{
+			renderer->dx11TextureList[handle.id].textureSRV = createSRV;
+		}
+		else
+		{
+			Log("error, dx11 create shader resource view failed: %x\n", hr);
+		}
+
+	}
+	else
+	{
+		Log("error, dx11 create texture failed: %x\n", hr);
+	}
+}
+
+YU_INTERNAL D3D11_FILTER Dx11Filter(SamplerStateDesc::Filter filter)
+{
+	switch (filter)
+	{
+		case(SamplerStateDesc::FILTER_POINT) :
+			return D3D11_FILTER_MIN_MAG_MIP_POINT;
+		case(SamplerStateDesc::FILTER_LINEAR) :
+			return D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+		case(SamplerStateDesc::FILTER_TRILINEAR) :
+			return D3D11_FILTER_MIN_MAG_POINT_MIP_LINEAR;
+	}
+	Log("error, unknown filter type\n");
+	assert(0);
+	return D3D11_FILTER_MIN_MAG_MIP_POINT;
+}
+
+YU_INTERNAL D3D11_TEXTURE_ADDRESS_MODE Dx11AddressMode(SamplerStateDesc::AddressMode mode)
+{
+	switch (mode)
+	{
+	case(SamplerStateDesc::ADDRESS_CLAMP) :
+		return D3D11_TEXTURE_ADDRESS_CLAMP;
+	case(SamplerStateDesc::ADDRESS_WRAP) :
+		return D3D11_TEXTURE_ADDRESS_WRAP;
+	}
+	Log("error, unknown address mode\n");
+	assert(0);
+	return D3D11_TEXTURE_ADDRESS_CLAMP;
+}
+
+YU_INTERNAL void ExecCreateSamplerCmd(RendererDx11* renderer, SamplerHandle handle, const SamplerStateDesc& desc)
+{
+	CD3D11_SAMPLER_DESC  dx11SamplerDesc(D3D11_DEFAULT);
+	dx11SamplerDesc.Filter = Dx11Filter(desc.filter);
+	dx11SamplerDesc.AddressU = Dx11AddressMode(desc.addressU);
+	dx11SamplerDesc.AddressV = Dx11AddressMode(desc.addressV);
+
+	ID3D11SamplerState* createdSampler;
+	HRESULT hr = gDx11Device->d3d11Device->CreateSamplerState(&dx11SamplerDesc, &createdSampler);
+	if (SUCCEEDED(hr))
+	{
+		SamplerDx11& sampler = renderer->dx11SamplerList[handle.id];
+		sampler.sampler = createdSampler;
+	}
+	else
+	{
+		Log("error, dx11 create sampler state failed\n");
+	}
+}
 
 struct VertexP3C4
 {
@@ -676,17 +789,19 @@ struct VertexP3C4
 	u8		color[4];
 };
 
-static void ExecRenderCmd(RendererDx11* renderer, RenderQueue* queue, int renderListIdx)
+YU_INTERNAL void ExecRenderCmd(RendererDx11* renderer, RenderQueue* queue, int renderListIdx)
 {
 	RenderList* list = &(queue->renderList[renderListIdx]);
 	assert(list->renderInProgress.load(std::memory_order_acquire));
-
-
+	
 	for (int i = 0; i < list->cmdCount; i++)
 	{
-		MeshHandle handle = list->cmd[i].mesh;
-		CameraHandle camHandle = list->cmd[i].cam;
-		PipelineHandle pipelineHandle = list->cmd[i].pipeline;
+		RenderCmd& cmd = list->cmd[i];
+		MeshHandle& handle = cmd.mesh;
+		CameraHandle& camHandle = cmd.cam;
+		PipelineHandle& pipelineHandle = cmd.pipeline;
+		RenderResource& resources = cmd.resources;
+
 		CameraData* data = &renderer->cameraList.Get(camHandle.id)->GetMutable();
 
 		gDx11Device->d3d11DeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -701,6 +816,26 @@ static void ExecRenderCmd(RendererDx11* renderer, RenderQueue* queue, int render
 		ID3D11Buffer* constantBuffer = cam->constantBuffer;
 		gDx11Device->d3d11DeviceContext->VSSetConstantBuffers(0, 1, &constantBuffer);
 
+		if (renderer->prevNumPSSRV > resources.numPsTexture)
+		{
+			UINT startDisableTex = resources.numPsTexture;
+			UINT numDisableTex = renderer->prevNumPSSRV - resources.numPsTexture;
+			for (UINT tex = startDisableTex; tex < numDisableTex; tex++)
+			{
+				ID3D11ShaderResourceView* dx11TextureSRV = nullptr;
+				gDx11Device->d3d11DeviceContext->PSSetShaderResources(tex, 1, &dx11TextureSRV);
+			}
+		}
+
+		for (UINT tex = 0; tex < resources.numPsTexture; tex++)
+		{
+			ID3D11ShaderResourceView* dx11TextureSRV = renderer->dx11TextureList[resources.psTextures[tex].textures.id].textureSRV;
+			ID3D11SamplerState* dx11Sampler = renderer->dx11SamplerList[resources.psTextures[tex].sampler.id].sampler;
+			gDx11Device->d3d11DeviceContext->PSSetShaderResources(tex, 1, &dx11TextureSRV);
+			gDx11Device->d3d11DeviceContext->PSSetSamplers(tex, 1, &dx11Sampler);
+		}
+		renderer->prevNumPSSRV = resources.numPsTexture;
+
 		UINT stride = sizeof(VertexP3C4);
 		UINT offset = 0;
 		ID3D11Buffer* vertexBuffer = mesh->vertexBuffer;
@@ -712,11 +847,16 @@ static void ExecRenderCmd(RendererDx11* renderer, RenderQueue* queue, int render
 	}
 
 	//gDx11Device->d3d11DeviceContext->Flush();
-	list->cmdCount = 0;
-	list->renderInProgress.store(false, std::memory_order_release);
+	
+	{
+		list->cmdCount = 0;
+		list->renderInProgress.store(false, std::memory_order_release);
+		list->scratchBuffer.Rewind(0);
+	}
+
 }
 
-static void ExecThreadCmd()
+YU_INTERNAL void ExecThreadCmd()
 {
 	RenderThreadCmd cmd;
 	while (gDx11Device->renderThreadCmdQueue.Dequeue(cmd))
@@ -733,7 +873,7 @@ static void ExecThreadCmd()
 	}
 }
 
-static bool ExecThreadCmd(RendererDx11* renderer)
+YU_INTERNAL bool ExecThreadCmd(RendererDx11* renderer)
 {
 	bool frameEnd = false;
 	for (int i = 0; i < renderer->numQueue; i++)
@@ -778,8 +918,17 @@ static bool ExecThreadCmd(RendererDx11* renderer)
 				{
 					ExecCreatePipelineCmd(renderer, cmd.createPipelineCmd.handle, cmd.createPipelineCmd.data);
 				}break;
+				case (RenderThreadCmd::CREATE_TEXTURE) :
+				{
+					ExecCreateTextureCmd(renderer, cmd.createTextureCmd.handle, cmd.createTextureCmd.desc, cmd.createTextureCmd.initData);
+				}break;
+				case (RenderThreadCmd::CREATE_SAMPLER) :
+				{
+					ExecCreateSamplerCmd(renderer, cmd.createSamplerCmd.handle, cmd.createSamplerCmd.desc);
+				}break;
 				default:
 				{
+					Log("error: unknown render thread cmd\n");
 					assert(0);
 				}
 			}
@@ -825,7 +974,7 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 
 		kTimer.Start();
 		WaitForKick(frameLock);
-		kTimer.Finish();
+		kTimer.Stop();
 		waitKickTime = kTimer.DurationInMs();
 
 
@@ -853,7 +1002,7 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 
 		BaseDoubleBufferData::SwapDirty();
 
-		innerTimer.Finish();
+		innerTimer.Stop();
 		FrameComplete(frameLock);
 
 		f++;

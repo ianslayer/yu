@@ -51,6 +51,9 @@ struct InputEvent
 		UNKNOWN = 0,
 		KEYBOARD,
 		MOUSE,
+		JOY,
+
+		KILL_FOCUS,
 	};
 
 	struct KeyboardEvent
@@ -81,12 +84,54 @@ struct InputEvent
 		float	scroll;
 	};
 
+	struct JoyEvent
+	{
+		enum Type
+		{
+			BUTTON = 1 << 0,
+			AXIS = 1 << 1,
+		};
+
+		enum BUTTON_ID
+		{
+			BUTTON_A = 1 << 0,
+			BUTTON_B = 1 << 1,
+			BUTTON_X = 1 << 2,
+			BUTTON_Y = 1 << 3,
+
+			BUTTON_LEFT = 1 << 4,
+			BUTTON_RIGHT = 1 << 5,
+			BUTTON_UP = 1 << 6,
+			BUTTON_DOWN = 1 << 7,
+
+			BUTTON_START = 1 << 8,
+			BUTTON_BACK = 1 << 9,
+
+			BUTTON_LEFT_THUMB = 1 << 10,
+			BUTTON_RIGHT_THUMB = 1 << 11,
+
+			BUTTON_LEFT_SHOULDER = 1 << 12,
+			BUTTON_RIGHT_SHOULDER = 1 << 13,
+		};
+
+		u32	type;
+		u32	 buttonState;
+		int	 controllerIdx;
+
+		float leftX;
+		float leftY;
+
+		float rightX;
+		float rightY;
+	};
+
 	Window		window;
 	Type		type;
 	union
 	{
 		MouseEvent		mouseEvent;
 		KeyboardEvent	keyboardEvent;
+		JoyEvent		joyEvent;
 	};
 	u64			timeStamp;
 };
@@ -135,15 +180,15 @@ struct CPUInfo
 	
 struct SystemInfo
 {
-	static int			NumDisplays();
-	static Display		GetDisplay(int index);
-	static Display		GetMainDisplay();
-	static int			NumDisplayMode(const Display& display);
-	//static Rect			GetDisplayRect(const Display& display);
-	static DisplayMode	GetDisplayMode(const Display& display, int modeIndex);
-	static DisplayMode	GetCurrentDisplayMode(const Display& display);
-	//static void			SetDisplayMode(const Display& display, int modeIndex);
-	static CPUInfo		GetCPUInfo();
+	YU_CLASS_FUNCTION int			NumDisplays();
+	YU_CLASS_FUNCTION Display		GetDisplay(int index);
+	YU_CLASS_FUNCTION Display		GetMainDisplay();
+	YU_CLASS_FUNCTION int			NumDisplayMode(const Display& display);
+	//YU_CLASS_FUNCTION Rect			GetDisplayRect(const Display& display);
+	YU_CLASS_FUNCTION DisplayMode	GetDisplayMode(const Display& display, int modeIndex);
+	YU_CLASS_FUNCTION DisplayMode	GetCurrentDisplayMode(const Display& display);
+	//YU_CLASS_FUNCTION void			SetDisplayMode(const Display& display, int modeIndex);
+	YU_CLASS_FUNCTION CPUInfo		GetCPUInfo();
 };
 
 struct WindowManager
@@ -153,11 +198,10 @@ struct WindowManager
 	Window				CreateWin(const Rect& rect);
 	void				CloseWin(Window& win);
 	
-	void*				GetInputQueue(); //hack, ... I don't want include dequeue.h
+	bool				DequeueInputEvent(InputEvent& ev);
 
 	Window				mainWindow;
 	struct WindowManagerImpl*	mgrImpl;
-
 };
 
 bool	InitWindowManager();

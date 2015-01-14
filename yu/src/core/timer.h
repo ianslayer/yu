@@ -27,7 +27,7 @@ f64			ConvertToMs(const CycleCount& cycles);
 struct PerfTimer
 {
 	void Start();
-	void Finish();
+	void Stop();
 
 	const CycleCount& Duration() const;
 	f64		          DurationInMs() const;
@@ -54,7 +54,7 @@ class Timer
 {
 public:
 	void	Start();
-	void	Finish();
+	void	Stop();
 	
 	const Time& Duration() const;
 	f64		DurationInMs() const;
@@ -103,7 +103,7 @@ YU_INLINE void PerfTimer::Start()
 	cycleCounter = SampleCycle();
 }
 
-YU_INLINE void PerfTimer::Finish()
+YU_INLINE void PerfTimer::Stop()
 {
 	CycleCount finishCycle;
 	finishCycle = SampleCycle();

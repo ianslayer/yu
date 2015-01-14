@@ -42,7 +42,7 @@ struct D3DInputHandler : public ID3DInclude
 	}
 };
 
-static void InitDx11Compiler()
+YU_INTERNAL void InitDx11Compiler()
 {
 	unsigned int maxVersion = 47;
 	unsigned int minVersion = 33;

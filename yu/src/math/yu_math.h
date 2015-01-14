@@ -25,6 +25,12 @@ template<class T> YU_INLINE void swap(T v0, T v1)
 	v1 = tmp;
 }
 
+template<class T> YU_INLINE T clip(T val, T minVal, T maxVal)
+{
+	T result = max(val, minVal);
+	result = min(result, maxVal);
+	return result;
+}
 
 }
 
