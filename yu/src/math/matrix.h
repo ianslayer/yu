@@ -115,7 +115,7 @@ public:
 	void MakeIdentity();
 	Matrix3x3  Transpose();
 	Matrix3x3& TransposeSelf();
-	static Matrix3x3 RotateAxis(const Vector3& vec, float rad);
+	YU_CLASS_FUNCTION Matrix3x3 RotateAxis(const Vector3& vec, float rad);
 
     float* FloatPtr();
     const float* FloatPtr() const;
@@ -377,7 +377,7 @@ inline Matrix4x4 Matrix4x4::operator *(float a) const
 
 inline Vector4 Matrix4x4::operator *(const Vector4 &vec) const
 {
-	return Vector4(
+	return _Vector4(
 		row[0][0] * vec.x + row[0][1] * vec.y + row[0][2] * vec.z + row[0][3] * vec.w,
 		row[1][0] * vec.x + row[1][1] * vec.y + row[1][2] * vec.z + row[1][3] * vec.w,
 		row[2][0] * vec.x + row[2][1] * vec.y + row[2][2] * vec.z + row[2][3] * vec.w,
@@ -542,12 +542,12 @@ inline Matrix4x4 Scale(const Vector3& _scale)
 
 inline Vector3 TransformVector(const Matrix4x4& m, const Vector3& v)
 {
-	return DiscardW(m * Vector4(v, 0.f) );
+	return DiscardW(m * _Vector4(v, 0.f) );
 }
 
 inline Vector3 TransformPoint(const Matrix4x4& m, const Vector3& v)
 {
-	return DivideW(m * Vector4(v, 1.f));
+	return DivideW(m * _Vector4(v, 1.f));
 }
 
 inline Matrix4x4 RotateAxis(const Vector3& r, float rad)

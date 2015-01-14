@@ -444,14 +444,7 @@ YU_INLINE Vector3 Normalize(const Vector3& a)
 	return n;
 }
 
-class Vector4 {
-public:
-	Vector4();
-	explicit Vector4(float* _pVec);
-	explicit Vector4(float _xyzw);
-	Vector4(float _x, float _y, float _z, float _w);
-	Vector4(const Vector3& _xyz, float w);
-
+struct Vector4 {
 	float operator []  (int index) const;	
 	float& operator [](int index);
 
@@ -478,38 +471,43 @@ public:
 	float w;
 };
 
-YU_INLINE Vector4::Vector4()
+YU_INLINE Vector4 _Vector4(float* _pVec)
 {
-	//x = y = z = w = 0.f;
+	Vector4 result;
+	result.x = _pVec[0];
+	result.y = _pVec[1];
+	result.z = _pVec[2];
+	result.w = _pVec[3];
+	return result;
 }
 
-YU_INLINE Vector4::Vector4(float* _pVec)
+YU_INLINE Vector4 _Vector4(float _xyzw)
 {
-	x = _pVec[0];
-	y = _pVec[1];
-	z = _pVec[2];
-	w = _pVec[3];
+	Vector4 result;
+	result.x = result.y = result.z = result.w = _xyzw;
+
+	return result;
 }
 
-YU_INLINE Vector4::Vector4(float _xyzw)
+YU_INLINE Vector4 _Vector4(float _x, float _y, float _z, float _w)
 {
-	x = y = z = w = _xyzw;
+	Vector4 result;
+	result.x = _x;
+	result.y = _y;
+	result.z = _z;
+	result.w = _w;
+
+	return result;
 }
 
-YU_INLINE Vector4::Vector4(float _x, float _y, float _z, float _w)
+YU_INLINE Vector4 _Vector4(const Vector3& _xyz, float _w)
 {
-	x = _x;
-	y = _y;
-	z = _z;
-	w = _w;
-}
-
-YU_INLINE Vector4::Vector4(const Vector3& _xyz, float _w)
-{
-	x = _xyz.x;
-	y = _xyz.y;
-	z = _xyz.z;
-	w = _w;
+	Vector4 result;
+	result.x = _xyz.x;
+	result.y = _xyz.y;
+	result.z = _xyz.z;
+	result.w = _w;
+	return result;
 }
 
 YU_INLINE float Vector4::operator [](int index) const
@@ -524,7 +522,7 @@ YU_INLINE float& Vector4::operator [](int index)
 
 YU_INLINE Vector4 operator-(const Vector4& v)
 {
-    return Vector4(-v.x, -v.y, -v.z, -v.w);
+    return _Vector4(-v.x, -v.y, -v.z, -v.w);
 }
 
 YU_INLINE const Vector4& Vector4::operator+=(const Vector4& rhs)
@@ -632,59 +630,59 @@ YU_INLINE Vector3 DiscardW(const Vector4& _vec4)
 
 YU_INLINE const Vector4 operator + (const Vector4& a, const Vector4& b)
 {
-	return Vector4(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w);	
+	return _Vector4(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w);	
 }
 
 YU_INLINE const Vector4 operator + (float a, const Vector4& b)
 {
-	return Vector4(a + b.x, a + b.y, a + b.z, a + b.w);	
+	return _Vector4(a + b.x, a + b.y, a + b.z, a + b.w);	
 }	
 
 YU_INLINE const Vector4 operator + (Vector4& a, float b)
 {
-	return Vector4(a.x + b, a.y + b, a.z + b, a.w + b);	
+	return _Vector4(a.x + b, a.y + b, a.z + b, a.w + b);	
 }	
 
 YU_INLINE const Vector4 operator - (const Vector4& a, const Vector4& b)
 {
-	return Vector4(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w);	
+	return _Vector4(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w);	
 }
 
 YU_INLINE const Vector4 operator*(const Vector4& a, const Vector4& b)
 {
-	return Vector4(a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w);
+	return _Vector4(a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w);
 }
 
 YU_INLINE const Vector4 operator*(float a, const Vector4& b)
 {
-	return Vector4(a * b.x, a * b.y, a * b.z, a * b.w);
+	return _Vector4(a * b.x, a * b.y, a * b.z, a * b.w);
 }
 
 YU_INLINE const Vector4 operator*(const Vector4& a, float b)
 {
-	return Vector4(a.x * b, a.y * b, a.z * b, a.w * b);
+	return _Vector4(a.x * b, a.y * b, a.z * b, a.w * b);
 }		
 
 YU_INLINE const Vector4 operator/(const Vector4& a, const Vector4& b)
 {
 	//assert(b.x != 0 && b.y != 0 && b.z != 0);
-	return Vector4(a.x / b.x, a.y / b.y, a.z / b.z, a.w / b.w);
+	return _Vector4(a.x / b.x, a.y / b.y, a.z / b.z, a.w / b.w);
 }
 
 YU_INLINE const Vector4 operator / (const Vector4& v, float s)
 {
 	//assert(s != 0);
-	return Vector4(v.x / s, v.y / s, v.z / s, v.w / s);
+	return _Vector4(v.x / s, v.y / s, v.z / s, v.w / s);
 }
 
 YU_INLINE Vector4 Max(const Vector4& a, const Vector4& b)
 {
-	return Vector4(yu::max(a.x, b.x), yu::max(a.y, b.y), yu::max(a.z, b.z), yu::max(a.w, b.w) );
+	return _Vector4(yu::max(a.x, b.x), yu::max(a.y, b.y), yu::max(a.z, b.z), yu::max(a.w, b.w) );
 }
 
 YU_INLINE Vector4 Min(const Vector4& a, const Vector4& b)
 {
-	return Vector4(yu::min(a.x, b.x), yu::min(a.y, b.y), yu::min(a.z, b.z), yu::min(a.w, b.w));
+	return _Vector4(yu::min(a.x, b.x), yu::min(a.y, b.y), yu::min(a.z, b.z), yu::min(a.w, b.w));
 }
 
 YU_INLINE bool Vector4::operator == (const Vector4& rhs) const

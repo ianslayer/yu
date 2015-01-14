@@ -25,11 +25,11 @@
     <Filter Include="Source Files\renderer">
       <UniqueIdentifier>{c780c412-8c8c-4c22-9b50-0bbb52c4dac5}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\app">
-      <UniqueIdentifier>{9efb9b68-85f4-4ce8-a85f-7fdefc54041b}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Source Files\sound">
       <UniqueIdentifier>{3ab16efc-e3bf-4fff-94aa-93dceb50d471}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\stargazer">
+      <UniqueIdentifier>{9efb9b68-85f4-4ce8-a85f-7fdefc54041b}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -45,12 +45,6 @@
     <ClCompile Include="..\src\renderer\shader_compiler_dx11.cpp">
       <Filter>Source Files\renderer</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\app\work_map.cpp">
-      <Filter>Source Files\app</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\app\common.cpp">
-      <Filter>Source Files\app</Filter>
-    </ClCompile>
     <ClCompile Include="..\src\sound\sound_wasapi.cpp">
       <Filter>Source Files\sound</Filter>
     </ClCompile>
@@ -59,6 +53,12 @@
     </ClCompile>
     <ClCompile Include="..\src\main_win32.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\stargazer\common.cpp">
+      <Filter>Source Files\stargazer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\stargazer\work_map.cpp">
+      <Filter>Source Files\stargazer</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -128,9 +128,6 @@
     <ClInclude Include="..\src\core\thread_impl.h">
       <Filter>Source Files\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\app\work_map.h">
-      <Filter>Source Files\app</Filter>
-    </ClInclude>
     <ClInclude Include="..\src\renderer\color.h">
       <Filter>Source Files\renderer</Filter>
     </ClInclude>
@@ -166,6 +163,9 @@
     </ClInclude>
     <ClInclude Include="..\src\core\string_impl.h">
       <Filter>Source Files\core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\stargazer\work_map.h">
+      <Filter>Source Files\stargazer</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

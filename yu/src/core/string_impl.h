@@ -109,8 +109,8 @@ struct StringIdHashFunc
 
 #define CHECK_DUPLICATE
 
-const static int HASH_TABLE_SIZE = 1024;
-const static int  HASH_MASK = HASH_TABLE_SIZE - 1;
+const YU_GLOBAL int HASH_TABLE_SIZE = 1024;
+const YU_GLOBAL int  HASH_MASK = HASH_TABLE_SIZE - 1;
 struct StrTable
 {
 	StrTable(bool _threadSafe, bool _stripString, ArenaAllocator* _strBufferAllocator, ArenaAllocator* _nodeAllocator)

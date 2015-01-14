@@ -15,7 +15,7 @@ namespace yu
 
 #ifdef CREATE_CRC_TABLE
 
-static unsigned int crctable[256];
+YU_GLOBAL unsigned int crctable[256];
 
 /*
  Generate a table for a byte-wise 32-bit CRC calculation on the polynomial:
@@ -46,7 +46,7 @@ void make_crc_table( void ) {
 	int i, j;
 	unsigned int c, poly;
 	/* terms of polynomial defining this crc (except x^32): */
-	static const byte p[] = {0,1,2,4,5,7,8,10,11,12,16,22,23,26};
+	YU_LOCAL_PERSIST const byte p[] = {0,1,2,4,5,7,8,10,11,12,16,22,23,26};
 	
 	/* make exclusive-or pattern from polynomial (0xedb88320L) */
 	poly = 0L;
@@ -68,7 +68,7 @@ void make_crc_table( void ) {
 /*
  Table of CRC-32's of all single-byte values (made by make_crc_table)
  */
-static unsigned int crctable[256] = {
+YU_GLOBAL unsigned int crctable[256] = {
 	0x00000000L, 0x77073096L, 0xee0e612cL, 0x990951baL,
 	0x076dc419L, 0x706af48fL, 0xe963a535L, 0x9e6495a3L,
 	0x0edb8832L, 0x79dcb8a4L, 0xe0d5e91eL, 0x97d2d988L,

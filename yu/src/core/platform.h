@@ -96,6 +96,13 @@
 #	endif
 #endif
 
+//borrow from handmade hero :-)
+#define YU_GLOBAL static
+#define YU_GLOBAL_EXPORT //worse than static...
+#define YU_INTERNAL static
+#define YU_LOCAL_PERSIST static
+#define YU_CLASS_FUNCTION static
+
 #include <stdint.h>
 
 namespace yu

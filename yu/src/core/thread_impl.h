@@ -95,8 +95,8 @@ struct ThreadTable
 	std::atomic<u64>			frameCount;
 };
 
-static ThreadTable* gThreadTable;
-static Event* gFrameSync;
+YU_GLOBAL ThreadTable* gThreadTable;
+YU_GLOBAL Event* gFrameSync;
 
 void InitThreadRuntime()
 {

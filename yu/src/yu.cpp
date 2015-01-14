@@ -3,7 +3,7 @@
 
 #include "renderer/renderer.h"
 #include "sound/sound.h"
-#include "app/work_map.h"
+#include "stargazer/work_map.h"
 
 #include "yu.h"
 #include <atomic>
@@ -43,9 +43,9 @@ void InitYu()
 	frameBufferDesc.height = (int) rect.height;
 	frameBufferDesc.refreshRate = 60;
 	frameBufferDesc.sampleCount = 1;
-
+	//InitSound();
 	InitRenderThread(gWindowManager->mainWindow, frameBufferDesc);
-	InitSound();
+
 
 	InitWorkerSystem();
 	InitWorkMap();
@@ -108,7 +108,7 @@ int YuMain()
 		timer.Start();
 
 		yu::KickStart();
-		timer.Finish();
+		timer.Stop();
 		kickStartTime = timer.DurationInMs();
 
 		Clear(gWorkMap);
@@ -118,9 +118,9 @@ int YuMain()
 
 		timer.Start();
 		yu::WaitFrameComplete();
-		timer.Finish();
+		timer.Stop();
 		waitFrameTime = timer.DurationInMs();
-		frameTimer.Finish();
+		frameTimer.Stop();
 
 		
 		f++;

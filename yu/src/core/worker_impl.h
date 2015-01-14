@@ -2,7 +2,6 @@
 
 namespace yu
 {
-InputData* InputData::typeList;
 
 #define MAX_WORKER_THREAD 32
 #define MAX_WORK_QUEUE_LEN 4096
@@ -186,7 +185,8 @@ struct WorkerSystem
 	WorkItem				terminateWorkItem;
 
 };
-static WorkerSystem* gWorkerSystem;
+
+YU_GLOBAL WorkerSystem* gWorkerSystem;
 YU_THREAD_LOCAL WorkerThread* worker;
 
 WorkerThread* GetWorkerThread()

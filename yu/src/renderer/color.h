@@ -16,5 +16,13 @@ struct Color
 		u8 c[4];
 	};
 };
+
+YU_INLINE Color _Color(u8 r, u8 g, u8 b, u8 a)
+{
+	Color c;
+	c.r = r; c.g = g; c.b = b; c.a = a;
+	return c;
+}
+
 }
 #endif

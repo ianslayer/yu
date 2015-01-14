@@ -55,7 +55,7 @@ struct WindowManagerImpl
 	Thread								windowThread;
 };
 
-WindowManager* gWindowManager = 0;
+YU_GLOBAL_EXPORT WindowManager* gWindowManager;
 
 bool PlatformInitSystem();
 
@@ -233,10 +233,9 @@ CPUInfo SystemInfo::GetCPUInfo()
 
 #endif
 
-
-void* WindowManager::GetInputQueue()
+bool WindowManager::DequeueInputEvent(InputEvent& ev)
 {
-	return &mgrImpl->inputQueue;
+	return mgrImpl->inputQueue.Dequeue(ev);
 }
 
 }
