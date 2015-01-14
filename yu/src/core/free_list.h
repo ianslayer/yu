@@ -45,6 +45,11 @@ template<class T, int num> struct FreeList
 		return &object[index];
 	}
 
+	int Available()
+	{
+		return num - numAlloced;
+	}
+
 	int	freeObject[num];
 	T	object[num];
 	std::atomic<int> numAlloced;

@@ -7,8 +7,16 @@ namespace yu
 {
 struct DisplayMode;
 struct Window;
+struct CameraHandle{ i32 id; };
+struct MeshHandle{ i32 id; };
+struct VertexShaderHandle{ i32 id; };
+struct PixelShaderHandle{ i32 id; };
+struct TextureHandle{ i32 id; };
+struct SamplerHandle{ i32 id; };
+struct PipelineHandle{ i32 id; };
+struct FenceHandle{ i32 id; };
 
-enum TexFormat
+enum TextureFormat
 {
 	TEX_FORMAT_UNKNOWN,
 	TEX_FORMAT_R8G8B8A8_UNORM,
@@ -19,7 +27,7 @@ enum TexFormat
 
 struct FrameBufferDesc
 {
-	TexFormat	format;
+	TextureFormat	format;
 	double		refreshRate;
 	int			width;
 	int			height;
@@ -27,70 +35,43 @@ struct FrameBufferDesc
 	bool		fullScreen;
 };
 
-struct CameraHandle{ i32 id; };
-struct MeshHandle{ i32 id; };
-struct VertexShaderHandle{ i32 id; };
-struct PixelShaderHandle{ i32 id; };
-struct PipelineHandle{ i32 id; };
-struct FenceHandle{ i32 id; };
-
-struct BaseDoubleBufferData
+struct TextureDesc
 {
-	BaseDoubleBufferData* nextDirty;
-	static BaseDoubleBufferData* dirtyLink;
-
-	u32 updateCount = 0;
-	bool dirty;
-
-	static void SwapDirty()
-	{
-		for (BaseDoubleBufferData* data = dirtyLink; data != nullptr; data = data->nextDirty)
-		{
-			if (data->dirty)
-			{
-				data->updateCount++;
-				data->dirty = false;
-			}
-		}
-
-		dirtyLink = nullptr;
-	}
+	TextureFormat	format;
+	int			width;
+	int			height;
+	int			mipLevels;
 };
 
-template<class T>
-struct DoubleBufferData : public BaseDoubleBufferData
+struct TextureMipData
 {
-	void InitData(T& _data)
-	{
-		data[0] = data[1] = _data;
-		dirty = false;
-		nextDirty = nullptr;
-	}
+	void* texels;
+	size_t texDataSize;
+};
 
-	const T& GetConst() const
-	{
-		return data[updateCount&1];
-	}
+struct RenderTextureDesc
+{
+	TextureHandle refTexture;
+};
 
-	T& GetMutable()
+struct SamplerStateDesc
+{
+	enum Filter
 	{
-		return data[1-updateCount&1];
-	}
-	
-	void UpdateData(const T& _data)
+		FILTER_POINT,
+		FILTER_LINEAR,
+		FILTER_TRILINEAR,
+	};
+
+	enum AddressMode
 	{
-		GetMutable() = _data;
-		
-		if (!dirty)
-		{
-			dirty = true;
-			nextDirty = dirtyLink;
-			dirtyLink = this;
-		}
-	}
+		ADDRESS_CLAMP,
+		ADDRESS_WRAP,
+	};
 
-	T	data[2];
-
+	Filter		filter;
+	AddressMode addressU;
+	AddressMode addressV;
 };
 
 struct CameraData
@@ -131,11 +112,6 @@ struct CameraData
 };
 CameraData DefaultCamera();
 
-struct DoubleBufferCameraData : public DoubleBufferData < CameraData >
-{
-
-};
-
 struct MeshData
 {
 	Vector3*	posList = nullptr;
@@ -171,10 +147,21 @@ struct PixelShaderData
 #endif
 };
 
-struct PipelineData
+struct PipelineData //TODO: add vertex format, render state etc
 {
 	VertexShaderHandle vs;
 	PixelShaderHandle ps;
+};
+
+struct RenderResource
+{
+	struct TextureSlot
+	{
+		TextureHandle textures;
+		SamplerHandle sampler;
+	};
+	TextureSlot*	psTextures;
+	u32				numPsTexture;
 };
 
 struct Renderer;
@@ -190,7 +177,20 @@ void			UpdateCamera(RenderQueue* queue, CameraHandle handle, const CameraData& c
 void			FreeCamera(RenderQueue* queue, CameraHandle handle);
 
 MeshHandle		CreateMesh(RenderQueue* queue, u32 numVertices, u32 numIndices, u32 vertChannelMask);
+
+MeshHandle		CreateMesh(RenderQueue* queue, u32 numVertices, u32 numIndices, u32 vertChannelMask, 
+						   u32 startFillVert, u32 startFillIndex,
+						   MeshData* subMeshdata);
+
 void			FreeMesh(RenderQueue* queue, MeshHandle handle);
+void			UpdateMesh(RenderQueue* queue, MeshHandle handle,
+				u32 startVert, u32 startIndex,
+				MeshData* subMeshdata);
+/*
+void			CopySubMesh(RenderQueue* queue, MeshHandle handle,
+				u32 startVert, u32 numVertices, u32 startIndex, u32 numIndices, u32 channel,
+				MeshData* outMeshData);
+				*/
 
 struct VertexShaderAPIData;
 struct PixelShaderAPIData;
@@ -200,18 +200,15 @@ PixelShaderHandle	CreatePixelShader(RenderQueue* queue, const PixelShaderAPIData
 
 PipelineHandle		CreatePipeline(RenderQueue* queue, const PipelineData& data);
 
-void			UpdateMesh(RenderQueue* queue, MeshHandle handle, 
-				u32 startVert, u32 startIndex, 
-				MeshData* subMeshdata);
+TextureHandle		CreateTexture(RenderQueue* queue, const TextureDesc& desc, TextureMipData* initData = nullptr);
+size_t				TextureSize(TextureFormat format, int width, int height, int depth, int mipLevels);
+size_t				TextureLevelSize(TextureFormat format, int width, int height, int depth, int mipSlice);
+SamplerHandle		CreateSampler(RenderQueue* queue, const SamplerStateDesc& desc);
 
-void			CopySubMesh(RenderQueue* queue, MeshHandle handle, 
-				u32 startVert, u32 numVertices, u32 startIndex, u32 numIndices, u32 channel,
-				MeshData* outMeshData);
+void				Render(RenderQueue* queue, CameraHandle cam, MeshHandle mesh, PipelineHandle pipeline, const RenderResource& resource);
 
-void			Render(RenderQueue* queue, CameraHandle cam, MeshHandle mesh, PipelineHandle pipeline);
-
-void			Flush(RenderQueue* queue);
-void			Swap(RenderQueue* queue, bool vsync = true);
+void				Flush(RenderQueue* queue);
+void				Swap(RenderQueue* queue, bool vsync = true);
 
 FenceHandle		CreateFence();
 void			InsertFence(FenceHandle fence);

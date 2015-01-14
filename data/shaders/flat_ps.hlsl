@@ -7,9 +7,12 @@ struct PS_OUTPUT {
 	float4 color: SV_TARGET0;
 };
 
+Texture2D colorTexture : register(t0);
+SamplerState pointSampler : register(s0);
+
 PS_OUTPUT main(PS_INPUT IN)
 {
 	PS_OUTPUT Out;
-	Out.color = float4(1, 0, 0, 1);
+	Out.color = colorTexture.Sample(pointSampler, float2(0.2, 0.1));
 	return Out;
 }

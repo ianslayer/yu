@@ -133,18 +133,17 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\src\app\common.cpp" />
-    <ClCompile Include="..\src\app\work_map.cpp" />
     <ClCompile Include="..\src\core\core_win32.cpp" />
     <ClCompile Include="..\src\core\crc32.cpp" />
     <ClCompile Include="..\src\main_win32.cpp" />
     <ClCompile Include="..\src\renderer\renderer_dx11.cpp" />
     <ClCompile Include="..\src\renderer\shader_compiler_dx11.cpp" />
     <ClCompile Include="..\src\sound\sound_wasapi.cpp" />
+    <ClCompile Include="..\src\stargazer\common.cpp" />
+    <ClCompile Include="..\src\stargazer\work_map.cpp" />
     <ClCompile Include="..\src\yu.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\src\app\work_map.h" />
     <ClInclude Include="..\src\container\array.h" />
     <ClInclude Include="..\src\container\dequeue.h" />
     <ClInclude Include="..\src\container\hash.h" />
@@ -178,6 +177,7 @@
     <ClInclude Include="..\src\renderer\shader.h" />
     <ClInclude Include="..\src\renderer\shader_dx11.h" />
     <ClInclude Include="..\src\sound\sound.h" />
+    <ClInclude Include="..\src\stargazer\work_map.h" />
     <ClInclude Include="..\src\yu.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

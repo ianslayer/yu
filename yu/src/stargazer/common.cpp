@@ -9,7 +9,6 @@
 #include "../renderer/renderer.h"
 #include "../renderer/shader.h"
 
-
 #include "work_map.h"
 #include <new>
 
@@ -18,17 +17,8 @@ namespace yu
 
 struct FrameLockData : public InputData
 {
-	DECLARE_INPUT_TYPE(FrameLockData)
 	FrameLock*	frameLock;
 };
-IMP_INPUT_TYPE(FrameLockData)
-
-void RegisterFrameLockType()
-{
-	FrameLockData::typeList = InputData::typeList;
-	InputData::typeList = FrameLockData::typeList;
-}
-//IMP_INPUT_TYPE(FrameLockData)
 
 void FrameStart(FrameLock* lock)
 {	
@@ -81,10 +71,6 @@ FrameWorkItemResult FrameWorkItem()
 
 #define MAX_INPUT 256
 #define MAX_KEYBOARD_STATE 256
-struct Input : public InputData
-{
-	SpscFifo<InputEvent, 256>* inputQueue;
-};
 
 struct KeyState
 {
@@ -101,15 +87,26 @@ struct MouseState
 	KeyState rightButton;
 };
 
+struct JoyState
+{
+	u32 buttonState;
+	float leftX;
+	float leftY;
+
+	float rightX;
+	float rightY;
+};
+
 struct InputResult : public OutputData
 {
 	InputEvent	frameEvent[MAX_INPUT];
 	KeyState	keyboardState[MAX_KEYBOARD_STATE];
 	MouseState	mouseState;
+	JoyState	joyState[4];
 	int			numEvent;
 };
 
-void ProcessInput(Input& input, InputResult& output)
+void ProcessInput(InputResult& output)
 {
 //	int	threadIdx =	GetWorkerThreadIdx();
 //	Log("thread id:%d\n", threadIdx);
@@ -126,7 +123,7 @@ void ProcessInput(Input& input, InputResult& output)
 	output.mouseState.rightButton.pressCount = 0;
 	output.mouseState.dx = output.mouseState.dy = 0.f;
 
-	while (input.inputQueue->Dequeue(event) && output.numEvent < MAX_INPUT)
+	while (gWindowManager->DequeueInputEvent(event) && output.numEvent < MAX_INPUT)
 	{
 		Time sysInitTime = SysStartTime();
 		Time eventTime;
@@ -137,6 +134,11 @@ void ProcessInput(Input& input, InputResult& output)
 		switch (event.type)
 		{
 		case InputEvent::UNKNOWN:
+		break;
+		case InputEvent::KILL_FOCUS:
+		{
+			memset(&output, 0, sizeof(output));
+		}
 		break;
 		case InputEvent::KEYBOARD:
 		{
@@ -212,6 +214,24 @@ void ProcessInput(Input& input, InputResult& output)
 			}
 
 		}break;
+		case InputEvent::JOY:
+		{
+			if (event.joyEvent.type & InputEvent::JoyEvent::AXIS)
+			{
+				int controllerIdx = event.joyEvent.controllerIdx;
+				output.joyState[controllerIdx].leftX = event.joyEvent.leftX;
+				output.joyState[controllerIdx].leftY = event.joyEvent.leftY;
+				output.joyState[controllerIdx].rightX = event.joyEvent.rightX;
+				output.joyState[controllerIdx].rightY = event.joyEvent.rightY;
+			}
+
+			if (event.joyEvent.type & InputEvent::JoyEvent::BUTTON)
+			{
+				int controllerIdx = event.joyEvent.controllerIdx;
+				output.joyState[controllerIdx].buttonState = event.joyEvent.buttonState;
+			}
+
+		}break;
 		}
 	}
 }
@@ -221,8 +241,7 @@ void ProcessInput(Input& input, InputResult& output)
 void InputWorkFunc(WorkItem* item)
 {
 	InputResult* result = (InputResult*)GetOutputData(item);
-	Input* input = (Input*)GetInputData(item);
-	ProcessInput(*input, *result);
+	ProcessInput(*result);
 }
 
 WorkItem* InputWorkItem()
@@ -230,11 +249,7 @@ WorkItem* InputWorkItem()
 	WorkItem* item = NewSysWorkItem();
 	SetWorkFunc(item, InputWorkFunc, nullptr);
 	InputResult* result = New<InputResult>(gSysArena);
-	memset(result->keyboardState, 0, sizeof(result->keyboardState));
-	memset(&result->mouseState, 0, sizeof(result->mouseState));
-	Input* input = New<Input>(gSysArena);
-	input->inputQueue = (SpscFifo<InputEvent, 256>*) gWindowManager->GetInputQueue();
-	SetInputData(item, input);
+	memset(result, 0, sizeof(*result));
 	SetOutputData(item, result);
 	return item;
 }
@@ -262,6 +277,7 @@ void CameraControl(const CameraControllerInput& input, CameraControllerOutput& o
 	CameraData data = GetCameraData(input.queue, input.camera);
 
 	Vector3 lookAt = data.lookat;
+	Vector3 aheadDir = _Vector3(lookAt.x, lookAt.y, 0);
 	Vector3 right = data.right;
 	Vector3 position = data.position;
 	Vector3 up = -data.Down();
@@ -286,11 +302,11 @@ void CameraControl(const CameraControllerInput& input, CameraControllerOutput& o
 
 	if (input.inputResult->keyboardState['W'].pressed == 1)
 	{
-		position += lookAt * input.moveSpeed;	
+		position += aheadDir * input.moveSpeed;
 	}
 	if (input.inputResult->keyboardState['S'].pressed == 1)
 	{
-		position -= lookAt * input.moveSpeed;
+		position -= aheadDir * input.moveSpeed;
 	}
 	if (input.inputResult->keyboardState['D'].pressed == 1)
 	{
@@ -301,6 +317,23 @@ void CameraControl(const CameraControllerInput& input, CameraControllerOutput& o
 		position -= right * input.moveSpeed;
 	}
 
+	//controller control
+	{
+		Matrix3x3 yaw = Matrix3x3::RotateAxis(up, -input.inputResult->joyState[0].rightX * input.turnSpeed * 2);
+		data.lookat = yaw * lookAt;
+		data.right = yaw * right;
+
+		Matrix3x3 pitch = Matrix3x3::RotateAxis(right, input.inputResult->joyState[0].rightY * input.turnSpeed * 2);
+		data.lookat = pitch * data.lookat;
+
+		data.right.z = 0;
+		data.right.Normalize();
+		data.lookat = cross(data.right, data.Down());
+		data.lookat.Normalize();
+
+		position += aheadDir * input.moveSpeed * input.inputResult->joyState[0].leftY;
+		position += right * input.moveSpeed * input.inputResult->joyState[0].leftX;
+	}
 
 	data.position = position;
 	UpdateCamera(input.queue, input.camera, data);
@@ -346,6 +379,10 @@ struct TestRenderer : public InputData
 	MeshHandle square;
 	RenderQueue* queue;
 
+	TextureMipData texData;
+	Color		texels[16];
+	RenderResource::TextureSlot textureSlot;
+
 	PipelineHandle		pipeline;
 	VertexShaderHandle	vs;
 	PixelShaderHandle	ps;
@@ -363,7 +400,7 @@ RenderQueue* GetRenderQueue(WorkItem* renderItem)
 	return renderer->queue;
 }
 
-void Render(TestRenderer* render)
+void Render(TestRenderer* renderer)
 {
 	/*
 	MeshData updateData = {};
@@ -386,11 +423,15 @@ void Render(TestRenderer* render)
 	//camData.position = _Vector3(50, 0, 0.f);
 	//UpdateCamera(render->queue, render->camera, camData);
 
-	Render(render->queue, render->camera, render->triangle, render->pipeline);
+	RenderResource resource = {};
+	resource.numPsTexture = 1;
+	resource.psTextures = &renderer->textureSlot;
+
+	Render(renderer->queue, renderer->camera, renderer->triangle, renderer->pipeline, resource);
 	//for (int i = 0; i < 1000; i++)
-	Render(render->queue, render->camera, render->square, render->pipeline);
-	Flush(render->queue);
-	Swap(render->queue, true);
+	Render(renderer->queue, renderer->camera, renderer->square, renderer->pipeline, resource);
+	Flush(renderer->queue);
+	Swap(renderer->queue, true);
 }
 
 void TestRender(WorkItem* item)
@@ -464,14 +505,31 @@ WorkItem* TestRenderItem()
 	camData.SetXFov(3.14f / 2.f, 1280, 720);
 	UpdateCamera(testRenderer->queue, testRenderer->camera, camData);
 
+	TextureDesc texDesc = {};
+	texDesc.format = TEX_FORMAT_R8G8B8A8_UNORM;
+	texDesc.width = 4;
+	texDesc.height = 4;
+	texDesc.mipLevels = 1;
+	for (int i = 0; i < 16; i++)
+	{
+		testRenderer->texels[i] = _Color(0, 0xFF, 0, 0);
+	}
+	testRenderer->texData.texels = &testRenderer->texels;
+	testRenderer->texData.texDataSize = TextureSize(texDesc.format, texDesc.width, texDesc.height, 1, 1);
+
+	testRenderer->textureSlot.textures = CreateTexture(testRenderer->queue, texDesc, &testRenderer->texData);
+
+	SamplerStateDesc samplerDesc = { SamplerStateDesc::FILTER_POINT, SamplerStateDesc::ADDRESS_CLAMP, SamplerStateDesc::ADDRESS_CLAMP };
+	testRenderer->textureSlot.sampler = CreateSampler(testRenderer->queue, samplerDesc);
+
 	Matrix4x4 viewProjMatrix = camData.PerspectiveMatrix() * camData.ViewMatrix();
 	Matrix4x4 viewMatrix = camData.ViewMatrix();
 	Vector4 viewPos[4];
 	Vector4 projPos[4];
 	for (int i = 0; i < 4; i++)
 	{
-		viewPos[i] = viewMatrix * Vector4(squarePos[i], 1);
-		projPos[i] = viewProjMatrix * Vector4(squarePos[i], 1);
+		viewPos[i] = viewMatrix * _Vector4(squarePos[i], 1);
+		projPos[i] = viewProjMatrix * _Vector4(squarePos[i], 1);
 		projPos[i] /= projPos[i].w;
 	}
 

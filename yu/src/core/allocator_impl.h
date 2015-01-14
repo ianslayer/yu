@@ -11,7 +11,7 @@
 namespace yu
 {
 
-const static size_t MIN_ALLOC_ALIGN = sizeof(void*);
+const YU_GLOBAL size_t MIN_ALLOC_ALIGN = sizeof(void*);
 
 DefaultAllocator  _gDefaultAllocator;
 DefaultAllocator* gDefaultAllocator = nullptr;
@@ -248,6 +248,11 @@ void	StackAllocator::Free(void* ptr)
 		waterBase = oldBase;
 	}
 }
+
+size_t StackAllocator::Available()
+{
+	return bufferSize - waterMark;
+}
 	
 }
 
@@ -273,7 +278,7 @@ void * operator new(size_t n) throw(std::bad_alloc)
 	if(!p)
 	{
 		//exit(1);
-		static const std::bad_alloc nomem;
+		YU_LOCAL_PERSIST const std::bad_alloc nomem;
 		throw nomem;
 	}
 
@@ -305,7 +310,7 @@ void * operator new[](size_t n) throw(std::bad_alloc)
 	if(!p)
 	{
 		//exit(1);
-		static const std::bad_alloc nomem;
+		YU_LOCAL_PERSIST const std::bad_alloc nomem;
 		throw nomem;
 	}
 
