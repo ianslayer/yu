@@ -12,5 +12,5 @@
 #if defined YU_DX11
 #	include "shader_dx11.h"
 #endif
-
+#	include "shader_gl.h"
 #endif

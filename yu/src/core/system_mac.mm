@@ -410,14 +410,11 @@ Window	System::CreateWin(const Rect& rect)
 	cmd.type = WindowThreadCmd::CREATE_WINDOW;
 	cmd.cmd.createWinParam = &param;
 
-	while (1)
-	{
-		if (sys->winThreadCmdQueue.Enqueue(cmd))
-		{
-			WaitForCondVar(param.winCreationCV, param.winCreationCS);
-			break;
-		}
-	}
+	while (!sys->winThreadCmdQueue.Enqueue(cmd))
+	;
+
+	WaitForCondVar(param.winCreationCV, param.winCreationCS);
+
 	param.winCreationCS.Unlock();
 
 	return param.win;}

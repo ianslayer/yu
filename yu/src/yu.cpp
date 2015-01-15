@@ -28,6 +28,8 @@ void InitYu()
 
 	InitWindowManager();
 
+	gYuInitialized = 1;
+
 	Rect rect;
 	rect.x = 128;
 	rect.y = 128;
@@ -50,7 +52,7 @@ void InitYu()
 	InitWorkerSystem();
 	InitWorkMap();
 
-	gYuInitialized = 1;
+
 }
 
 void FreeYu()
