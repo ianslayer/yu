@@ -21,7 +21,11 @@ template<class T, int num> struct FreeList
 		if (allocIdx >= num)
 			return -1;
 
-		return freeObject[allocIdx];
+		int allocObj = freeObject[allocIdx];
+#if defined YU_DEBUG
+		freeObject[allocIdx] = -1;
+#endif
+		return allocObj;
 	}
 
 	void Free(int index)
