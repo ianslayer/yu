@@ -33,6 +33,7 @@
 		B2DDA46A19D171A200324654 /* system_mac.mm in Sources */ = {isa = PBXBuildFile; fileRef = B2DDA46919D171A200324654 /* system_mac.mm */; };
 		B2DDA46E19D177D200324654 /* yu.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B2DDA46C19D177D200324654 /* yu.cpp */; };
 		B2E18D921A3C3FCD00014E16 /* OpenGL.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B2E18D911A3C3FCD00014E16 /* OpenGL.framework */; };
+		B2E18D981A43F62400014E16 /* sound_mac.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B2E18D971A43F62400014E16 /* sound_mac.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -105,6 +106,10 @@
 		B2DDA46C19D177D200324654 /* yu.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = yu.cpp; path = ../src/yu.cpp; sourceTree = "<group>"; };
 		B2DDA46D19D177D200324654 /* yu.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = yu.h; path = ../src/yu.h; sourceTree = "<group>"; };
 		B2E18D911A3C3FCD00014E16 /* OpenGL.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = OpenGL.framework; path = System/Library/Frameworks/OpenGL.framework; sourceTree = SDKROOT; };
+		B2E18D931A43F27C00014E16 /* shader_gl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = shader_gl.h; path = ../src/renderer/shader_gl.h; sourceTree = "<group>"; };
+		B2E18D941A43F29000014E16 /* shader.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = shader.h; path = ../src/renderer/shader.h; sourceTree = "<group>"; };
+		B2E18D961A43F5F500014E16 /* sound.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = sound.h; path = ../src/sound/sound.h; sourceTree = "<group>"; };
+		B2E18D971A43F62400014E16 /* sound_mac.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = sound_mac.cpp; path = ../src/sound/sound_mac.cpp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -216,6 +221,7 @@
 		B213243119BAD40D009D0681 /* src */ = {
 			isa = PBXGroup;
 			children = (
+				B2E18D951A43F5E200014E16 /* sound */,
 				B23FB6F61A3AB1FC002F286F /* app */,
 				B2DDA46C19D177D200324654 /* yu.cpp */,
 				B2DDA46D19D177D200324654 /* yu.h */,
@@ -282,12 +288,14 @@
 		B215A0DC19E51A70005F907C /* renderer */ = {
 			isa = PBXGroup;
 			children = (
+				B2E18D941A43F29000014E16 /* shader.h */,
 				B23FB6F41A3AB14D002F286F /* color.h */,
 				B23FB6F51A3AB14D002F286F /* renderer_impl.h */,
 				B215A0DD19E51ACA005F907C /* gl_utility.h */,
 				B215A0DF19E51BA3005F907C /* renderer.h */,
 				B2C9BBAF19E6D66D0071B3D6 /* gl_mac.mm */,
 				B23FB6FD1A3AB2B8002F286F /* renderer_gl.cpp */,
+				B2E18D931A43F27C00014E16 /* shader_gl.h */,
 			);
 			name = renderer;
 			sourceTree = "<group>";
@@ -300,6 +308,15 @@
 				B23FB6FA1A3AB20A002F286F /* work_map.h */,
 			);
 			name = app;
+			sourceTree = "<group>";
+		};
+		B2E18D951A43F5E200014E16 /* sound */ = {
+			isa = PBXGroup;
+			children = (
+				B2E18D961A43F5F500014E16 /* sound.h */,
+				B2E18D971A43F62400014E16 /* sound_mac.cpp */,
+			);
+			name = sound;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -401,6 +418,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B23FB6FC1A3AB20A002F286F /* work_map.cpp in Sources */,
+				B2E18D981A43F62400014E16 /* sound_mac.cpp in Sources */,
 				B215A0DA19E50971005F907C /* string.cpp in Sources */,
 				B2C9BBB019E6D66D0071B3D6 /* gl_mac.mm in Sources */,
 				B23FB6FE1A3AB2B8002F286F /* renderer_gl.cpp in Sources */,

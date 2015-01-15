@@ -511,16 +511,16 @@ WorkItem* TestRenderItem()
 	UpdateMesh(testRenderer->queue, testRenderer->square, 0, 0, &squareData);
 	*/
 
-	VertexShaderAPIData vsData = CompileVSFromFile("data/shaders/flat_vs.hlsl");
-	PixelShaderAPIData psData = CompilePSFromFile("data/shaders/flat_ps.hlsl");
+	//VertexShaderAPIData vsData = CompileVSFromFile("data/shaders/flat_vs.hlsl");
+	//PixelShaderAPIData psData = CompilePSFromFile("data/shaders/flat_ps.hlsl");
 
-	testRenderer->vs = CreateVertexShader(testRenderer->queue, vsData);
-	testRenderer->ps = CreatePixelShader(testRenderer->queue, psData);
-	PipelineData pipelineData;
-	pipelineData.vs = testRenderer->vs;
-	pipelineData.ps = testRenderer->ps;
+	//testRenderer->vs = CreateVertexShader(testRenderer->queue, vsData);
+	//testRenderer->ps = CreatePixelShader(testRenderer->queue, psData);
+	//PipelineData pipelineData;
+	//pipelineData.vs = testRenderer->vs;
+	//pipelineData.ps = testRenderer->ps;
 
-	testRenderer->pipeline = CreatePipeline(testRenderer->queue, pipelineData);
+	//testRenderer->pipeline = CreatePipeline(testRenderer->queue, pipelineData);
 
 	testRenderer->camera = CreateCamera(testRenderer->queue);
 	CameraData camData = DefaultCamera();
