@@ -375,6 +375,12 @@ struct TestRenderer : public InputData
 
 	CameraControllerOutput* updatedCam;
 
+	MeshData triangleData = {};
+
+	Vector3 trianglePos[3] ;
+	Color triangleColor[3] ;
+	u32 triangleIndices[3] ;
+
 	MeshHandle	triangle;
 	MeshHandle square;
 	RenderQueue* queue;
@@ -386,6 +392,8 @@ struct TestRenderer : public InputData
 	PipelineHandle		pipeline;
 	VertexShaderHandle	vs;
 	PixelShaderHandle	ps;
+
+	FenceHandle			createResourceFence;
 };
 
 CameraHandle GetCamera(WorkItem* renderItem)
@@ -427,9 +435,17 @@ void Render(TestRenderer* renderer)
 	resource.numPsTexture = 1;
 	resource.psTextures = &renderer->textureSlot;
 
+	//WaitFence(renderer->queue, renderer->createResourceFence);
+
+	//Reset(renderer->queue, renderer->createResourceFence);
+
 	Render(renderer->queue, renderer->camera, renderer->triangle, renderer->pipeline, resource);
+	
+	InsertFence(renderer->queue, renderer->createResourceFence);
+
+	//WaitFence(renderer->queue, renderer->createResourceFence);
 	//for (int i = 0; i < 1000; i++)
-	Render(renderer->queue, renderer->camera, renderer->square, renderer->pipeline, resource);
+	//Render(renderer->queue, renderer->camera, renderer->square, renderer->pipeline, resource);
 	Flush(renderer->queue);
 	Swap(renderer->queue, true);
 }
@@ -457,21 +473,29 @@ WorkItem* TestRenderItem()
 
 	SetInputData(item, testRenderer);
 
+	testRenderer->createResourceFence = CreateFence(testRenderer->queue);
+
 	testRenderer->triangle = CreateMesh(testRenderer->queue, 3, 3, MeshData::POSITION | MeshData::COLOR);
-	MeshData triangleData = {};
-	triangleData.channelMask = MeshData::POSITION | MeshData::COLOR;
-	Vector3 trianglePos[3] = { _Vector3(0, 5, 5), _Vector3(5, -5, 5), _Vector3(-5, -5, 5) };
-	Color color[3] = {};
-	u32 indices[3] = {0, 2, 1};
 
-	triangleData.posList = trianglePos;
-	triangleData.colorList = color;
-	triangleData.indices = indices;
-	triangleData.numVertices = 3;
-	triangleData.numIndices = 3;
+	testRenderer->trianglePos[0] = _Vector3(0, 5, 5);
+	testRenderer->trianglePos[1] = _Vector3(5, -5, 5);
+	testRenderer->trianglePos[2] = _Vector3(-5, -5, 5);// { _Vector3(0, 5, 5), _Vector3(5, -5, 5), _Vector3(-5, -5, 5) };
+	
+	//testRenderer->triangleColor ;
+	testRenderer->triangleIndices[0] = 0;
+	testRenderer->triangleIndices[1] = 2; 
+	testRenderer->triangleIndices[2] = 1;
 
-	UpdateMesh(testRenderer->queue, testRenderer->triangle, 0, 0, &triangleData);
+	testRenderer->triangleData.channelMask = MeshData::POSITION | MeshData::COLOR;
+	testRenderer->triangleData.posList = testRenderer->trianglePos;
+	testRenderer->triangleData.colorList = testRenderer->triangleColor;
+	testRenderer->triangleData.indices = testRenderer->triangleIndices;
+	testRenderer->triangleData.numVertices = 3;
+	testRenderer->triangleData.numIndices = 3;
 
+	UpdateMesh(testRenderer->queue, testRenderer->triangle, 0, 0, &testRenderer->triangleData);
+
+	/*
 	testRenderer->square = CreateMesh(testRenderer->queue, 4, 6, MeshData::POSITION | MeshData::COLOR);
 	MeshData squareData = {};
 	squareData.channelMask = MeshData::POSITION | MeshData::COLOR;
@@ -485,6 +509,7 @@ WorkItem* TestRenderItem()
 	squareData.numVertices = 4;
 	squareData.numIndices = 6;
 	UpdateMesh(testRenderer->queue, testRenderer->square, 0, 0, &squareData);
+	*/
 
 	VertexShaderAPIData vsData = CompileVSFromFile("data/shaders/flat_vs.hlsl");
 	PixelShaderAPIData psData = CompilePSFromFile("data/shaders/flat_ps.hlsl");
@@ -496,7 +521,6 @@ WorkItem* TestRenderItem()
 	pipelineData.ps = testRenderer->ps;
 
 	testRenderer->pipeline = CreatePipeline(testRenderer->queue, pipelineData);
-
 
 	testRenderer->camera = CreateCamera(testRenderer->queue);
 	CameraData camData = DefaultCamera();
@@ -522,6 +546,9 @@ WorkItem* TestRenderItem()
 	SamplerStateDesc samplerDesc = { SamplerStateDesc::FILTER_POINT, SamplerStateDesc::ADDRESS_CLAMP, SamplerStateDesc::ADDRESS_CLAMP };
 	testRenderer->textureSlot.sampler = CreateSampler(testRenderer->queue, samplerDesc);
 
+	InsertFence(testRenderer->queue, testRenderer->createResourceFence);
+
+	/*
 	Matrix4x4 viewProjMatrix = camData.PerspectiveMatrix() * camData.ViewMatrix();
 	Matrix4x4 viewMatrix = camData.ViewMatrix();
 	Vector4 viewPos[4];
@@ -532,7 +559,7 @@ WorkItem* TestRenderItem()
 		projPos[i] = viewProjMatrix * _Vector4(squarePos[i], 1);
 		projPos[i] /= projPos[i].w;
 	}
-
+	*/
 	return item;
 }
 

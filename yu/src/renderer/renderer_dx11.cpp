@@ -420,104 +420,126 @@ YU_INTERNAL void ExecSwapFrameBufferCmd(bool vsync)
 }
 
 ID3DBlob* CompileShaderDx11(const char* shaderSource, size_t sourceLen, const char* entryPoint, const char* profile);
-ID3DBlob* CompileShaderFromFileDx11(const char* path, const char* entryPoint, const char* profile);
 
-YU_INTERNAL ID3D11InputLayout* CreateInputLayout(D3D11_INPUT_ELEMENT_DESC* desc, UINT numElem)
+YU_INTERNAL ID3D11InputLayout* CreateInputLayout(u32 vertChannelMask)
 {
+	D3D11_INPUT_ELEMENT_DESC preDefineDesc[] =
+	{
+		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA },
+		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA },
+		{ "COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA }
+	};
+
+	D3D11_INPUT_ELEMENT_DESC translateDesc[3];
+	UINT numChannel = 0;
 	char shaderBuf[4096];
 	StringBuilder shaderStr(shaderBuf, 4096);
 	shaderStr.Cat("struct VertexInput {\n");
 
-	shaderStr.Cat("float3 position : POSITION;\n");
-	shaderStr.Cat("float4 color : COLOR;\n");
+	if (vertChannelMask & MeshData::Channel::POSITION)
+	{
+		translateDesc[numChannel] = preDefineDesc[0];
+		shaderStr.Cat("float3 position : POSITION;\n");
+		numChannel++;
+	}
+	if (vertChannelMask & MeshData::Channel::TEXCOORD)
+	{
+		translateDesc[numChannel] = preDefineDesc[1];
+		shaderStr.Cat("float2 texcoord : TEXCOORD0;\n");
+		numChannel++;
+	}
+	if (vertChannelMask & MeshData::Channel::COLOR)
+	{
+		translateDesc[numChannel] = preDefineDesc[2];
+		shaderStr.Cat("float4 color : COLOR;\n");
+		numChannel++;
+	}
 
 	shaderStr.Cat("};\n");
 	shaderStr.Cat("struct VS_OUTPUT {\n\
-				  				  	float4 Position : SV_POSITION; \n\
-														};\n\
-																		");
+				  				  float4 Position : SV_POSITION; \n\
+								  					};\n\
+																	");
 	shaderStr.Cat("VS_OUTPUT VS(VertexInput IN) {\n");
 	shaderStr.Cat("VS_OUTPUT Out; \n\
-				  					Out.Position = float4(0.0, 0.0, 0.0, 0.0); \n\
-														return Out; \n\
-																		  ");
+				  				 Out.Position = float4(0.0, 0.0, 0.0, 0.0); \n\
+								 				return Out; \n\
+																");
 	shaderStr.Cat("}");
-
 	DxResourcePtr<ID3DBlob> vsShader = CompileShaderDx11(shaderStr.strBuf, shaderStr.strLen, "VS", "vs_5_0");
 
 	ID3D11InputLayout* inputLayout;
-	HRESULT hr = gDx11Device->d3d11Device->CreateInputLayout(desc, numElem, vsShader->GetBufferPointer(), vsShader->GetBufferSize(), &inputLayout);
+	HRESULT hr = gDx11Device->d3d11Device->CreateInputLayout(translateDesc, numChannel, vsShader->GetBufferPointer(), vsShader->GetBufferSize(), &inputLayout);
 	return inputLayout;
 }
 
-YU_INTERNAL void ExecUpdateMeshCmd(RendererDx11* renderer, MeshHandle handle)
+YU_INTERNAL void ExecCreateMeshCmd(RendererDx11* renderer, MeshHandle mesh, u32 numVertices, u32 numIndices, u32 vertChannelMask, MeshData* meshData)
 {
-	MeshData* data = renderer->meshList.Get(handle.id);
-	MeshDataDx11* dx11Data = &renderer->dx11MeshList[handle.id];
+	UINT vertexSize = VertexSize(vertChannelMask);
+	UINT vbSize = vertexSize * numVertices;
+	UINT ibSize = numIndices * sizeof(u32);
+	MeshDataDx11* dx11MeshData = &renderer->dx11MeshList[mesh.id];
+	dx11MeshData->inputLayout = CreateInputLayout(vertChannelMask);
 
-	//TODO: hack, fixme
-	D3D11_INPUT_ELEMENT_DESC vertDesc[] =
-	{
-		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA },
-		{ "COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA }
-	};
+	D3D11_BUFFER_DESC vbDesc = {};
+	vbDesc.ByteWidth = vbSize;
+	vbDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+	vbDesc.Usage = D3D11_USAGE_DYNAMIC;
+	vbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
-	ID3D11InputLayout* inputLayout = CreateInputLayout(vertDesc, 2);
-	dx11Data->inputLayout = inputLayout;
+	D3D11_BUFFER_DESC ibDesc = {};
+	ibDesc.ByteWidth = ibSize;
+	ibDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+	ibDesc.Usage = D3D11_USAGE_DYNAMIC;
+	ibDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
-	UINT vertexSize = 0;
-	if (HasPos(data->channelMask))
-	{
-		vertexSize += sizeof(Vector3);
-	}
-	if (HasTexcoord(data->channelMask))
-	{
-		vertexSize += sizeof(Vector2);
-	}
-	if (HasColor(data->channelMask))
-	{
-		vertexSize += sizeof(Color);
-	}
+	D3D11_SUBRESOURCE_DATA* initVertexDataPtr = nullptr;
+	D3D11_SUBRESOURCE_DATA  initVertexData = {};
+	D3D11_SUBRESOURCE_DATA* initIndexDataPtr = nullptr;
+	D3D11_SUBRESOURCE_DATA  initIndexData = {};
 
-	UINT vbSize = vertexSize * data->numVertices;
-	void* vb = gDefaultAllocator->Alloc(vbSize);
-
-	u8* vertex = (u8*) vb;
-	for (u32 i = 0; i < data->numVertices; i++)
+	void* vertexbuffer = nullptr;
+	void* indexBuffer = nullptr;
+	if (meshData)
 	{
-		if (HasPos(data->channelMask))
+		initVertexDataPtr = &initVertexData;
+		vertexbuffer = gDefaultAllocator->Alloc(vbSize);
+
+		u8* vertex = (u8*)vertexbuffer;
+		for (u32 i = 0; i < numVertices; i++)
 		{
-			*((Vector3*)vertex) = data->posList[i];
-			vertex += sizeof(Vector3);
+			if (HasPos(vertChannelMask))
+			{
+				*((Vector3*)vertex) = meshData->posList[i];
+				vertex += sizeof(Vector3);
+			}
+			if (HasTexcoord(vertChannelMask))
+			{
+				*((Vector2*)vertex) = meshData->texcoordList[i];
+				vertex += sizeof(Vector2);
+			}
+			if (HasColor(vertChannelMask))
+			{
+				*((Color*)vertex) = meshData->colorList[i];
+				vertex += sizeof(Color);
+			}
 		}
-		if (HasTexcoord(data->channelMask))
-		{
-			*((Vector2*)vertex) = data->texcoordList[i];
-			vertex += sizeof(Vector2);
-		}
-		if (HasColor(data->channelMask))
-		{
-			*((Color*)vertex) = data->colorList[i];
-			vertex += sizeof(Color);
-		}
+		initVertexData.pSysMem = vertexbuffer;
+		initVertexData.SysMemPitch = vbSize;
+		initVertexData.SysMemSlicePitch = 0;
+
+		initIndexDataPtr = &initIndexData;
+		initIndexData.pSysMem = meshData->indices;
+		initIndexData.SysMemPitch = ibSize;
+		initIndexData.SysMemSlicePitch = 0;
 	}
-	assert(vertex == (u8*)vb + vbSize);
 
-	D3D11_BUFFER_DESC vbdesc = {};
-	vbdesc.ByteWidth = vbSize;
-	vbdesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-	vbdesc.Usage = D3D11_USAGE_DEFAULT;
-
-	D3D11_SUBRESOURCE_DATA vertexBufferData;
-	vertexBufferData.pSysMem = vb;
-	vertexBufferData.SysMemPitch = vbSize;
-	vertexBufferData.SysMemSlicePitch = 0;
-	ID3D11Buffer* vertexBuffer;
-	HRESULT hr = gDx11Device->d3d11Device->CreateBuffer(&vbdesc, &vertexBufferData, &vertexBuffer);
-	gDefaultAllocator->Free(vb);
+	ID3D11Buffer* dx11VertexBuffer;
+	HRESULT hr = gDx11Device->d3d11Device->CreateBuffer(&vbDesc, initVertexDataPtr, &dx11VertexBuffer);
+	gDefaultAllocator->Free(vertexbuffer);
 	if (SUCCEEDED(hr))
 	{
-		dx11Data->vertexBuffer = vertexBuffer;
+		dx11MeshData->vertexBuffer = dx11VertexBuffer;
 		Log("successfully created vertex buffer\n");
 	}
 	else
@@ -525,36 +547,81 @@ YU_INTERNAL void ExecUpdateMeshCmd(RendererDx11* renderer, MeshHandle handle)
 		Log("error: failed to create vertex buffer\n");
 	}
 
-	UINT ibSize = data->numIndices * sizeof(u32);
 
-	D3D11_BUFFER_DESC ibdesc = {};
-	ibdesc.ByteWidth = ibSize;
-	ibdesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-	ibdesc.Usage = D3D11_USAGE_DEFAULT;
-
-	D3D11_SUBRESOURCE_DATA indexBufferData;
-	indexBufferData.pSysMem = data->indices;
-	indexBufferData.SysMemPitch = ibSize;
-	indexBufferData.SysMemSlicePitch = 0;
-
-	ID3D11Buffer* indexBuffer;
-	hr = gDx11Device->d3d11Device->CreateBuffer(&ibdesc, &indexBufferData, &indexBuffer);
+	ID3D11Buffer* dx11IndexBuffer;
+	hr = gDx11Device->d3d11Device->CreateBuffer(&ibDesc, initIndexDataPtr, &dx11IndexBuffer);
 	if (SUCCEEDED(hr))
 	{
-		dx11Data->indexBuffer = indexBuffer;
+		dx11MeshData->indexBuffer = dx11IndexBuffer;
 		Log("successfully created index buffer\n");
 	}
 	else
 	{
 		Log("error: failed to create index buffer\n");
 	}
+
 }
 
-YU_INTERNAL void ExecUpdateCameraCmd(RendererDx11* renderer, CameraHandle handle, const CameraData& updateData)
+YU_INTERNAL void ExecUpdateMeshCmd(RendererDx11* renderer, MeshHandle mesh, u32 startVert, u32 startIndex, MeshData* meshData)
 {
-	renderer->cameraList.Get(handle.id)->UpdateData(updateData);
-	CameraData* data = &renderer->cameraList.Get(handle.id)->GetMutable();
-	CameraDataDx11* dx11Data = &renderer->dx11CameraList[handle.id];
+	//TODO: correctlly handle startVert & startIndex 
+	MeshDataDx11* dx11Data = &renderer->dx11MeshList[mesh.id];
+
+	ID3D11Buffer* dx11VertexBuffer = dx11Data->vertexBuffer;
+	ID3D11Buffer* dx11IndexBuffer = dx11Data->indexBuffer;
+	D3D11_MAPPED_SUBRESOURCE mappedVertexBuffer;
+	D3D11_MAPPED_SUBRESOURCE mappedIndexBuffer;
+	HRESULT hr = gDx11Device->d3d11DeviceContext->Map(dx11VertexBuffer, 0, D3D11_MAP_WRITE_NO_OVERWRITE, 0, &mappedVertexBuffer);
+	if (FAILED(hr))
+	{
+		Log("error: ExecUpdateMeshCmd dx11 map vertex buffer failed");
+		gDx11Device->d3d11DeviceContext->Unmap(dx11VertexBuffer, 0);
+		return;
+	}
+	hr = gDx11Device->d3d11DeviceContext->Map(dx11IndexBuffer, 0, D3D11_MAP_WRITE_NO_OVERWRITE, 0, &mappedIndexBuffer);
+	if (FAILED(hr))
+	{
+		Log("error: ExecUpdateMeshCmd dx11 map index buffer failed");
+		gDx11Device->d3d11DeviceContext->Unmap(dx11IndexBuffer, 0);
+		return;
+	}
+
+	UINT vertexSize = VertexSize(meshData->channelMask);
+	UINT vbSize = vertexSize * meshData->numVertices;
+	void* vb = mappedVertexBuffer.pData;
+
+	u8* vertex = (u8*)vb;
+	for (u32 i = 0; i < meshData->numVertices; i++)
+	{
+		if (HasPos(meshData->channelMask))
+		{
+			*((Vector3*)vertex) = meshData->posList[i];
+			vertex += sizeof(Vector3);
+		}
+		if (HasTexcoord(meshData->channelMask))
+		{
+			*((Vector2*)vertex) = meshData->texcoordList[i];
+			vertex += sizeof(Vector2);
+		}
+		if (HasColor(meshData->channelMask))
+		{
+			*((Color*)vertex) = meshData->colorList[i];
+			vertex += sizeof(Color);
+		}
+	}
+	assert(vertex == (u8*)vb + vbSize);
+
+	memcpy(mappedIndexBuffer.pData, meshData->indices, sizeof(u32) * meshData->numIndices);
+
+	gDx11Device->d3d11DeviceContext->Unmap(dx11VertexBuffer, 0);
+	gDx11Device->d3d11DeviceContext->Unmap(dx11IndexBuffer, 0);
+}
+
+YU_INTERNAL void ExecUpdateCameraCmd(RendererDx11* renderer, CameraHandle camera, const CameraData& updateData)
+{
+	renderer->cameraList.Get(camera.id)->UpdateData(updateData);
+	CameraData* data = &renderer->cameraList.Get(camera.id)->GetMutable();
+	CameraDataDx11* dx11Data = &renderer->dx11CameraList[camera.id];
 	CameraConstant camConstant;
 	camConstant.viewMatrix = data->ViewMatrix();
 	camConstant.projectionMatrix = data->PerspectiveMatrix();
@@ -598,7 +665,7 @@ YU_INTERNAL void ExecUpdateCameraCmd(RendererDx11* renderer, CameraHandle handle
 }
 
 //TODO: remove shader blob delete from this, memory should be managed by caller
-YU_INTERNAL void ExecCreateVertexShaderCmd(RendererDx11* renderer, VertexShaderHandle handle, VertexShaderAPIData& data)
+YU_INTERNAL void ExecCreateVertexShaderCmd(RendererDx11* renderer, VertexShaderHandle vs, VertexShaderAPIData& data)
 {
 	if (data.blob)
 	{
@@ -607,7 +674,7 @@ YU_INTERNAL void ExecCreateVertexShaderCmd(RendererDx11* renderer, VertexShaderH
 
 		if (SUCCEEDED(hr))
 		{
-			renderer->dx11VertexShaderList[handle.id].shader = vertexShader;
+			renderer->dx11VertexShaderList[vs.id].shader = vertexShader;
 #if defined YU_DEBUG
 			Log("create vertex shader: %s succeeded\n", data.sourcePath.str);
 #endif
@@ -629,7 +696,7 @@ YU_INTERNAL void ExecCreateVertexShaderCmd(RendererDx11* renderer, VertexShaderH
 	}
 }
 
-YU_INTERNAL void ExecCreatePixelShaderCmd(RendererDx11* renderer, PixelShaderHandle handle, PixelShaderAPIData& data)
+YU_INTERNAL void ExecCreatePixelShaderCmd(RendererDx11* renderer, PixelShaderHandle ps, PixelShaderAPIData& data)
 {
 	if (data.blob)
 	{
@@ -638,7 +705,7 @@ YU_INTERNAL void ExecCreatePixelShaderCmd(RendererDx11* renderer, PixelShaderHan
 
 		if (SUCCEEDED(hr))
 		{
-			renderer->dx11PixelShaderList[handle.id].shader = pixelShader;
+			renderer->dx11PixelShaderList[ps.id].shader = pixelShader;
 #if defined YU_DEBUG
 			Log("create pixel shader: %s succeeded\n", data.sourcePath.str);
 #endif
@@ -660,14 +727,14 @@ YU_INTERNAL void ExecCreatePixelShaderCmd(RendererDx11* renderer, PixelShaderHan
 	}
 }
 
-YU_INTERNAL void ExecCreatePipelineCmd(RendererDx11* renderer, PipelineHandle handle, const PipelineData& data)
+YU_INTERNAL void ExecCreatePipelineCmd(RendererDx11* renderer, PipelineHandle pipeline, const PipelineData& data)
 {
-	PipelineDx11& pipeline = renderer->dx11PipelineList[handle.id];
+	PipelineDx11& dx11Pipeline = renderer->dx11PipelineList[pipeline.id];
 
 	bool success = true;
 	if (renderer->dx11VertexShaderList[data.vs.id].shader)
 	{
-		pipeline.vs = renderer->dx11VertexShaderList[data.vs.id].shader;
+		dx11Pipeline.vs = renderer->dx11VertexShaderList[data.vs.id].shader;
 	}
 	else
 	{
@@ -677,7 +744,7 @@ YU_INTERNAL void ExecCreatePipelineCmd(RendererDx11* renderer, PipelineHandle ha
 
 	if (renderer->dx11PixelShaderList[data.ps.id].shader)
 	{
-		pipeline.ps = renderer->dx11PixelShaderList[data.ps.id].shader;
+		dx11Pipeline.ps = renderer->dx11PixelShaderList[data.ps.id].shader;
 	}
 	else
 	{
@@ -691,7 +758,7 @@ YU_INTERNAL void ExecCreatePipelineCmd(RendererDx11* renderer, PipelineHandle ha
 	}
 }
 
-YU_INTERNAL void ExecCreateTextureCmd(RendererDx11* renderer, TextureHandle handle, const TextureDesc& texDesc, const TextureMipData* initData)
+YU_INTERNAL void ExecCreateTextureCmd(RendererDx11* renderer, TextureHandle texture, const TextureDesc& texDesc, const TextureMipData* initData)
 {
 	CD3D11_TEXTURE2D_DESC dx11TexDesc(DXGIFormat(texDesc.format), (UINT)texDesc.width, (UINT)texDesc.height, 1, UINT(texDesc.mipLevels),
 		D3D11_BIND_SHADER_RESOURCE);
@@ -711,7 +778,7 @@ YU_INTERNAL void ExecCreateTextureCmd(RendererDx11* renderer, TextureHandle hand
 	HRESULT hr = gDx11Device->d3d11Device->CreateTexture2D(&dx11TexDesc, dx11TexData, &createdTexture);
 	if (SUCCEEDED(hr))
 	{
-		Texture2DDx11& dx11Texture = renderer->dx11TextureList[handle.id];
+		Texture2DDx11& dx11Texture = renderer->dx11TextureList[texture.id];
 		dx11Texture.texture = createdTexture;
 
 		CD3D11_SHADER_RESOURCE_VIEW_DESC srvDesc(D3D11_SRV_DIMENSION_TEXTURE2D, DXGIFormat(texDesc.format));
@@ -719,7 +786,7 @@ YU_INTERNAL void ExecCreateTextureCmd(RendererDx11* renderer, TextureHandle hand
 		hr = gDx11Device->d3d11Device->CreateShaderResourceView(createdTexture, &srvDesc, &createSRV);
 		if (SUCCEEDED(hr))
 		{
-			renderer->dx11TextureList[handle.id].textureSRV = createSRV;
+			renderer->dx11TextureList[texture.id].textureSRV = createSRV;
 		}
 		else
 		{
@@ -763,7 +830,7 @@ YU_INTERNAL D3D11_TEXTURE_ADDRESS_MODE Dx11AddressMode(SamplerStateDesc::Address
 	return D3D11_TEXTURE_ADDRESS_CLAMP;
 }
 
-YU_INTERNAL void ExecCreateSamplerCmd(RendererDx11* renderer, SamplerHandle handle, const SamplerStateDesc& desc)
+YU_INTERNAL void ExecCreateSamplerCmd(RendererDx11* renderer, SamplerHandle sampler, const SamplerStateDesc& desc)
 {
 	CD3D11_SAMPLER_DESC  dx11SamplerDesc(D3D11_DEFAULT);
 	dx11SamplerDesc.Filter = Dx11Filter(desc.filter);
@@ -774,13 +841,20 @@ YU_INTERNAL void ExecCreateSamplerCmd(RendererDx11* renderer, SamplerHandle hand
 	HRESULT hr = gDx11Device->d3d11Device->CreateSamplerState(&dx11SamplerDesc, &createdSampler);
 	if (SUCCEEDED(hr))
 	{
-		SamplerDx11& sampler = renderer->dx11SamplerList[handle.id];
-		sampler.sampler = createdSampler;
+		SamplerDx11& dx11Sampler = renderer->dx11SamplerList[sampler.id];
+		dx11Sampler.sampler = createdSampler;
 	}
 	else
 	{
 		Log("error, dx11 create sampler state failed\n");
 	}
+}
+
+
+YU_INTERNAL void ExecInsertFenceCmd(RendererDx11* renderer, FenceHandle fenceHandle)
+{
+	Fence* fence = renderer->fenceList.Get(fenceHandle.id);
+	fence->cpuExecuted = true;
 }
 
 struct VertexP3C4
@@ -889,13 +963,18 @@ YU_INTERNAL bool ExecThreadCmd(RendererDx11* renderer)
 					RenderThreadCmd::ResizeBufferCmd resizeCmd = cmd.resizeBuffCmd;
 					ExecResizeBackBufferCmd(resizeCmd.width, resizeCmd.height, resizeCmd.fmt);
 				}break;
+				case (RenderThreadCmd::CREATE_MESH) :
+				{
+					ExecCreateMeshCmd(renderer, cmd.createMeshCmd.mesh, cmd.createMeshCmd.numVertices, cmd.createMeshCmd.numIndices, 
+						cmd.createMeshCmd.vertChannelMask, cmd.createMeshCmd.meshData);
+				}break;
 				case (RenderThreadCmd::UPDATE_MESH) :
 				{
-					ExecUpdateMeshCmd(renderer, cmd.updateMeshCmd.handle);
+					ExecUpdateMeshCmd(renderer, cmd.updateMeshCmd.mesh, cmd.updateMeshCmd.startVertex, cmd.updateMeshCmd.startIndex, cmd.updateMeshCmd.meshData);
 				}break;
 				case (RenderThreadCmd::UPDATE_CAMERA) :
 				{
-					ExecUpdateCameraCmd(renderer, cmd.updateCameraCmd.handle, cmd.updateCameraCmd.camData);
+					ExecUpdateCameraCmd(renderer, cmd.updateCameraCmd.camera, cmd.updateCameraCmd.camData);
 				}break;
 				case(RenderThreadCmd::RENDER) :
 				{
@@ -908,23 +987,31 @@ YU_INTERNAL bool ExecThreadCmd(RendererDx11* renderer)
 				}break;
 				case (RenderThreadCmd::CREATE_VERTEX_SHADER) :
 				{
-					ExecCreateVertexShaderCmd(renderer, cmd.createVSCmd.handle, cmd.createVSCmd.data);
+					ExecCreateVertexShaderCmd(renderer, cmd.createVSCmd.vertexShader, cmd.createVSCmd.data);
 				}break;
 				case (RenderThreadCmd::CREATE_PIXEL_SHADER) :
 				{
-					ExecCreatePixelShaderCmd(renderer, cmd.createPSCmd.handle, cmd.createPSCmd.data);
+					ExecCreatePixelShaderCmd(renderer, cmd.createPSCmd.pixelShader, cmd.createPSCmd.data);
 				}break;
 				case (RenderThreadCmd::CREATE_PIPELINE) :
 				{
-					ExecCreatePipelineCmd(renderer, cmd.createPipelineCmd.handle, cmd.createPipelineCmd.data);
+					ExecCreatePipelineCmd(renderer, cmd.createPipelineCmd.pipeline, cmd.createPipelineCmd.data);
 				}break;
 				case (RenderThreadCmd::CREATE_TEXTURE) :
 				{
-					ExecCreateTextureCmd(renderer, cmd.createTextureCmd.handle, cmd.createTextureCmd.desc, cmd.createTextureCmd.initData);
+					ExecCreateTextureCmd(renderer, cmd.createTextureCmd.texture, cmd.createTextureCmd.desc, cmd.createTextureCmd.initData);
 				}break;
 				case (RenderThreadCmd::CREATE_SAMPLER) :
 				{
-					ExecCreateSamplerCmd(renderer, cmd.createSamplerCmd.handle, cmd.createSamplerCmd.desc);
+					ExecCreateSamplerCmd(renderer, cmd.createSamplerCmd.sampler, cmd.createSamplerCmd.desc);
+				}break;
+				case (RenderThreadCmd::CREATE_FENCE):
+				{
+					//nothing to do
+				}break;
+				case (RenderThreadCmd::INSERT_FENCE):
+				{
+					ExecInsertFenceCmd(renderer, cmd.insertFenceCmd.fence);
 				}break;
 				default:
 				{

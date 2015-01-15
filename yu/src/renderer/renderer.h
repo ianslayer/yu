@@ -28,19 +28,19 @@ enum TextureFormat
 struct FrameBufferDesc
 {
 	TextureFormat	format;
-	double		refreshRate;
-	int			width;
-	int			height;
-	int			sampleCount;
-	bool		fullScreen;
+	double			refreshRate;
+	int				width;
+	int				height;
+	int				sampleCount;
+	bool			fullScreen;
 };
 
 struct TextureDesc
 {
 	TextureFormat	format;
-	int			width;
-	int			height;
-	int			mipLevels;
+	int				width;
+	int				height;
+	int				mipLevels;
 };
 
 struct TextureMipData
@@ -177,20 +177,16 @@ void			UpdateCamera(RenderQueue* queue, CameraHandle handle, const CameraData& c
 void			FreeCamera(RenderQueue* queue, CameraHandle handle);
 
 MeshHandle		CreateMesh(RenderQueue* queue, u32 numVertices, u32 numIndices, u32 vertChannelMask);
+MeshHandle		CreateMesh(RenderQueue* queue, u32 vertChannelMask, MeshData* meshData, bool copyData = false);
 
-MeshHandle		CreateMesh(RenderQueue* queue, u32 numVertices, u32 numIndices, u32 vertChannelMask, 
-						   u32 startFillVert, u32 startFillIndex,
-						   MeshData* subMeshdata);
+//MeshHandle	CreateSubMesh(RenderQueue* queue, MeshHandle mainMesh, MeshData* subMeshdata); //?
 
 void			FreeMesh(RenderQueue* queue, MeshHandle handle);
+
 void			UpdateMesh(RenderQueue* queue, MeshHandle handle,
 				u32 startVert, u32 startIndex,
 				MeshData* subMeshdata);
-/*
-void			CopySubMesh(RenderQueue* queue, MeshHandle handle,
-				u32 startVert, u32 numVertices, u32 startIndex, u32 numIndices, u32 channel,
-				MeshData* outMeshData);
-				*/
+
 
 struct VertexShaderAPIData;
 struct PixelShaderAPIData;
@@ -205,17 +201,19 @@ size_t				TextureSize(TextureFormat format, int width, int height, int depth, in
 size_t				TextureLevelSize(TextureFormat format, int width, int height, int depth, int mipSlice);
 SamplerHandle		CreateSampler(RenderQueue* queue, const SamplerStateDesc& desc);
 
+FenceHandle			CreateFence(RenderQueue* queue); //TODO: implement true gpu fence, bool createGpuFence = false
+void				InsertFence(RenderQueue* queue, FenceHandle fence);
+bool				IsCPUComplete(RenderQueue* queue, FenceHandle fence);
+//TODO: Implement IsGPUComplete
+void				WaitFence(RenderQueue* queue, FenceHandle fence);
+void				Reset(RenderQueue* queue, FenceHandle fence);
+
 void				Render(RenderQueue* queue, CameraHandle cam, MeshHandle mesh, PipelineHandle pipeline, const RenderResource& resource);
 
 void				Flush(RenderQueue* queue);
 void				Swap(RenderQueue* queue, bool vsync = true);
 
-FenceHandle		CreateFence();
-void			InsertFence(FenceHandle fence);
-bool			Complete(FenceHandle fence);
-void			Reset(FenceHandle fence);
-
-void			InitRenderThread(const Window& win, const FrameBufferDesc& desc);
+void				InitRenderThread(const Window& win, const FrameBufferDesc& desc);
 
 }
 
