@@ -1,6 +1,7 @@
 #include "crc32.h"
 #include "string.h"
 #include <string.h>
+#include <assert.h>
 #include <new>
 namespace yu
 {
