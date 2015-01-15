@@ -127,7 +127,13 @@ Matrix4x4 CameraData::PerspectiveMatrix() const
 #define MAX_SHADER 4096
 #define MAX_TEXTURE 4096
 #define MAX_SAMPLER 4096
+#define MAX_FENCE 1024
 #define MAX_RENDER_QUEUE 32
+
+struct Fence
+{
+	std::atomic<bool>	cpuExecuted;
+};
 
 struct RenderThreadCmd
 {
@@ -150,6 +156,10 @@ struct RenderThreadCmd
 
 		CREATE_TEXTURE,
 		CREATE_SAMPLER,
+
+		CREATE_FENCE,
+		INSERT_FENCE,
+		QUERY_FENCE,
 	};
 
 	CommandType type;
@@ -160,56 +170,71 @@ struct RenderThreadCmd
 		unsigned int	height;
 		TextureFormat		fmt;
 	};
-
+	
 	struct CreateMeshCmd
 	{
-		MeshHandle handle;
-		u32 numVertices;
-		u32 numIndices;
-		u32 vertChannelMask;
+		MeshHandle	mesh;
+		u32			numVertices;
+		u32			numIndices;
+		u32			vertChannelMask;
+		MeshData*	meshData;
 	};
-
+	
 	//TODO: merge the below two update into render cmd
 	struct UpdateMeshCmd
 	{
-		MeshHandle handle;
+		MeshHandle	mesh;
+		u32			startVertex;
+		u32			startIndex;
+		MeshData*	meshData;
 	};
 
 	struct UpdateCameraCmd
 	{
-		CameraHandle handle;
+		CameraHandle camera;
 		CameraData	 camData;
 	};
 
 	struct CreateVertexShaderCmd
 	{
-		VertexShaderHandle handle;
+		VertexShaderHandle vertexShader;
 		VertexShaderAPIData data;
 	};
 
 	struct CreatePixelShaderCmd
 	{
-		PixelShaderHandle handle;
+		PixelShaderHandle pixelShader;
 		PixelShaderAPIData data;
 	};
 
 	struct CreatePipelineCmd
 	{
-		PipelineHandle	handle;
+		PipelineHandle	pipeline;
 		PipelineData	data;
 	};
 
 	struct CreateTextureCmd
 	{
-		TextureHandle	handle;
+		TextureHandle	texture;
 		TextureDesc		desc;
 		TextureMipData* initData;
 	};
 
 	struct CreateSamplerCmd
 	{
-		SamplerHandle		handle;
+		SamplerHandle		sampler;
 		SamplerStateDesc	desc;
+	};
+
+	struct CreateFenceCmd
+	{
+		FenceHandle			fence;
+		bool				createGpuFence;
+	};
+
+	struct InsertFenceCmd
+	{
+		FenceHandle			fence;
 	};
 
 	struct RenderCmd
@@ -225,6 +250,7 @@ struct RenderThreadCmd
 	union
 	{
 		ResizeBufferCmd			resizeBuffCmd;
+		CreateMeshCmd			createMeshCmd;
 		UpdateCameraCmd			updateCameraCmd;
 		UpdateMeshCmd			updateMeshCmd;
 		RenderCmd				renderCmd;
@@ -235,6 +261,9 @@ struct RenderThreadCmd
 		CreatePipelineCmd		createPipelineCmd;
 		CreateTextureCmd		createTextureCmd;
 		CreateSamplerCmd		createSamplerCmd;
+		
+		CreateFenceCmd			createFenceCmd;
+		InsertFenceCmd			insertFenceCmd;
 	};
 };
 
@@ -334,15 +363,23 @@ struct DoubleBufferCameraData : public DoubleBufferData < CameraData >
 
 BaseDoubleBufferData* BaseDoubleBufferData::dirtyLink;
 
+struct MeshRenderData
+{
+	u32			numVertices = 0;
+	u32			numIndices = 0;
+	u32			channelMask = 0;
+};
+
 struct Renderer
 {
 	FreeList<DoubleBufferCameraData, MAX_CAMERA>		cameraList;
-	FreeList<MeshData, MAX_MESH>						meshList;
+	FreeList<MeshRenderData, MAX_MESH>					meshList;
 	FreeList<VertexShaderData, MAX_SHADER>				vertexShaderList;
 	FreeList<PixelShaderData, MAX_SHADER>				pixelShaderList;
 	FreeList<PipelineData, MAX_PIPELINE>				pipelineList;
 	FreeList<TextureDesc, MAX_TEXTURE>					textureList;
 	FreeList<SamplerStateDesc, MAX_SAMPLER>				samplerList;
+	FreeList<Fence, MAX_FENCE>							fenceList;
 	FreeList<RenderQueue, MAX_RENDER_QUEUE>				renderQueueList; //generally one queue per worker thread
 	RenderQueue											*renderQueue[MAX_RENDER_QUEUE];
 	int													numQueue = 0;
@@ -359,161 +396,155 @@ RenderQueue* CreateRenderQueue(Renderer* renderer)
 	return queue;
 }
 
-MeshHandle	CreateMesh(RenderQueue* queue, u32 numVertices, u32 numIndices, u32 vertChannelMask)
-{
-	MeshHandle handle;
-	handle.id = queue->renderer->meshList.Alloc();
-	return handle;
-}
-
-void FreeMesh(RenderQueue* queue, MeshHandle handle) //TODO : cleanup render thread data
-{
-	MeshData* data = queue->renderer->meshList.Get(handle.id);
-	delete data->posList; data->posList = nullptr;
-	delete data->texcoordList; data->texcoordList = nullptr;
-	delete data->colorList; data->colorList = nullptr;
-	queue->renderer->meshList.Free(handle.id);
-}
-
-bool HasPos(u32 mask)
-{
-	return (mask & MeshData::POSITION) != 0;
-}
-
-bool HasTexcoord(u32 mask)
-{
-	return (mask & MeshData::TEXCOORD) != 0;
-}
-
-bool HasColor(u32 mask)
-{
-	return (mask & MeshData::COLOR) != 0;
-}
-
 YU_INTERNAL void BlockEnqueueCmd(RenderQueue* queue, RenderThreadCmd cmd)
 {
 	while (!queue->cmdList.Enqueue(cmd))
 		;
 }
 
-void UpdateMesh(RenderQueue* queue, MeshHandle handle, 
+YU_INTERNAL bool HasPos(u32 mask)
+{
+	return (mask & MeshData::POSITION) != 0;
+}
+
+YU_INTERNAL bool HasTexcoord(u32 mask)
+{
+	return (mask & MeshData::TEXCOORD) != 0;
+}
+
+YU_INTERNAL bool HasColor(u32 mask)
+{
+	return (mask & MeshData::COLOR) != 0;
+}
+
+YU_INTERNAL u32 VertexSize(u32 mask)
+{
+	UINT vertexSize = 0;
+	if (HasPos(mask))
+	{
+		vertexSize += sizeof(Vector3);
+	}
+	if (HasTexcoord(mask))
+	{
+		vertexSize += sizeof(Vector2);
+	}
+	if (HasColor(mask))
+	{
+		vertexSize += sizeof(Color);
+	}
+
+	return vertexSize;
+}
+
+MeshHandle	CreateMesh(RenderQueue* queue, u32 numVertices, u32 numIndices, u32 vertChannelMask)
+{
+	MeshHandle mesh;
+	mesh.id = queue->renderer->meshList.Alloc();
+	MeshRenderData* renderData = queue->renderer->meshList.Get(mesh.id);
+	renderData->channelMask = vertChannelMask;
+	renderData->numVertices = numVertices;
+	renderData->numIndices = numIndices;
+
+	RenderThreadCmd cmd;
+	cmd.type = RenderThreadCmd::CREATE_MESH;
+	cmd.createMeshCmd.mesh = mesh;
+	cmd.createMeshCmd.meshData = nullptr;
+	cmd.createMeshCmd.numVertices = numVertices;
+	cmd.createMeshCmd.numIndices = numIndices;
+	cmd.createMeshCmd.vertChannelMask = vertChannelMask;
+	BlockEnqueueCmd(queue, cmd);
+
+	return mesh;
+}
+
+void FreeMesh(RenderQueue* queue, MeshHandle mesh) //TODO : cleanup render thread data
+{
+	queue->renderer->meshList.Free(mesh.id);
+}
+
+/*
+YU_INTERNAL MeshData* CopyMesh(MeshData* originMesh, Allocator* allocator)
+{
+
+}
+*/
+
+void UpdateMesh(RenderQueue* queue, MeshHandle mesh, 
 	u32 startVert, u32 startIndex, 
 	MeshData* inputSubMesh)
 {
+
 	Renderer* renderer = queue->renderer;
-	//TODO: should use an update queue, so it's thread safe
-	MeshData* data = renderer->meshList.Get(handle.id);
 
-	if ((startVert + inputSubMesh->numVertices) > data->numVertices || data->channelMask != inputSubMesh->channelMask)
+	MeshRenderData* meshRenderData = renderer->meshList.Get(mesh.id);
+	if (meshRenderData->channelMask != inputSubMesh->channelMask)
 	{
-		Vector3* posList = nullptr;
-		Vector2* texcoordList = nullptr;
-		Color*	colorList = nullptr;
-
-		if (HasPos(inputSubMesh->channelMask))
-		{
-			posList = new Vector3[startVert + inputSubMesh->numVertices];
-			if (data->posList)
-				memcpy(posList, data->posList, sizeof(Vector3) * data->numVertices);
-		}
-		if (HasTexcoord(inputSubMesh->channelMask))
-		{
-			texcoordList = new Vector2[startVert + inputSubMesh->numVertices];
-			if (data->colorList)
-				memcpy(texcoordList, data->texcoordList, sizeof(Vector2) * data->numVertices);
-		}
-		if (HasColor(inputSubMesh->channelMask))
-		{
-			colorList = new Color[startVert + inputSubMesh->numVertices];
-			if (data->colorList)
-				memcpy(colorList, data->colorList, sizeof(Color) * data->numVertices);
-		}
-
-		delete data->posList; data->posList = posList;
-		delete data->texcoordList; data->texcoordList = texcoordList;
-		delete data->colorList; data->colorList = colorList;
-
-		data->numVertices = startVert + inputSubMesh->numVertices;
-		data->channelMask = inputSubMesh->channelMask;
+		Log("error: UpdateMesh trying to update mesh in different vertex layout\n");
+		return;
 	}
-
-	if (HasPos(inputSubMesh->channelMask))
+	if (startVert + inputSubMesh->numVertices > meshRenderData->numVertices)
 	{
-		memcpy(data->posList + sizeof(Vector3) * startVert, inputSubMesh->posList, sizeof(Vector3) *inputSubMesh->numVertices);
+		Log("error: UpdateMesh vertex number out of bound\n ");
+		return;
 	}
-	if (HasTexcoord(inputSubMesh->channelMask))
+	if (startIndex + inputSubMesh->numIndices > meshRenderData->numIndices)
 	{
-		memcpy(data->texcoordList + sizeof(Vector2) * startVert, inputSubMesh->texcoordList, sizeof(Vector2)  * inputSubMesh->numVertices);
-	}
-	if (HasColor(inputSubMesh->channelMask))
-	{
-		memcpy(data->colorList + sizeof(Color) * startVert, inputSubMesh->colorList, sizeof(Color)  * inputSubMesh->numVertices);
-	}
-
-	if (inputSubMesh->indices)
-	{
-		if ((startIndex + inputSubMesh->numIndices) > data->numIndices)
-		{
-			u32* indices = new u32[(startIndex + inputSubMesh->numIndices)];
-			if (data->indices)
-				memcpy(indices, data->indices, sizeof(u32) * (startIndex + inputSubMesh->numIndices));
-			delete data->indices;
-			data->indices = indices;
-		}
-
-		data->numIndices = (startIndex + inputSubMesh->numIndices);
-		memcpy(data->indices + sizeof(u32) * startIndex, inputSubMesh->indices, sizeof(u32) * inputSubMesh->numIndices);
+		Log("error: UpdateMesh index number out of bound\n");
+		return;
 	}
 
 	RenderThreadCmd cmd;
 	cmd.type = RenderThreadCmd::UPDATE_MESH;
-	cmd.updateMeshCmd.handle = handle;
+	cmd.updateMeshCmd.mesh = mesh;
+	cmd.updateMeshCmd.startVertex = startVert;
+	cmd.updateMeshCmd.startIndex = startIndex;
+	cmd.updateMeshCmd.meshData = inputSubMesh;
 	BlockEnqueueCmd(queue, cmd);
 }
 
 VertexShaderHandle CreateVertexShader(RenderQueue* queue, const VertexShaderAPIData& data)
 {
-	VertexShaderHandle handle;
-	handle.id = queue->renderer->vertexShaderList.Alloc();
+	VertexShaderHandle vertexShader;
+	vertexShader.id = queue->renderer->vertexShaderList.Alloc();
 
 	RenderThreadCmd cmd;
 	cmd.type = RenderThreadCmd::CREATE_VERTEX_SHADER;
-	cmd.createVSCmd.handle = handle;
+	cmd.createVSCmd.vertexShader = vertexShader;
 	cmd.createVSCmd.data = data;
 
 	BlockEnqueueCmd(queue, cmd);
 
-	return handle;
+	return vertexShader;
 }
 
 
 PixelShaderHandle CreatePixelShader(RenderQueue* queue, const PixelShaderAPIData& data)
 {
-	PixelShaderHandle handle;
-	handle.id = queue->renderer->pixelShaderList.Alloc();
+	PixelShaderHandle pixelShader;
+	pixelShader.id = queue->renderer->pixelShaderList.Alloc();
 
 	RenderThreadCmd cmd;
 	cmd.type = RenderThreadCmd::CREATE_PIXEL_SHADER;
-	cmd.createPSCmd.handle = handle;
+	cmd.createPSCmd.pixelShader = pixelShader;
 	cmd.createPSCmd.data = data;
 
 	BlockEnqueueCmd(queue, cmd);
 
-	return handle;
+	return pixelShader;
 }
 
 PipelineHandle CreatePipeline(RenderQueue* queue, const PipelineData& data)
 {
-	PipelineHandle handle;
-	handle.id = queue->renderer->pipelineList.Alloc();
+	PipelineHandle pipeline;
+	pipeline.id = queue->renderer->pipelineList.Alloc();
 	RenderThreadCmd cmd;
 	cmd.type = RenderThreadCmd::CREATE_PIPELINE;
-	cmd.createPipelineCmd.handle = handle;
+	cmd.createPipelineCmd.pipeline = pipeline;
 	cmd.createPipelineCmd.data = data;
 
 	BlockEnqueueCmd(queue, cmd);
 
-	return handle;
+	return pipeline;
 }
 
 int TexelSize(TextureFormat format)
@@ -589,29 +620,70 @@ size_t TextureSize(TextureFormat format, int width, int height, int depth, int m
 
 TextureHandle CreateTexture(RenderQueue* queue, const TextureDesc& desc, TextureMipData* initData)
 {
-	TextureHandle handle;
-	handle.id = queue->renderer->textureList.Alloc();
+	TextureHandle texture;
+	texture.id = queue->renderer->textureList.Alloc();
 	RenderThreadCmd cmd;
 	cmd.type = RenderThreadCmd::CREATE_TEXTURE;
-	cmd.createTextureCmd.handle = handle;
+	cmd.createTextureCmd.texture = texture;
 	cmd.createTextureCmd.desc = desc;
 	cmd.createTextureCmd.initData = initData;
 	BlockEnqueueCmd(queue, cmd);
 
-	return handle;
+	return texture;
 }
 
 SamplerHandle CreateSampler(RenderQueue* queue, const SamplerStateDesc& desc)
 {
-	SamplerHandle handle;
-	handle.id = queue->renderer->samplerList.Alloc();
+	SamplerHandle sampler;
+	sampler.id = queue->renderer->samplerList.Alloc();
 	RenderThreadCmd cmd;
 	cmd.type = RenderThreadCmd::CREATE_SAMPLER;
-	cmd.createSamplerCmd.handle = handle;
+	cmd.createSamplerCmd.sampler = sampler;
 	cmd.createSamplerCmd.desc = desc;
 	BlockEnqueueCmd(queue, cmd);
 
-	return handle;
+	return sampler;
+}
+
+FenceHandle CreateFence(RenderQueue* queue)
+{
+	FenceHandle fence;
+	fence.id = queue->renderer->fenceList.Alloc();
+	queue->renderer->fenceList.Get(fence.id)->cpuExecuted = false;
+	RenderThreadCmd cmd;
+	cmd.type = RenderThreadCmd::CREATE_FENCE;
+	cmd.createFenceCmd.fence = fence;
+	cmd.createFenceCmd.createGpuFence = false;
+	BlockEnqueueCmd(queue, cmd);
+
+	return fence;
+}
+
+void InsertFence(RenderQueue* queue, FenceHandle fence)
+{
+	RenderThreadCmd cmd;
+	cmd.type = RenderThreadCmd::INSERT_FENCE;
+	cmd.insertFenceCmd.fence = fence;
+	Flush(queue); //important: must ensure all previous commands are enqueued
+	BlockEnqueueCmd(queue, cmd);
+}
+
+bool IsCPUComplete(RenderQueue* queue, FenceHandle fenceHandle)
+{
+	Fence* fence = queue->renderer->fenceList.Get(fenceHandle.id);
+	return fence->cpuExecuted;
+}
+
+void WaitFence(RenderQueue* queue, FenceHandle fence) //TODO: consider proper wait
+{
+	while (!IsCPUComplete(queue, fence))
+		;
+}
+
+void Reset(RenderQueue* queue, FenceHandle fence)
+{
+	assert(queue->renderer->fenceList.Get(fence.id)->cpuExecuted == true);
+	queue->renderer->fenceList.Get(fence.id)->cpuExecuted = false;
 }
 
 CameraHandle CreateCamera(RenderQueue* queue)
@@ -630,14 +702,14 @@ CameraData GetCameraData(RenderQueue* queue, CameraHandle handle)
 	return queue->renderer->cameraList.Get(handle.id)->GetConst();
 }
 
-void UpdateCamera(RenderQueue* queue, CameraHandle handle, const CameraData& camera)
+void UpdateCamera(RenderQueue* queue, CameraHandle camera, const CameraData& cameraData)
 {
 	Renderer* renderer = queue->renderer;
 
 	RenderThreadCmd cmd;
 	cmd.type = RenderThreadCmd::UPDATE_CAMERA;
-	cmd.updateCameraCmd.handle = handle;
-	cmd.updateCameraCmd.camData = camera;
+	cmd.updateCameraCmd.camera = camera;
+	cmd.updateCameraCmd.camData = cameraData;
 	BlockEnqueueCmd(queue, cmd);
 }
 
@@ -666,13 +738,13 @@ void Render(RenderQueue* queue, CameraHandle cam, MeshHandle mesh, PipelineHandl
 	}
 ListFound:
 	
-	MeshData* meshData = queue->renderer->meshList.Get(mesh.id);
+	MeshRenderData* meshRenderData = queue->renderer->meshList.Get(mesh.id);
 	RenderCmd& cmd = list->cmd[list->cmdCount];
 	cmd.cam = cam;
 	cmd.mesh = mesh;
 	cmd.pipeline = pipeline;
 	cmd.startIndex = 0;
-	cmd.numIndex = meshData->numIndices;
+	cmd.numIndex = meshRenderData->numIndices;
 
 	{
 		cmd.resources.numPsTexture = resources.numPsTexture;
