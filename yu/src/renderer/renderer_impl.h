@@ -23,6 +23,8 @@ struct OvrController
 	ovrBool			 initialized = false;
 };
 
+
+#if defined YU_CC_MSVC
 void InitOvr(OvrController& controller)
 {
 	if (!controller.initialized)
@@ -42,6 +44,7 @@ void InitOvr(OvrController& controller)
 		}
 	}
 }
+#endif
 
 
 namespace yu
@@ -419,7 +422,7 @@ YU_INTERNAL bool HasColor(u32 mask)
 
 YU_INTERNAL u32 VertexSize(u32 mask)
 {
-	UINT vertexSize = 0;
+	u32 vertexSize = 0;
 	if (HasPos(mask))
 	{
 		vertexSize += sizeof(Vector3);

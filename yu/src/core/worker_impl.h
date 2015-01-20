@@ -201,7 +201,7 @@ int GetWorkerThreadIdx()
 
 void SubmitWorkItem(WorkItem* item, WorkItem* dep[], int numDep)
 {
-	WorkerThread* worker = GetWorkerThread();
+//	WorkerThread* workerThread = GetWorkerThread();
 	item->permits = -numDep;
 	for (int i = 0; i < numDep; i++)
 	{
