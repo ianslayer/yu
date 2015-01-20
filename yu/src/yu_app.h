@@ -5,27 +5,27 @@
 
 namespace yu
 {
-class System;
+class WindowManager;
 }
 
 @interface YuApp : NSApplication
 {
-	yu::System* system;
+	yu::WindowManager* winManager;
 }
 
 @property (assign) IBOutlet NSWindow* mainWin;
--(void) setSystem:(yu::System*) sys;
+-(void) setWindowManager:(yu::WindowManager*) mgr;
 
 -(void) run;
 @end
 
 @interface YuView : NSView<NSWindowDelegate>
 {
-	yu::System* system;
+	yu::WindowManager* winManager;
 	NSOpenGLContext *openGLContext;
 	NSOpenGLPixelFormat *pixelFormat;
 }
--(void) setSystem:(yu::System*) sys;
+-(void) setWindowManager:(yu::WindowManager*) mgr;
 -(void) initOpenGL;
 @end
 

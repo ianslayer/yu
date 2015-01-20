@@ -1,6 +1,7 @@
 #include "../core/thread.h"
 #include "../core/system.h"
 #include "../core/allocator.h"
+#include "../core/log.h"
 #include "shader.h"
 #include "renderer_impl.h"
 #include "gl_utility.h"
@@ -99,7 +100,7 @@ void InitRenderThread(const Window& win, const FrameBufferDesc& desc)
 	param.win = win;
 	param.desc = desc;
 	renderThread = CreateThread(RenderThread, &param);
-	CPUInfo cpuInfo = System::GetCPUInfo();
+	CPUInfo cpuInfo = SystemInfo::GetCPUInfo();
 	SetThreadAffinity(renderThread.handle, 1 << (cpuInfo.numLogicalProcessors - 1));
 	WaitForCondVar(param.initGLCV, param.initGLCS);
 	param.initGLCS.Unlock();

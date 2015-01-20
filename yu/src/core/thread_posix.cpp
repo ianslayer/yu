@@ -1,3 +1,6 @@
+#include "platform.h"
+#include <new>
+#include "allocator.h"
 #include "thread_impl.h"
 #include "string.h"
 #include "log.h"

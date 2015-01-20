@@ -1,12 +1,16 @@
 #include <ApplicationSErvices/ApplicationServices.h>
 #import <Cocoa/Cocoa.h>
 #import "yu_app.h"
-#include "thread.h"
-#include "yu.h"
 
-#include "system_impl.h"
 #include "../container/array.h"
 #include "../container/dequeue.h"
+
+#include "timer.h"
+#include "log_impl.h"
+#include "string_impl.h"
+#include "system_impl.h"
+#include "allocator_impl.h"
+#include "worker_impl.h"
 
 namespace yu
 {
@@ -16,7 +20,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 	{
 		case (WindowThreadCmd::CREATE_WINDOW):
 		{
-			CreateWinParam* param = (CreateWinParam*)cmd.cmd.createWinParam;
+			CreateWinParam* param = (CreateWinParam*)cmd.createWinParam;
 			param->winCreationCS.Lock();
 			Rect rect = param->rect;
 			Window window = {};
@@ -35,7 +39,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 			[NSApp activateIgnoringOtherApps:YES];
 			
 			YuView* view = [[YuView alloc] initWithFrame:winrect];
-			[view setSystem:gSystem];
+			[view setWindowManager:gWindowManager];
 			[win setContentView:view];
 			[win setAcceptsMouseMovedEvents:YES];
 			[win setDelegate:view];
@@ -43,7 +47,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 			
 			window.win = win;
 
-			((SystemImpl*)(gSystem->sysImpl))->windowList.PushBack(window);
+			(gWindowManager->mgrImpl)->windowList.PushBack(window);
 			param->win = window;
 			param->winCreationCS.Unlock();
 
@@ -58,9 +62,9 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 }
 
 @implementation YuApp
--(void) setSystem:(yu::System*) sys
+-(void) setWindowManager:(yu::WindowManager*) mgr
 {
-	system = sys;
+	winManager = mgr;
 }
 - (void) run
 {
@@ -82,9 +86,9 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
             [self sendEvent:event];
         }
 		
-		yu::SystemImpl* sysImpl = system->sysImpl;
+		yu::WindowManagerImpl* mgrImpl = winManager->mgrImpl;
 		yu::WindowThreadCmd cmd;
-		while (sysImpl->winThreadCmdQueue.Dequeue(cmd))
+		while (mgrImpl->winThreadCmdQueue.Dequeue(cmd))
 		{
 			ExecWindowCommand(cmd);
 		}
@@ -96,9 +100,9 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 @end
 
 @implementation YuView
--(void) setSystem:(yu::System*) sys
+-(void) setWindowManager:(yu::WindowManager*) winMgr
 {
-	system = sys;
+	winManager = winMgr;
 }
 
 -(NSOpenGLContext*) openGLContext
@@ -182,7 +186,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 	ev.mouseEvent.x = float(eventLocation.x);
 	ev.mouseEvent.y = float(winrect.size.height - eventLocation.y);
 	
-	system->sysImpl->inputQueue.Enqueue(ev);
+	winManager->EnqueueEvent(ev);
 }
  
 - (void)mouseUp:(NSEvent *)theEvent
@@ -198,7 +202,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 	ev.mouseEvent.x = float(eventLocation.x);
 	ev.mouseEvent.y = float(winrect.size.height - eventLocation.y);
 	
-	system->sysImpl->inputQueue.Enqueue(ev);
+	winManager->EnqueueEvent(ev);
 }
 
 - (void)rightMouseDown:(NSEvent *)theEvent
@@ -214,7 +218,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 	ev.mouseEvent.x = float(eventLocation.x);
 	ev.mouseEvent.y = float(winrect.size.height - eventLocation.y);
 	
-	system->sysImpl->inputQueue.Enqueue(ev);
+	winManager->EnqueueEvent(ev);
 }
 
 - (void)rightMouseUp:(NSEvent *)theEvent
@@ -230,7 +234,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 	ev.mouseEvent.x = float(eventLocation.x);
 	ev.mouseEvent.y = float(winrect.size.height - eventLocation.y);
 	
-	system->sysImpl->inputQueue.Enqueue(ev);
+	winManager->EnqueueEvent(ev);
 }
 
 -(void)mouseMoved:(NSEvent *)theEvent
@@ -246,7 +250,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 	ev.mouseEvent.x = float(eventLocation.x);
 	ev.mouseEvent.y = float(winrect.size.height - eventLocation.y);
 	
-	system->sysImpl->inputQueue.Enqueue(ev);
+	winManager->EnqueueEvent(ev);
 }
 
 -(void)keyDown:(NSEvent *)theEvent
@@ -266,14 +270,14 @@ namespace yu
 {
 bool PlatformInitSystem()
 {
-	gSystem->sysImpl = new SystemImpl();
-	[gYuApp setSystem: gSystem];
+	gWindowManager->mgrImpl = new WindowManagerImpl();
+	[gYuApp setWindowManager: gWindowManager];
 	return true;
 }
 
 #define MAX_DISPLAY 16
 
-int System::NumDisplays()
+int SystemInfo::NumDisplays()
 {
 	CGDirectDisplayID displayIds[MAX_DISPLAY];
 	uint32_t numDisplay;
@@ -321,7 +325,7 @@ NSScreen* ScreenFromDisplay(const Display& display)
 	return nullptr;
 }
 
-Display System::GetDisplay(int index)
+Display SystemInfo::GetDisplay(int index)
 {
 	CGDirectDisplayID displayIds[MAX_DISPLAY];
 	uint32_t numDisplay;
@@ -339,7 +343,7 @@ Display System::GetDisplay(int index)
 	return display;
 }
 
-Display System::GetMainDisplay()
+Display SystemInfo::GetMainDisplay()
 {
 	Display display = {};
 	//memset(&display, 0, sizeof(display));
@@ -348,7 +352,7 @@ Display System::GetMainDisplay()
 	return display;
 }
 
-int System::NumDisplayMode(const yu::Display &display)
+int SystemInfo::NumDisplayMode(const yu::Display &display)
 {
 	CFArrayRef displayModeList = CGDisplayCopyAllDisplayModes(display.id, NULL);
 	CFIndex totalModes = CFArrayGetCount(displayModeList);
@@ -357,7 +361,7 @@ int System::NumDisplayMode(const yu::Display &display)
 	return (int) totalModes;
 }
 
-DisplayMode System::GetDisplayMode(const yu::Display &display, int modeIndex)
+DisplayMode SystemInfo::GetDisplayMode(const yu::Display &display, int modeIndex)
 {
 	DisplayMode displayMode = {};
 	
@@ -378,7 +382,7 @@ DisplayMode System::GetDisplayMode(const yu::Display &display, int modeIndex)
 	return displayMode;
 }
 
-DisplayMode System::GetCurrentDisplayMode(const Display& display)
+DisplayMode SystemInfo::GetCurrentDisplayMode(const Display& display)
 {
 	DisplayMode displayMode;
 	CGDisplayModeRef mode = CGDisplayCopyDisplayMode(display.id);
@@ -399,18 +403,17 @@ void System::SetDisplayMode(const Display& display, int modeIndex)
 }
 */
 
-Window	System::CreateWin(const Rect& rect)
+Window	WindowManager::CreateWin(const Rect& rect)
 {
-	SystemImpl* sys = (SystemImpl*)(this->sysImpl);
 	CreateWinParam param;
 	WindowThreadCmd cmd;
 	param.rect = rect;
 
 	param.winCreationCS.Lock();
 	cmd.type = WindowThreadCmd::CREATE_WINDOW;
-	cmd.cmd.createWinParam = &param;
+	cmd.createWinParam = &param;
 
-	while (!sys->winThreadCmdQueue.Enqueue(cmd))
+	while (!mgrImpl->winThreadCmdQueue.Enqueue(cmd))
 	;
 
 	WaitForCondVar(param.winCreationCV, param.winCreationCS);
@@ -419,14 +422,14 @@ Window	System::CreateWin(const Rect& rect)
 
 	return param.win;}
 
-void System::CloseWin(yu::Window &win)
+void WindowManager::CloseWin(yu::Window &win)
 {
-	for(int i = 0; i < sysImpl->windowList.Size(); i++)
+	for(int i = 0; i < mgrImpl->windowList.Size(); i++)
 	{
-		if(win.win == sysImpl->windowList[i].win)
+		if(win.win == mgrImpl->windowList[i].win)
 		{
 			[win.win release];
-			sysImpl->windowList.Erase(i);
+			mgrImpl->windowList.Erase(i);
 			break;
 		}
 	}
