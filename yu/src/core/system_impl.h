@@ -238,4 +238,10 @@ bool WindowManager::DequeueInputEvent(InputEvent& ev)
 	return mgrImpl->inputQueue.Dequeue(ev);
 }
 
+void WindowManager::EnqueueEvent(InputEvent& ev)
+{
+	ev.timeStamp = SampleTime().time;
+	mgrImpl->inputQueue.Enqueue(ev);
+}
+
 }

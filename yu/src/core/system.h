@@ -199,6 +199,7 @@ struct WindowManager
 	void				CloseWin(Window& win);
 	
 	bool				DequeueInputEvent(InputEvent& ev);
+	void				EnqueueEvent(InputEvent& ev);
 
 	Window				mainWindow;
 	struct WindowManagerImpl*	mgrImpl;

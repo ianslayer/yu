@@ -51,7 +51,7 @@ void Timer::Start()
 	time = SampleTime();
 }
 
-void Timer::Finish()
+void Timer::Stop()
 {
 	Time finishTime = SampleTime();
 	time.time = finishTime.time - time.time;
@@ -104,7 +104,7 @@ u64 EstimateCPUFrequency()
 		Time curTime = SampleTime();
 		duration = curTime - startCount;
 	}
-	timer.Finish();
+	timer.Stop();
 	SetThreadAffinity(currentThreadHandle, originAffinity);
 
 	return timer.Duration().cycle;
