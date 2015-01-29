@@ -495,13 +495,13 @@ WorkItem* TestRenderItem()
 
 	UpdateMesh(testRenderer->queue, testRenderer->triangle, 0, 0, &testRenderer->triangleData);
 
-	/*
+	YU_LOCAL_PERSIST Vector3 squarePos[4] = { _Vector3(-10.f, -10.f, -5.f), _Vector3(-10.f, 10.f, -5.f), _Vector3(10.f, -10.f, -5.f), _Vector3(10.f, 10.f, -5.f) };
+	YU_LOCAL_PERSIST Color squareColor[4] = {};
+	YU_LOCAL_PERSIST u32 squareIndices[6] = { 0, 1, 2, 2, 1, 3};
 	testRenderer->square = CreateMesh(testRenderer->queue, 4, 6, MeshData::POSITION | MeshData::COLOR);
-	MeshData squareData = {};
+	
+	YU_LOCAL_PERSIST  MeshData squareData = {};
 	squareData.channelMask = MeshData::POSITION | MeshData::COLOR;
-	Vector3 squarePos[4] = { _Vector3(-10.f, -10.f, -5.f), _Vector3(-10.f, 10.f, -5.f), _Vector3(10.f, -10.f, -5.f), _Vector3(10.f, 10.f, -5.f) };
-	Color squareColor[4] = {};
-	u32 squareIndices[6] = { 0, 1, 2, 2, 1, 3};
 
 	squareData.posList = squarePos;
 	squareData.colorList = squareColor;
@@ -509,18 +509,21 @@ WorkItem* TestRenderItem()
 	squareData.numVertices = 4;
 	squareData.numIndices = 6;
 	UpdateMesh(testRenderer->queue, testRenderer->square, 0, 0, &squareData);
-	*/
+	
+#if defined YU_OS_WIN32
+	VertexShaderAPIData vsData = LoadVSFromFile("data/shaders/flat_vs.hlsl");
+	PixelShaderAPIData psData = LoadPSFromFile("data/shaders/flat_ps.hlsl");
+#elif defined YU_OS_MAC
+	VertexShaderAPIData vsData = LoadVSFromFile("data/shaders/flat_vs.glsl");
+	PixelShaderAPIData psData = LoadPSFromFile("data/shaders/flat_ps.glsl");
+#endif
+	testRenderer->vs = CreateVertexShader(testRenderer->queue, vsData);
+	testRenderer->ps = CreatePixelShader(testRenderer->queue, psData);
+	PipelineData pipelineData;
+	pipelineData.vs = testRenderer->vs;
+	pipelineData.ps = testRenderer->ps;
 
-	//VertexShaderAPIData vsData = CompileVSFromFile("data/shaders/flat_vs.hlsl");
-	//PixelShaderAPIData psData = CompilePSFromFile("data/shaders/flat_ps.hlsl");
-
-	//testRenderer->vs = CreateVertexShader(testRenderer->queue, vsData);
-	//testRenderer->ps = CreatePixelShader(testRenderer->queue, psData);
-	//PipelineData pipelineData;
-	//pipelineData.vs = testRenderer->vs;
-	//pipelineData.ps = testRenderer->ps;
-
-	//testRenderer->pipeline = CreatePipeline(testRenderer->queue, pipelineData);
+	testRenderer->pipeline = CreatePipeline(testRenderer->queue, pipelineData);
 
 	testRenderer->camera = CreateCamera(testRenderer->queue);
 	CameraData camData = DefaultCamera();
@@ -548,8 +551,8 @@ WorkItem* TestRenderItem()
 
 	InsertFence(testRenderer->queue, testRenderer->createResourceFence);
 
-	/*
-	Matrix4x4 viewProjMatrix = camData.PerspectiveMatrix() * camData.ViewMatrix();
+	
+	Matrix4x4 viewProjMatrix = camData.PerspectiveMatrixGl() * camData.ViewMatrix();
 	Matrix4x4 viewMatrix = camData.ViewMatrix();
 	Vector4 viewPos[4];
 	Vector4 projPos[4];
@@ -559,7 +562,7 @@ WorkItem* TestRenderItem()
 		projPos[i] = viewProjMatrix * _Vector4(squarePos[i], 1);
 		projPos[i] /= projPos[i].w;
 	}
-	*/
+	
 	return item;
 }
 

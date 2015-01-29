@@ -36,6 +36,20 @@ char * strncpy ( char * destination, const char * source, size_t num  )
 #endif
 }
 
+char ToLowerCase(char c)
+{
+	if( c <= 'Z' && c >= 'A' )
+		return c - 'A' + 'a';
+	return c;
+}
+
+char ToUpperCase(char c)
+{
+	if( c <= 'z' && c >= 'a' )
+		return c - 'a' + 'A';
+	return c;
+}
+
 StringBuilder::StringBuilder(char* buf, size_t _bufSize)
 	: strBuf(buf), bufSize(_bufSize), strLen(0)
 {
