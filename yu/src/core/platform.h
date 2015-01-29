@@ -35,12 +35,19 @@
 //compiler
 #if defined(_MSC_VER)
 #	define YU_CC_MSVC
-#elif defined(__GNUC__)
-#  define YU_CC_GNU
 #elif defined(__clang__)
 #  define YU_CC_CLANG
+#elif defined(__GNUC__)
+#  define YU_CC_GNU
 #else
 #  error yu does not support this compiler
+#endif
+
+//turn off warning
+#if defined(YU_CC_MSVC)
+
+#elif defined(YU_CC_CLANG)
+//#	pragma clang diagnostic ignored "-Wunused-variable"
 #endif
 
 //byte order

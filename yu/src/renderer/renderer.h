@@ -78,13 +78,11 @@ struct CameraData
 {
 	Matrix4x4 ViewMatrix() const;
 	Matrix4x4 InvViewMatrix() const;
-	Matrix4x4 PerspectiveMatrix() const;
-	Matrix4x4 InvPerspectiveMatrix() const;
-
-	Matrix4x4 ScreenToRasterMatrix() const;
-	Matrix4x4 RasterToScreenMatrix() const;
-	Matrix4x4 RasterToCameraMatrix() const;
-
+	Matrix4x4 PerspectiveMatrixDx() const;
+	Matrix4x4 InvPerspectiveMatrixDx() const;
+	Matrix4x4 PerspectiveMatrixGl() const;
+	Matrix4x4 InvPerspectiveMatrixGl() const;
+	
 	void      SetXFov(float angleRad, float filmWidth, float filmHeight);
 
 	void      DeriveProjectionParamter(float filmWidth, float filmHeight);

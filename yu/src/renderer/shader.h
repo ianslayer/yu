@@ -14,3 +14,9 @@
 #endif
 #	include "shader_gl.h"
 #endif
+
+namespace yu
+{
+VertexShaderAPIData LoadVSFromFile(const char* path);
+PixelShaderAPIData LoadPSFromFile(const char* path);
+}
