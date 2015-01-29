@@ -5,7 +5,6 @@
 #include "renderer.h"
 
 #include "../../3rd_party/ovr/Src/OVR_CAPI.h"
-
 #if defined YU_CC_MSVC
 	#if defined YU_CPU_X86_64
 		#pragma comment(lib, "../3rd_party/ovr/Lib/x64/VS2013/libovr64.lib")
@@ -64,8 +63,8 @@ CameraData DefaultCamera()
 	cam.xFov = 3.14f / 2.f;
 
 	//projection
-	cam.n = 3000.f;
-	cam.f = 0.1f;
+	cam.n = 0.1f;
+	cam.f = 3000.f;
 
 	cam.DeriveProjectionParamter(1280, 720);
 
@@ -99,29 +98,38 @@ void CameraData::SetXFov(float angleRad, float filmWidth, float filmHeight)
 
 void CameraData::DeriveProjectionParamter(float filmWidth, float filmHeight)
 {
-	r = f* tanf(xFov/2.f);
+	r = n* tanf(xFov/2.f);
 	t = r * filmHeight / filmHeight;
 
 	l = -r;
 	b = -t;
 }
 
-Matrix4x4 CameraData::PerspectiveMatrix() const
+Matrix4x4 CameraData::PerspectiveMatrixDx() const
 {
-
 	float width = r - l;
 	float height = t - b;
 
 	//use complementary z
-	float zNear = n;
-	float zFar =f;
+	float depth = n - f;
 
-	float depth = zFar - zNear;
-
-	return Scale(_Vector3(1, -1, 1)) * Matrix4x4(2.f * zFar / width, 0.f, -(l + r) / width, 0.f,
-					0.f, 2.f * zFar / height, -(t + b) / height,0.f,
-					0.f, 0.f, zFar / depth, -(zFar * zNear) / depth,
+	return Scale(_Vector3(1, -1, 1)) * Matrix4x4(2.f * n / width, 0.f, -(l + r) / width, 0.f,
+					0.f, 2.f * n / height, -(t + b) / height,0.f,
+					0.f, 0.f, n/ depth, -(n * f) / depth,
 					0.f, 0.f, 1.f, 0.f);
+}
+
+Matrix4x4 CameraData::PerspectiveMatrixGl() const
+{
+	float width = r - l;
+	float height = t - b;
+
+	float depth = n - f;
+	
+	return Scale(_Vector3(1, -1, 1)) * Matrix4x4(2.f * n / width, 0.f, (l + r) / width, 0.f,
+					0.f, 2.f * n / height, (t + b) / height,0.f,
+					0.f, 0.f, -(n + f) / depth, (2.f * n * f) / depth,
+					0.f, 0.f, -1.f, 0.f);
 }
 
 #define MAX_CAMERA 256
@@ -366,6 +374,13 @@ struct DoubleBufferCameraData : public DoubleBufferData < CameraData >
 
 BaseDoubleBufferData* BaseDoubleBufferData::dirtyLink;
 
+YU_PRE_ALIGN(16)
+struct CameraConstant
+{
+	Matrix4x4 viewMatrix;
+	Matrix4x4 projectionMatrix;
+} YU_POST_ALIGN(16);
+
 struct MeshRenderData
 {
 	u32			numVertices = 0;
@@ -437,6 +452,30 @@ YU_INTERNAL u32 VertexSize(u32 mask)
 	}
 
 	return vertexSize;
+}
+
+YU_INTERNAL void InterleaveVertexBuffer(void* vertexBuffer, MeshData* meshData, u32 channelMask, u32 startVertex, u32 numVertices)
+{
+	u8* vertex = (u8*) vertexBuffer;
+	for (u32 i = startVertex; i < startVertex + numVertices; i++)
+	{
+		if (HasPos(channelMask) && HasPos(meshData->channelMask) )
+		{
+			*((Vector3*)vertex) = meshData->posList[i];
+				vertex += sizeof(Vector3);
+		}
+		if (HasTexcoord(channelMask) && HasTexcoord(meshData->channelMask))
+		{
+			*((Vector2*)vertex) = meshData->texcoordList[i];
+			vertex += sizeof(Vector2);
+		}
+		if (HasColor(channelMask) && HasColor(meshData->channelMask))
+		{
+			*((Color*)vertex) = meshData->colorList[i];
+			vertex += sizeof(Color);
+		}
+	}
+	
 }
 
 MeshHandle	CreateMesh(RenderQueue* queue, u32 numVertices, u32 numIndices, u32 vertChannelMask)
@@ -558,6 +597,10 @@ int TexelSize(TextureFormat format)
 	case TEX_FORMAT_R8G8B8A8_UNORM_SRGB:
 		return 4;
 
+	case TEX_FORMAT_UNKNOWN:
+	case NUM_TEX_FORMATS:
+	default:
+	;
 	}
 	Log("error: unknown texture format\n");
 	assert(0);

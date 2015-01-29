@@ -1,9 +1,5 @@
-#include "platform.h"
 #include <new>
-#include "allocator.h"
 #include "thread_impl.h"
-#include "string.h"
-#include "log.h"
 
 namespace yu
 {
@@ -172,8 +168,8 @@ void NotifyAllCondVar(CondVar& cv)
 	pthread_cond_broadcast(&cv.cv);
 }
 
-static char yuSemName[128];
-static std::atomic<unsigned int> semName;
+YU_GLOBAL char yuSemName[128];
+YU_GLOBAL std::atomic<unsigned int> semName;
 Semaphore::Semaphore(int initCount, int maxCount)
 {
 	unsigned int name = semName.fetch_add(1);

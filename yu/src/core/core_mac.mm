@@ -1,19 +1,56 @@
 #include <ApplicationSErvices/ApplicationServices.h>
 #import <Cocoa/Cocoa.h>
+#include <mach/mach_time.h>
 #import "yu_app.h"
 
 #include "../container/array.h"
 #include "../container/dequeue.h"
 
-#include "timer.h"
 #include "log_impl.h"
+#include "timer_impl.h"
 #include "string_impl.h"
 #include "system_impl.h"
 #include "allocator_impl.h"
+#include "thread_posix_impl.h"
 #include "worker_impl.h"
+#include "file_posix_impl.h"
 
 namespace yu
 {
+
+void InitSysTime()
+{
+	mach_timebase_info_data_t timeInfo;
+	mach_timebase_info(&timeInfo);
+	timerFrequency = timeInfo.numer / timeInfo.denom;
+
+	initCycle = SampleCycle();
+	cpuFrequency = EstimateCPUFrequency();
+	
+	initTime = SampleTime();
+
+	Log("estimated cpu freq: %llu\n", cpuFrequency);
+	Log("timer freq: %llu\n", timerFrequency);
+}
+
+Time SampleTime()
+{
+	Time time;
+	time.time = mach_absolute_time();
+	return time;
+}
+
+f64 ConvertToMs(const Time& time)
+{
+	mach_timebase_info_data_t timeInfo;
+	mach_timebase_info(&timeInfo);
+	
+	f64 ret = ((time.time * timeInfo.numer) / (timeInfo.denom)) / (1000000.0);
+	
+	return ret;
+}
+
+
 void ExecWindowCommand(WindowThreadCmd& cmd)
 {
 	switch (cmd.type)
@@ -134,7 +171,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 		kCGLPFAColorSize, 24,
 		kCGLPFADepthSize, 16,
 		0*/
-//        NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersion3_2Core,
+        NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersion3_2Core,
 //        NSOpenGLPFAWindow,
         NSOpenGLPFADoubleBuffer,
         NSOpenGLPFADepthSize, 24,
@@ -178,8 +215,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 	NSPoint eventLocation = [theEvent locationInWindow];
 	yu::InputEvent ev = {};
 	ev.type = yu::InputEvent::MOUSE;
-	ev.timeStamp = yu::SampleTime().time;
-	
+
 	NSRect winrect = [self bounds];
 	
 	ev.mouseEvent.type = yu::InputEvent::MouseEvent::L_BUTTON_DOWN;
@@ -194,8 +230,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 	NSPoint eventLocation = [theEvent locationInWindow];
 	yu::InputEvent ev = {};
 	ev.type = yu::InputEvent::MOUSE;
-	ev.timeStamp = yu::SampleTime().time;
-	
+
 	NSRect winrect = [self bounds];
 	
 	ev.mouseEvent.type = yu::InputEvent::MouseEvent::L_BUTTON_UP;
@@ -210,8 +245,6 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 	NSPoint eventLocation = [theEvent locationInWindow];
 	yu::InputEvent ev = {};
 	ev.type = yu::InputEvent::MOUSE;
-	ev.timeStamp = yu::SampleTime().time;
-	
 	NSRect winrect = [self bounds];
 	
 	ev.mouseEvent.type = yu::InputEvent::MouseEvent::R_BUTTON_DOWN;
@@ -226,8 +259,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 	NSPoint eventLocation = [theEvent locationInWindow];
 	yu::InputEvent ev = {};
 	ev.type = yu::InputEvent::MOUSE;
-	ev.timeStamp = yu::SampleTime().time;
-	
+
 	NSRect winrect = [self bounds];
 	
 	ev.mouseEvent.type = yu::InputEvent::MouseEvent::R_BUTTON_UP;
@@ -242,8 +274,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 	NSPoint eventLocation = [theEvent locationInWindow];
 	yu::InputEvent ev = {};
 	ev.type = yu::InputEvent::MOUSE;
-	ev.timeStamp = yu::SampleTime().time;
-	
+
 	NSRect winrect = [self bounds];
 	
 	ev.mouseEvent.type = yu::InputEvent::MouseEvent::MOVE;
@@ -255,12 +286,30 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 
 -(void)keyDown:(NSEvent *)theEvent
 {
-
+	yu::InputEvent ev = {};
+	ev.type = yu::InputEvent::KEYBOARD;
+	ev.keyboardEvent.type = yu::InputEvent::KeyboardEvent::DOWN;
+	unichar key = [[theEvent charactersIgnoringModifiers] characterAtIndex:0];
+	if(key >= 0 && key < 256)
+	{
+		char asciiKey = yu::ToUpperCase((char) key);
+		ev.keyboardEvent.key = asciiKey;
+		winManager->EnqueueEvent(ev);
+	}
 }
 
 -(void)keyUp:(NSEvent *)theEvent
 {
-
+	yu::InputEvent ev = {};
+	ev.type = yu::InputEvent::KEYBOARD;
+	ev.keyboardEvent.type = yu::InputEvent::KeyboardEvent::UP;
+	unichar key = [[theEvent charactersIgnoringModifiers] characterAtIndex:0];
+	if(key >= 0 && key < 256)
+	{
+		char asciiKey = yu::ToUpperCase((char) key);
+		ev.keyboardEvent.key = asciiKey;
+		winManager->EnqueueEvent(ev);
+	}
 }
 
 @end

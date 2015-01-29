@@ -1,4 +1,4 @@
-#include "../math/vector.h"
+`#include "../math/vector.h"
 #include "../container/dequeue.h"
 #include "../core/allocator.h"
 #include "../core/system.h"
@@ -39,12 +39,6 @@ struct MeshDataDx11
 	DxResourcePtr<ID3D11Buffer>			vertexBuffer;
 	DxResourcePtr<ID3D11Buffer>			indexBuffer;
 	DxResourcePtr<ID3D11InputLayout>	inputLayout;
-};
-
-struct CameraConstant
-{
-	Matrix4x4 viewMatrix;
-	Matrix4x4 projectionMatrix;
 };
 
 struct CameraDataDx11
@@ -876,7 +870,7 @@ YU_INTERNAL void ExecRenderCmd(RendererDx11* renderer, RenderQueue* queue, int r
 		PipelineHandle& pipelineHandle = cmd.pipeline;
 		RenderResource& resources = cmd.resources;
 
-		CameraData* data = &renderer->cameraList.Get(camHandle.id)->GetMutable();
+		//CameraData* data = &renderer->cameraList.Get(camHandle.id)->GetMutable();
 
 		gDx11Device->d3d11DeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
