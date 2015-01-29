@@ -445,7 +445,7 @@ void Render(TestRenderer* renderer)
 
 	//WaitFence(renderer->queue, renderer->createResourceFence);
 	//for (int i = 0; i < 1000; i++)
-	//Render(renderer->queue, renderer->camera, renderer->square, renderer->pipeline, resource);
+	Render(renderer->queue, renderer->camera, renderer->square, renderer->pipeline, resource);
 	Flush(renderer->queue);
 	Swap(renderer->queue, true);
 }
