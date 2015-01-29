@@ -1,4 +1,4 @@
-`#include "../math/vector.h"
+#include "../math/vector.h"
 #include "../container/dequeue.h"
 #include "../core/allocator.h"
 #include "../core/system.h"
@@ -618,7 +618,7 @@ YU_INTERNAL void ExecUpdateCameraCmd(RendererDx11* renderer, CameraHandle camera
 	CameraDataDx11* dx11Data = &renderer->dx11CameraList[camera.id];
 	CameraConstant camConstant;
 	camConstant.viewMatrix = data->ViewMatrix();
-	camConstant.projectionMatrix = data->PerspectiveMatrix();
+	camConstant.projectionMatrix = data->PerspectiveMatrixDx();
 
 	if (!dx11Data->constantBuffer)
 	{

@@ -134,4 +134,14 @@ PixelShaderAPIData CompilePSFromFile(const char* path)
 	return data;
 }
 
+VertexShaderAPIData LoadVSFromFile(const char* path)
+{
+	return CompileVSFromFile(path);
+}
+
+PixelShaderAPIData LoadPSFromFile(const char* path)
+{
+	return CompilePSFromFile(path);
+}
+
 }
