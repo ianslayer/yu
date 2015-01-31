@@ -1,3 +1,6 @@
+#include "renderer.h"
+#if defined YU_DX11
+
 #include "../core/log.h"
 #include "../core/file.h"
 #include "shader_dx11.h"
@@ -145,3 +148,5 @@ PixelShaderAPIData LoadPSFromFile(const char* path)
 }
 
 }
+
+#endif

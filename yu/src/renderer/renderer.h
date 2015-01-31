@@ -215,5 +215,13 @@ void				InitRenderThread(const Window& win, const FrameBufferDesc& desc);
 
 }
 
+#if defined YU_OS_MAC || defined YU_FORCE_GL
+#	define YU_GL
+#	define YU_GRAPHICS_API YU_GL
+#elif defined YU_OS_WIN32
+#	define YU_DX11
+#	define YU_GRAPHICS_API YU_DX11
+#endif
+
 
 #endif

@@ -93,9 +93,8 @@ inline Matrix2x2 Matrix2x2::operator * (const Matrix2x2& mat) const
 	return dst *= mat;
 }
 
-class Matrix3x3
+struct Matrix3x3
 {
-public: 
 	Matrix3x3(){};
 	Matrix3x3(float m00, float m01, float m02,
 		float m10, float m11, float m12,
@@ -113,14 +112,13 @@ public:
 	Matrix3x3 operator * (const Matrix3x3& mat) const;
 
 	void MakeIdentity();
-	Matrix3x3  Transpose();
+
 	Matrix3x3& TransposeSelf();
 	YU_CLASS_FUNCTION Matrix3x3 RotateAxis(const Vector3& vec, float rad);
 
     float* FloatPtr();
     const float* FloatPtr() const;
 
-private:
 	Vector3 row[3];
 };
 
@@ -208,12 +206,12 @@ inline void Matrix3x3::MakeIdentity()
 	row[2].x = 0.f; row[2].y = 0.f; row[2].z = 1.f;
 }
 
-inline Matrix3x3 Matrix3x3::Transpose()
+inline Matrix3x3 Transpose(const Matrix3x3& m)
 {
 	return Matrix3x3(
-		row[0].x, row[1].x, row[2].x,
-		row[0].y, row[1].y, row[2].y,
-		row[0].z, row[1].z, row[2].z
+		m.row[0].x, m.row[1].x, m.row[2].x,
+		m.row[0].y, m.row[1].y, m.row[2].y,
+		m.row[0].z, m.row[1].z, m.row[2].z
 	);
 }
 
@@ -259,9 +257,8 @@ inline const float* Matrix3x3::FloatPtr() const
     return reinterpret_cast<const float*> (this);
 }
 
-class Matrix4x4
+struct Matrix4x4
 {
-public:
    Matrix4x4(){}
    Matrix4x4(float m00, float m01, float m02, float m03,
                       float m10, float m11, float m12, float m13,
@@ -293,11 +290,8 @@ public:
    const float* FloatPtr() const;
    float* FloatPtr();
 
-   Matrix4x4  Transpose();
    Matrix4x4& TransposeSelf();
 
-private:
-   
    Vector4 row[4];
 };
 
@@ -452,13 +446,13 @@ inline Matrix4x4 operator*(float a, const Matrix4x4& mat)
 	);
 }
 
-inline Matrix4x4 Matrix4x4::Transpose()
+inline Matrix4x4 Transpose(const Matrix4x4& m)
 {
 	return Matrix4x4(
-			row[0][0], row[1][0], row[2][0], row[3][0],
-			row[0][1], row[1][1], row[2][1], row[3][1],
-			row[0][2], row[1][2], row[2][2], row[3][2],
-			row[0][3], row[1][3], row[2][3], row[3][3]
+		m.row[0][0], m.row[1][0], m.row[2][0], m.row[3][0],
+		m.row[0][1], m.row[1][1], m.row[2][1], m.row[3][1],
+		m.row[0][2], m.row[1][2], m.row[2][2], m.row[3][2],
+		m.row[0][3], m.row[1][3], m.row[2][3], m.row[3][3]
 	);
 }
 
@@ -575,7 +569,7 @@ inline Matrix4x4 InverseAffine(const Matrix4x4& m)
               m[1][0], m[1][1], m[1][2],
               m[2][0], m[2][1], m[2][2]);
     
-    Matrix3x3 invM = orien.Transpose();
+    Matrix3x3 invM = Transpose(orien);
     Vector3 invTranslation = - (invM * _Vector3(m[0][3], m[1][3], m[2][3]));
     
     return Matrix4x4(invM[0][0], invM[0][1], invM[0][2], invTranslation[0],

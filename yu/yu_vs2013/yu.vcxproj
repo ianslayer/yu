@@ -136,7 +136,10 @@
     <ClCompile Include="..\src\core\core_win32.cpp" />
     <ClCompile Include="..\src\core\crc32.cpp" />
     <ClCompile Include="..\src\main_win32.cpp" />
+    <ClCompile Include="..\src\renderer\gl3w.cpp" />
+    <ClCompile Include="..\src\renderer\gl_win32.cpp" />
     <ClCompile Include="..\src\renderer\renderer_dx11.cpp" />
+    <ClCompile Include="..\src\renderer\renderer_gl.cpp" />
     <ClCompile Include="..\src\renderer\shader_compiler_dx11.cpp" />
     <ClCompile Include="..\src\sound\sound_wasapi.cpp" />
     <ClCompile Include="..\src\stargazer\common.cpp" />
@@ -171,11 +174,15 @@
     <ClInclude Include="..\src\math\vector.h" />
     <ClInclude Include="..\src\math\yu_math.h" />
     <ClInclude Include="..\src\renderer\color.h" />
+    <ClInclude Include="..\src\renderer\gl3w.h" />
+    <ClInclude Include="..\src\renderer\glcorearb.h" />
+    <ClInclude Include="..\src\renderer\gl_utility.h" />
     <ClInclude Include="..\src\renderer\renderer.h" />
     <ClInclude Include="..\src\renderer\renderer_impl.h" />
     <ClInclude Include="..\src\renderer\resource_ptr_dx.h" />
     <ClInclude Include="..\src\renderer\shader.h" />
     <ClInclude Include="..\src\renderer\shader_dx11.h" />
+    <ClInclude Include="..\src\renderer\wglext.h" />
     <ClInclude Include="..\src\sound\sound.h" />
     <ClInclude Include="..\src\stargazer\work_map.h" />
     <ClInclude Include="..\src\yu.h" />
