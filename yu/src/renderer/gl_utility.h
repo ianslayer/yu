@@ -3,7 +3,10 @@
 
 #include "../core/platform.h"
 
-#if defined YU_OS_MAC
+#if defined YU_OS_WIN32
+	#include "gl3w.h" 
+	#include "wglext.h"
+#elif defined YU_OS_MAC
     #include <OpenGL/gl3.h>
     #include <OpenGL/gl3ext.h>
     #include <OpenGL/OpenGL.h>
