@@ -383,6 +383,7 @@ struct TestRenderer : public InputData
 
 	MeshHandle	triangle;
 	MeshHandle square;
+	MeshHandle screenQuad;
 	RenderQueue* queue;
 
 	TextureMipData texData;
@@ -441,11 +442,14 @@ void Render(TestRenderer* renderer)
 
 	Render(renderer->queue, renderer->camera, renderer->triangle, renderer->pipeline, resource);
 	
-	InsertFence(renderer->queue, renderer->createResourceFence);
+	//InsertFence(renderer->queue, renderer->createResourceFence);
 
 	//WaitFence(renderer->queue, renderer->createResourceFence);
 	//for (int i = 0; i < 1000; i++)
 	Render(renderer->queue, renderer->camera, renderer->square, renderer->pipeline, resource);
+
+	Render(renderer->queue, renderer->camera, renderer->screenQuad, renderer->pipeline, resource);
+
 	Flush(renderer->queue);
 	Swap(renderer->queue, true);
 }
@@ -475,6 +479,7 @@ WorkItem* TestRenderItem()
 
 	testRenderer->createResourceFence = CreateFence(testRenderer->queue);
 
+	
 	testRenderer->triangle = CreateMesh(testRenderer->queue, 3, 3, MeshData::POSITION | MeshData::COLOR);
 
 	testRenderer->trianglePos[0] = _Vector3(0, 5, 5);
@@ -494,6 +499,7 @@ WorkItem* TestRenderItem()
 	testRenderer->triangleData.numIndices = 3;
 
 	UpdateMesh(testRenderer->queue, testRenderer->triangle, 0, 0, &testRenderer->triangleData);
+	
 
 	YU_LOCAL_PERSIST Vector3 squarePos[4] = { _Vector3(-10.f, -10.f, -5.f), _Vector3(-10.f, 10.f, -5.f), _Vector3(10.f, -10.f, -5.f), _Vector3(10.f, 10.f, -5.f) };
 	YU_LOCAL_PERSIST Color squareColor[4] = {};
@@ -510,10 +516,22 @@ WorkItem* TestRenderItem()
 	squareData.numIndices = 6;
 	UpdateMesh(testRenderer->queue, testRenderer->square, 0, 0, &squareData);
 	
-#if defined YU_OS_WIN32
+	YU_LOCAL_PERSIST Vector3 screenQuadPos[4] = { _Vector3(-0.5f, -0.5f, 0.5f), _Vector3(-0.5f, 0.5f, 0.5f), _Vector3(0.5f, -0.5f, 0.5f), _Vector3(0.5f, 0.5f, 0.5f) };
+	testRenderer->screenQuad = CreateMesh(testRenderer->queue, 4, 6, MeshData::POSITION | MeshData::COLOR);
+	YU_LOCAL_PERSIST  MeshData screenQuadData = {};
+	screenQuadData.channelMask = MeshData::POSITION | MeshData::COLOR;
+
+	screenQuadData.posList = screenQuadPos;
+	screenQuadData.colorList = squareColor;
+	screenQuadData.indices = squareIndices;
+	screenQuadData.numVertices = 4;
+	screenQuadData.numIndices = 6;
+	UpdateMesh(testRenderer->queue, testRenderer->screenQuad, 0, 0, &screenQuadData);
+	
+#if defined YU_DX11
 	VertexShaderAPIData vsData = LoadVSFromFile("data/shaders/flat_vs.hlsl");
 	PixelShaderAPIData psData = LoadPSFromFile("data/shaders/flat_ps.hlsl");
-#elif defined YU_OS_MAC
+#elif defined YU_GL
 	VertexShaderAPIData vsData = LoadVSFromFile("data/shaders/flat_vs.glsl");
 	PixelShaderAPIData psData = LoadPSFromFile("data/shaders/flat_ps.glsl");
 #endif
@@ -539,7 +557,7 @@ WorkItem* TestRenderItem()
 	texDesc.mipLevels = 1;
 	for (int i = 0; i < 16; i++)
 	{
-		testRenderer->texels[i] = _Color(0, 0xFF, 0, 0);
+		testRenderer->texels[i] = _Color(0, 0, 0xFF, 0);
 	}
 	testRenderer->texData.texels = &testRenderer->texels;
 	testRenderer->texData.texDataSize = TextureSize(texDesc.format, texDesc.width, texDesc.height, 1, 1);
@@ -552,15 +570,20 @@ WorkItem* TestRenderItem()
 	InsertFence(testRenderer->queue, testRenderer->createResourceFence);
 
 	
-	Matrix4x4 viewProjMatrix = camData.PerspectiveMatrixGl() * camData.ViewMatrix();
+	Matrix4x4 dxViewProjMatrix = camData.PerspectiveMatrixDx() * camData.ViewMatrix();
+	Matrix4x4 glViewProjMatrix = camData.PerspectiveMatrixGl() * camData.ViewMatrix();
 	Matrix4x4 viewMatrix = camData.ViewMatrix();
 	Vector4 viewPos[4];
-	Vector4 projPos[4];
+	Vector4 dxProjPos[4];
+	Vector4 glProjPos[4];
 	for (int i = 0; i < 4; i++)
 	{
 		viewPos[i] = viewMatrix * _Vector4(squarePos[i], 1);
-		projPos[i] = viewProjMatrix * _Vector4(squarePos[i], 1);
-		projPos[i] /= projPos[i].w;
+		dxProjPos[i] = dxViewProjMatrix * _Vector4(squarePos[i], 1);
+		dxProjPos[i] /= dxProjPos[i].w;
+
+		glProjPos[i] = glViewProjMatrix * _Vector4(squarePos[i], 1);
+		glProjPos[i] /= glProjPos[i].w;
 	}
 	
 	return item;

@@ -1,3 +1,6 @@
+#include "renderer.h"
+#if defined YU_DX11
+
 #include "../math/vector.h"
 #include "../container/dequeue.h"
 #include "../core/allocator.h"
@@ -127,7 +130,7 @@ YU_INTERNAL DXGI_FORMAT DXGIFormat(TextureFormat fmt)
 		case TEX_FORMAT_R8G8B8A8_UNORM: return DXGI_FORMAT_R8G8B8A8_UNORM;
 		case TEX_FORMAT_R8G8B8A8_UNORM_SRGB: return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
 	}
-	Log("error, unknown format\n");
+	Log("error, DXGIFormat: unknown format\n");
 	return DXGI_FORMAT_UNKNOWN;
 }
 
@@ -1126,3 +1129,5 @@ void InitRenderThread(const Window& win, const FrameBufferDesc& desc)
 
 
 }
+
+#endif

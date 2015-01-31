@@ -111,11 +111,11 @@ Matrix4x4 CameraData::PerspectiveMatrixDx() const
 	float height = t - b;
 
 	//use complementary z
-	float depth = n - f;
+	float depth = f - n;
 
 	return Scale(_Vector3(1, -1, 1)) * Matrix4x4(2.f * n / width, 0.f, -(l + r) / width, 0.f,
 					0.f, 2.f * n / height, -(t + b) / height,0.f,
-					0.f, 0.f, n/ depth, -(n * f) / depth,
+					0.f, 0.f, -n/ depth, (n * f) / depth,
 					0.f, 0.f, 1.f, 0.f);
 }
 
@@ -124,12 +124,26 @@ Matrix4x4 CameraData::PerspectiveMatrixGl() const
 	float width = r - l;
 	float height = t - b;
 
-	float depth = n - f;
+	float depth = f - n;
 	
-	return Scale(_Vector3(1, -1, 1)) * Matrix4x4(2.f * n / width, 0.f, (l + r) / width, 0.f,
-					0.f, 2.f * n / height, (t + b) / height,0.f,
-					0.f, 0.f, -(n + f) / depth, (2.f * n * f) / depth,
-					0.f, 0.f, -1.f, 0.f);
+	/*
+	return Scale(_Vector3(1, -1, 1)) * 
+		Matrix4x4(1, 0, 0, 0,
+				0, 1, 0, 0,
+				0, 0, 2, -1,
+				0, 0, 0, 1
+		) * 
+		Matrix4x4(2.f * n / width, 0.f, -(l + r) / width, 0.f,
+		0.f, 2.f * n / height, -(t + b) / height, 0.f,
+		0.f, 0.f, -n / depth, (n * f) / depth,
+		0.f, 0.f, 1.f, 0.f);
+		*/
+
+	return Scale(_Vector3(1, -1, 1)) *
+		Matrix4x4(2.f * n / width, 0.f, -(l + r) / width, 0.f,
+		0.f, 2.f * n / height, -(t + b) / height, 0.f,
+		0.f, 0.f, -(n + f) / depth, (2.f * n * f) / depth,
+		0.f, 0.f, 1.f, 0.f);
 }
 
 #define MAX_CAMERA 256
