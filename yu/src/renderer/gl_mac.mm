@@ -3,7 +3,7 @@
 #include "renderer.h"
 #include "gl_utility.h"
 
-void InitGLContext(yu::Window& win, yu::FrameBufferDesc& desc)
+void InitGLContext(const yu::Window& win, const yu::FrameBufferDesc& desc)
 {
 	YuView* yuView = [win.win contentView];
 	[yuView initOpenGL];

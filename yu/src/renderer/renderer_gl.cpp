@@ -50,6 +50,7 @@ struct MeshDataGL
 {
 	GLuint vboId = 0;
 	GLuint iboId = 0;
+	GLuint vaoId = 0;
 };
 
 struct TextureGL
@@ -173,8 +174,42 @@ u32 channelMask, MeshData* meshData)
 	assert(glMesh.vboId == 0);
 	assert(glMesh.iboId == 0);
 	
+	glGenVertexArrays(1, &glMesh.vaoId);
+	glBindVertexArray(glMesh.vaoId);
 	glGenBuffers(1, &glMesh.vboId);
 	glBindBuffer(GL_ARRAY_BUFFER, glMesh.vboId);
+	glBindBuffer(GL_ARRAY_BUFFER, glMesh.vboId);
+
+	glDisableVertexAttribArray(0);
+	glDisableVertexAttribArray(1);
+	glDisableVertexAttribArray(2);
+	
+	GLuint currentVerAttribLoc = 0;
+		
+	GLsizei stride = (GLsizei)VertexSize(channelMask);
+	u8* offset = 0;
+	if(HasPos(channelMask))
+	{
+		glEnableVertexAttribArray(currentVerAttribLoc);
+		glVertexAttribPointer(currentVerAttribLoc, 3, GL_FLOAT, GL_FALSE, stride, offset);
+		currentVerAttribLoc++;
+		offset += sizeof(Vector3);
+	}
+	if(HasTexcoord(channelMask))
+	{
+		glEnableVertexAttribArray(currentVerAttribLoc);
+		glVertexAttribPointer(currentVerAttribLoc, 2, GL_FLOAT, GL_FALSE, stride, offset);
+		currentVerAttribLoc++;
+		offset += sizeof(Vector2);
+	}
+	if(HasColor(channelMask))
+	{
+		glEnableVertexAttribArray(currentVerAttribLoc);
+		glVertexAttribPointer(currentVerAttribLoc, 4, GL_UNSIGNED_BYTE, GL_FALSE, stride, offset);
+		currentVerAttribLoc++;
+		offset += sizeof(Color);
+	}
+	
 	glGenBuffers(1, &glMesh.iboId);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, glMesh.iboId);
 	
@@ -379,37 +414,7 @@ YU_INTERNAL void ExecRenderCmd(RendererGL* renderer, RenderQueue* queue, int ren
 		glBindBufferBase(GL_UNIFORM_BUFFER, glPipeline.cameraUBOIndex, glCamera.uniformBufferId);
 		glUseProgram(glPipeline.programId);
 		
-		glDisableVertexAttribArray(0);
-		glDisableVertexAttribArray(1);
-		glDisableVertexAttribArray(2);
-		glBindBuffer(GL_ARRAY_BUFFER, glMeshData.vboId);
-
-		GLuint currentVerAttribLoc = 0;
-		
-		GLsizei stride = (GLsizei)VertexSize(meshRenderData.channelMask);
-		u8* offset = 0;
-		if(HasPos(meshRenderData.channelMask))
-		{
-			glEnableVertexAttribArray(currentVerAttribLoc);
-			glVertexAttribPointer(currentVerAttribLoc, 3, GL_FLOAT, GL_FALSE, stride, offset);
-			currentVerAttribLoc++;
-			offset += sizeof(Vector3);
-		}
-		if(HasTexcoord(meshRenderData.channelMask))
-		{
-			glEnableVertexAttribArray(currentVerAttribLoc);
-			glVertexAttribPointer(currentVerAttribLoc, 2, GL_FLOAT, GL_FALSE, stride, offset);
-			currentVerAttribLoc++;
-			offset += sizeof(Vector2);
-		}
-		if(HasColor(meshRenderData.channelMask))
-		{
-			glEnableVertexAttribArray(currentVerAttribLoc);
-			glVertexAttribPointer(currentVerAttribLoc, 4, GL_UNSIGNED_BYTE, GL_FALSE, stride, offset);
-			currentVerAttribLoc++;
-			offset += sizeof(Color);
-		}
-		
+		glBindVertexArray(glMeshData.vaoId);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, glMeshData.iboId);
 		
 		glDrawElements(GL_TRIANGLES, (GLsizei)meshRenderData.numIndices, GL_UNSIGNED_INT, 0);
@@ -501,6 +506,13 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 	param->initGLCS.Unlock();
 
 	FrameLock* lock = AddFrameLock();
+	
+	/*
+	GLuint globalVao;
+	glGenVertexArrays(1, &globalVao);
+	glBindVertexArray(globalVao);
+	*/
+	
 	while(YuRunning())
 	{
 		WaitForKick(lock);
