@@ -142,8 +142,7 @@
     <ClCompile Include="..\src\renderer\renderer_gl.cpp" />
     <ClCompile Include="..\src\renderer\shader_compiler_dx11.cpp" />
     <ClCompile Include="..\src\sound\sound_wasapi.cpp" />
-    <ClCompile Include="..\src\stargazer\common.cpp" />
-    <ClCompile Include="..\src\stargazer\work_map.cpp" />
+    <ClCompile Include="..\src\stargazer\stargazer.cpp" />
     <ClCompile Include="..\src\yu.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -184,7 +183,7 @@
     <ClInclude Include="..\src\renderer\shader_dx11.h" />
     <ClInclude Include="..\src\renderer\wglext.h" />
     <ClInclude Include="..\src\sound\sound.h" />
-    <ClInclude Include="..\src\stargazer\work_map.h" />
+    <ClInclude Include="..\src\stargazer\stargazer.h" />
     <ClInclude Include="..\src\yu.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

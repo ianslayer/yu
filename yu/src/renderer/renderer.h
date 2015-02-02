@@ -12,6 +12,7 @@ struct MeshHandle{ i32 id; };
 struct VertexShaderHandle{ i32 id; };
 struct PixelShaderHandle{ i32 id; };
 struct TextureHandle{ i32 id; };
+struct RenderTextureHandle { i32 id; };
 struct SamplerHandle{ i32 id; };
 struct PipelineHandle{ i32 id; };
 struct FenceHandle{ i32 id; };
@@ -41,6 +42,7 @@ struct TextureDesc
 	int				width;
 	int				height;
 	int				mipLevels;
+	bool			renderTexture;
 };
 
 struct TextureMipData
@@ -51,7 +53,8 @@ struct TextureMipData
 
 struct RenderTextureDesc
 {
-	TextureHandle refTexture;
+	TextureHandle	refTexture;
+	int				mipLevel;
 };
 
 struct SamplerStateDesc
@@ -197,6 +200,7 @@ PipelineHandle		CreatePipeline(RenderQueue* queue, const PipelineData& data);
 TextureHandle		CreateTexture(RenderQueue* queue, const TextureDesc& desc, TextureMipData* initData = nullptr);
 size_t				TextureSize(TextureFormat format, int width, int height, int depth, int mipLevels);
 size_t				TextureLevelSize(TextureFormat format, int width, int height, int depth, int mipSlice);
+RenderTextureHandle	CreateRenderTexture(RenderQueue* queue, const RenderTextureDesc& desc);
 SamplerHandle		CreateSampler(RenderQueue* queue, const SamplerStateDesc& desc);
 
 FenceHandle			CreateFence(RenderQueue* queue); //TODO: implement true gpu fence, bool createGpuFence = false
@@ -206,6 +210,7 @@ bool				IsCPUComplete(RenderQueue* queue, FenceHandle fence);
 void				WaitFence(RenderQueue* queue, FenceHandle fence);
 void				Reset(RenderQueue* queue, FenceHandle fence);
 
+void				SetRenderTexture(RenderQueue* queue, RenderTextureHandle renderTexture);
 void				Render(RenderQueue* queue, CameraHandle cam, MeshHandle mesh, PipelineHandle pipeline, const RenderResource& resource);
 
 void				Flush(RenderQueue* queue);

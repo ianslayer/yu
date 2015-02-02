@@ -65,6 +65,11 @@ struct Texture2DDx11
 	DxResourcePtr<ID3D11ShaderResourceView> textureSRV;
 };
 
+struct RenderTextureDx11
+{
+	DxResourcePtr<ID3D11RenderTargetView> renderTargetView;
+};
+
 struct SamplerDx11
 {
 	DxResourcePtr<ID3D11SamplerState> sampler;
@@ -84,6 +89,7 @@ struct RendererDx11 : public Renderer
 	PixelShaderDx11		dx11PixelShaderList[MAX_SHADER];
 	PipelineDx11		dx11PipelineList[MAX_PIPELINE];
 	Texture2DDx11		dx11TextureList[MAX_TEXTURE];
+	RenderTextureDx11	dx11RenderTextureList[MAX_TEXTURE];
 	SamplerDx11			dx11SamplerList[MAX_SAMPLER];
 	UINT prevNumPSSRV = 0;
 };
@@ -118,7 +124,6 @@ struct RenderDeviceDx11
 	bool					goingFullScreen = false;
 
 	FrameBufferDesc			frameBufferDesc;
-	OvrController			ovrController;
 };
 
 YU_GLOBAL RenderDeviceDx11* gDx11Device;
@@ -344,8 +349,6 @@ YU_INTERNAL bool InitDX11(const Window& win, const FrameBufferDesc& desc)
 			{
 				SetFullScreen(desc);
 			}
-
-			InitOvr(gDx11Device->ovrController);
 
 			return true;
 		}
@@ -735,7 +738,7 @@ YU_INTERNAL void ExecCreatePipelineCmd(RendererDx11* renderer, PipelineHandle pi
 	}
 	else
 	{
-		Log("error, create pipeline failed, vertex shader is invalid\n");
+		Log("error, ExecCreatePipelineCmd: create pipeline failed, vertex shader is invalid\n");
 		success = false;
 	}
 
@@ -745,7 +748,7 @@ YU_INTERNAL void ExecCreatePipelineCmd(RendererDx11* renderer, PipelineHandle pi
 	}
 	else
 	{
-		Log("error, create pipeline failed, pixel shader is invalid\n");
+		Log("error, ExecCreatePipelineCmd: create pipeline failed, pixel shader is invalid\n");
 		success = false;
 	}
 
@@ -757,8 +760,13 @@ YU_INTERNAL void ExecCreatePipelineCmd(RendererDx11* renderer, PipelineHandle pi
 
 YU_INTERNAL void ExecCreateTextureCmd(RendererDx11* renderer, TextureHandle texture, const TextureDesc& texDesc, const TextureMipData* initData)
 {
+	UINT bindFlags = D3D11_BIND_SHADER_RESOURCE;
+	if (texDesc.renderTexture)
+	{
+		bindFlags |= D3D11_BIND_RENDER_TARGET;
+	}
 	CD3D11_TEXTURE2D_DESC dx11TexDesc(DXGIFormat(texDesc.format), (UINT)texDesc.width, (UINT)texDesc.height, 1, UINT(texDesc.mipLevels),
-		D3D11_BIND_SHADER_RESOURCE);
+		bindFlags);
 
 	D3D11_SUBRESOURCE_DATA* dx11TexData = nullptr;
 	D3D11_SUBRESOURCE_DATA dx11SubResourceData[16 * 6] = {};
@@ -787,14 +795,37 @@ YU_INTERNAL void ExecCreateTextureCmd(RendererDx11* renderer, TextureHandle text
 		}
 		else
 		{
-			Log("error, dx11 create shader resource view failed: %x\n", hr);
+			Log("error, ExecCreateTextureCmd: dx11 create shader resource view failed: %x\n", hr);
 		}
 
 	}
 	else
 	{
-		Log("error, dx11 create texture failed: %x\n", hr);
+		Log("error, ExecCreateTextureCmd: dx11 create texture failed: %x\n", hr);
 	}
+}
+
+YU_INTERNAL void ExecCreateRenderTextureCmd(RendererDx11* renderer, RenderTextureHandle& renderTexture, RenderTextureDesc& desc)
+{
+	TextureDesc& refTextureDesc = *renderer->textureList.Get(desc.refTexture.id);
+	Texture2DDx11& dx11Texture = renderer->dx11TextureList[desc.refTexture.id];
+
+	D3D11_RENDER_TARGET_VIEW_DESC dx11RTDesc;
+	dx11RTDesc.Format = DXGIFormat(refTextureDesc.format);
+	dx11RTDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+	dx11RTDesc.Texture2D.MipSlice = desc.mipLevel;
+
+	ID3D11RenderTargetView* dx11RTView;
+	HRESULT hr = gDx11Device->d3d11Device->CreateRenderTargetView(dx11Texture.texture, &dx11RTDesc, &dx11RTView);
+	if (SUCCEEDED(hr))
+	{
+		renderer->dx11RenderTextureList[renderTexture.id].renderTargetView = dx11RTView;
+	}
+	else
+	{
+		Log("error, ExecCreateRenderTextureCmd: dx11 create render texture failed%x\n", hr);
+	}
+
 }
 
 YU_INTERNAL D3D11_FILTER Dx11Filter(SamplerStateDesc::Filter filter)
@@ -997,6 +1028,10 @@ YU_INTERNAL bool ExecThreadCmd(RendererDx11* renderer)
 				case (RenderThreadCmd::CREATE_TEXTURE) :
 				{
 					ExecCreateTextureCmd(renderer, cmd.createTextureCmd.texture, cmd.createTextureCmd.desc, cmd.createTextureCmd.initData);
+				}break;
+				case (RenderThreadCmd::CREATE_RENDER_TEXTURE) :
+				{
+					ExecCreateRenderTextureCmd(renderer, cmd.createRenderTextureCmd.renderTexture, cmd.createRenderTextureCmd.desc);
 				}break;
 				case (RenderThreadCmd::CREATE_SAMPLER) :
 				{

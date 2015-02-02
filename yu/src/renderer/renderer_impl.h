@@ -4,48 +4,6 @@
 #include "../core/free_list.h"
 #include "renderer.h"
 
-#include "../../3rd_party/ovr/Src/OVR_CAPI.h"
-#if defined YU_CC_MSVC
-	#if defined YU_CPU_X86_64
-		#pragma comment(lib, "../3rd_party/ovr/Lib/x64/VS2013/libovr64.lib")
-	#elif defined YU_CPU_X86
-		#pragma comment(lib, "../3rd_party/ovr/Lib/Win32/VS2013/libovr.lib")
-	#endif
-
-	#pragma comment(lib, "ws2_32.lib") //what's this???
-#endif
-
-struct OvrController
-{
-	ovrHmd           hmd;                  // The handle of the headset
-	bool			 hmdDetected = false;
-	ovrBool			 initialized = false;
-};
-
-
-#if defined YU_CC_MSVC
-void InitOvr(OvrController& controller)
-{
-	if (!controller.initialized)
-	{
-		controller.initialized = ovr_Initialize();
-		controller.hmd = ovrHmd_Create(0);
-		if (controller.hmd)
-		{
-			controller.hmdDetected = true;
-
-			ovrSizei recommendedTex0Size = ovrHmd_GetFovTextureSize(controller.hmd, ovrEye_Left,
-				controller.hmd->DefaultEyeFov[0], 1.0f);
-
-			ovrSizei recommendedTex1Size = ovrHmd_GetFovTextureSize(controller.hmd, ovrEye_Left,
-				controller.hmd->DefaultEyeFov[0], 1.0f);
-
-		}
-	}
-}
-#endif
-
-
 namespace yu
 {
 
@@ -151,6 +109,7 @@ Matrix4x4 CameraData::PerspectiveMatrixGl() const
 #define MAX_PIPELINE 4096
 #define MAX_SHADER 4096
 #define MAX_TEXTURE 4096
+#define	MAX_RENDER_TEXTURE 4096
 #define MAX_SAMPLER 4096
 #define MAX_FENCE 1024
 #define MAX_RENDER_QUEUE 32
@@ -180,6 +139,7 @@ struct RenderThreadCmd
 		CREATE_PIPELINE,
 
 		CREATE_TEXTURE,
+		CREATE_RENDER_TEXTURE,
 		CREATE_SAMPLER,
 
 		CREATE_FENCE,
@@ -245,6 +205,12 @@ struct RenderThreadCmd
 		TextureMipData* initData;
 	};
 
+	struct CreateRenderTextureCmd
+	{
+		RenderTextureHandle	renderTexture;
+		RenderTextureDesc	desc;
+	};
+
 	struct CreateSamplerCmd
 	{
 		SamplerHandle		sampler;
@@ -285,6 +251,7 @@ struct RenderThreadCmd
 		CreatePixelShaderCmd	createPSCmd;
 		CreatePipelineCmd		createPipelineCmd;
 		CreateTextureCmd		createTextureCmd;
+		CreateRenderTextureCmd	createRenderTextureCmd;
 		CreateSamplerCmd		createSamplerCmd;
 		
 		CreateFenceCmd			createFenceCmd;
@@ -410,6 +377,7 @@ struct Renderer
 	FreeList<PixelShaderData, MAX_SHADER>				pixelShaderList;
 	FreeList<PipelineData, MAX_PIPELINE>				pipelineList;
 	FreeList<TextureDesc, MAX_TEXTURE>					textureList;
+	FreeList<RenderTextureDesc, MAX_RENDER_TEXTURE>		renderTextureList;
 	FreeList<SamplerStateDesc, MAX_SAMPLER>				samplerList;
 	FreeList<Fence, MAX_FENCE>							fenceList;
 	FreeList<RenderQueue, MAX_RENDER_QUEUE>				renderQueueList; //generally one queue per worker thread
@@ -682,6 +650,9 @@ TextureHandle CreateTexture(RenderQueue* queue, const TextureDesc& desc, Texture
 {
 	TextureHandle texture;
 	texture.id = queue->renderer->textureList.Alloc();
+	TextureDesc& texDesc = *queue->renderer->textureList.Get(texture.id);
+	texDesc = desc;
+
 	RenderThreadCmd cmd;
 	cmd.type = RenderThreadCmd::CREATE_TEXTURE;
 	cmd.createTextureCmd.texture = texture;
@@ -692,10 +663,28 @@ TextureHandle CreateTexture(RenderQueue* queue, const TextureDesc& desc, Texture
 	return texture;
 }
 
+RenderTextureHandle CreateRenderTexture(RenderQueue* queue, const RenderTextureDesc& desc)
+{
+	RenderTextureHandle renderTexture;
+	renderTexture.id = queue->renderer->textureList.Alloc();
+	RenderTextureDesc& rtDesc = *queue->renderer->renderTextureList.Get(renderTexture.id);
+	rtDesc = desc;
+
+	RenderThreadCmd cmd;
+	cmd.type = RenderThreadCmd::CREATE_RENDER_TEXTURE;
+	cmd.createRenderTextureCmd.renderTexture = renderTexture;
+	cmd.createRenderTextureCmd.desc = desc;
+	BlockEnqueueCmd(queue, cmd);
+	return renderTexture;
+}
+
 SamplerHandle CreateSampler(RenderQueue* queue, const SamplerStateDesc& desc)
 {
 	SamplerHandle sampler;
 	sampler.id = queue->renderer->samplerList.Alloc();
+	SamplerStateDesc& samplerDesc = *queue->renderer->samplerList.Get(sampler.id);
+	samplerDesc = desc;
+
 	RenderThreadCmd cmd;
 	cmd.type = RenderThreadCmd::CREATE_SAMPLER;
 	cmd.createSamplerCmd.sampler = sampler;

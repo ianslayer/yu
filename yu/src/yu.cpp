@@ -3,7 +3,7 @@
 
 #include "renderer/renderer.h"
 #include "sound/sound.h"
-#include "stargazer/work_map.h"
+#include "stargazer/stargazer.h"
 
 #include "yu.h"
 #include <atomic>
@@ -50,7 +50,9 @@ void InitYu()
 
 
 	InitWorkerSystem();
-	InitWorkMap();
+
+
+	InitStarGazer();
 
 
 }
@@ -66,7 +68,8 @@ void FreeYu()
 		FakeKickStart();//make sure all thread proceed to exit
 	}
 
-	FreeWorkMap();
+	FreeStarGazer();
+
 	FreeWindowManager();
 	FreeWorkerSystem();
 	FreeThreadRuntime();
@@ -113,8 +116,8 @@ int YuMain()
 		timer.Stop();
 		kickStartTime = timer.DurationInMs();
 
-		Clear(gWorkMap);
-		SubmitWork(gWorkMap);
+		Clear(gStarGazer);
+		SubmitWork(gStarGazer);
 
 		MainThreadWorker();
 

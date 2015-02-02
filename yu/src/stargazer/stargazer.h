@@ -9,7 +9,7 @@ struct FrameWorkItemResult
 	WorkItem* frameEndItem;
 };
 
-struct WorkMap
+struct StarGazer
 {
 //pre-defined work
 	WorkItem* startWork;
@@ -18,12 +18,12 @@ struct WorkMap
 	WorkItem* testRenderer;
 	WorkItem* endWork;
 };
-extern WorkMap* gWorkMap;
+extern StarGazer* gStarGazer;
 
-void Clear(WorkMap* workMap);
-void SubmitWork(WorkMap* workMap);
+void Clear(StarGazer* workMap);
+void SubmitWork(StarGazer* workMap);
 
-void InitWorkMap();
-void FreeWorkMap();
+void InitStarGazer();
+void FreeStarGazer();
 
 }
