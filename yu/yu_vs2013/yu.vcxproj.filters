@@ -54,12 +54,6 @@
     <ClCompile Include="..\src\main_win32.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\stargazer\common.cpp">
-      <Filter>Source Files\stargazer</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\stargazer\work_map.cpp">
-      <Filter>Source Files\stargazer</Filter>
-    </ClCompile>
     <ClCompile Include="..\src\renderer\gl_win32.cpp">
       <Filter>Source Files\renderer</Filter>
     </ClCompile>
@@ -68,6 +62,9 @@
     </ClCompile>
     <ClCompile Include="..\src\renderer\gl3w.cpp">
       <Filter>Source Files\renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\stargazer\stargazer.cpp">
+      <Filter>Source Files\stargazer</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -173,9 +170,6 @@
     <ClInclude Include="..\src\core\string_impl.h">
       <Filter>Source Files\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\stargazer\work_map.h">
-      <Filter>Source Files\stargazer</Filter>
-    </ClInclude>
     <ClInclude Include="..\src\renderer\gl_utility.h">
       <Filter>Source Files\renderer</Filter>
     </ClInclude>
@@ -187,6 +181,9 @@
     </ClInclude>
     <ClInclude Include="..\src\renderer\wglext.h">
       <Filter>Source Files\renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\stargazer\stargazer.h">
+      <Filter>Source Files\stargazer</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

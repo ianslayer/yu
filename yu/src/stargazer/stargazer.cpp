@@ -9,11 +9,108 @@
 #include "../renderer/renderer.h"
 #include "../renderer/shader.h"
 
-#include "work_map.h"
+#include "stargazer.h"
 #include <new>
+
+#include "../../3rd_party/ovr/Src/OVR_CAPI.h"
+#if defined YU_OS_WIN32
+#if defined YU_CPU_X86_64
+#pragma comment(lib, "../3rd_party/ovr/Lib/x64/VS2013/libovr64.lib")
+#elif defined YU_CPU_X86
+#pragma comment(lib, "../3rd_party/ovr/Lib/Win32/VS2013/libovr.lib")
+#endif
+
+#pragma comment(lib, "ws2_32.lib") //what's this???
+#endif
+
 
 namespace yu
 {
+
+
+struct OvrController
+{
+	ovrHmd           hmd;                  // The handle of the headset
+	bool			 hmdDetected = false;
+	ovrBool			 initialized = false;
+};
+
+
+#if defined YU_OS_WIN32
+void InitOvr(OvrController& controller)
+{
+	if (!controller.initialized)
+	{
+		controller.initialized = ovr_Initialize();
+		controller.hmd = ovrHmd_Create(0);
+		if (controller.hmd)
+		{
+			controller.hmdDetected = true;
+
+			ovrSizei recommendedTex0Size = ovrHmd_GetFovTextureSize(controller.hmd, ovrEye_Left,
+				controller.hmd->DefaultEyeFov[0], 1.0f);
+
+			ovrSizei recommendedTex1Size = ovrHmd_GetFovTextureSize(controller.hmd, ovrEye_Left,
+				controller.hmd->DefaultEyeFov[0], 1.0f);
+
+		}
+	}
+}
+#endif
+
+
+StarGazer starGazer;
+StarGazer* gStarGazer = &starGazer;
+
+FrameWorkItemResult FrameWorkItem();
+WorkItem* InputWorkItem();
+WorkItem* TestRenderItem();
+CameraHandle GetCamera(WorkItem* renderItem);
+RenderQueue* GetRenderQueue(WorkItem* renderItem);
+WorkItem* CameraControlItem(WorkItem* inputWorkItem, RenderQueue* queue, CameraHandle camHandle);
+
+void FreeWorkItem(WorkItem* item);
+
+void Clear(StarGazer* starGazer)
+{
+	ResetWorkItem(starGazer->startWork);
+	ResetWorkItem(starGazer->inputWork);
+	ResetWorkItem(starGazer->cameraControllerWork);
+	ResetWorkItem(starGazer->testRenderer);
+	ResetWorkItem(starGazer->endWork);
+}
+
+void SubmitWork(StarGazer* starGazer)
+{
+	SubmitWorkItem(starGazer->startWork, nullptr, 0);
+	SubmitWorkItem(starGazer->inputWork, &starGazer->startWork, 1);
+	SubmitWorkItem(starGazer->cameraControllerWork, &starGazer->inputWork, 1);
+	SubmitWorkItem(starGazer->testRenderer, &starGazer->cameraControllerWork, 1);
+
+	WorkItem* endDep[1] = { starGazer->testRenderer };
+
+	SubmitWorkItem(starGazer->endWork, endDep, 1);
+
+}
+
+void InitStarGazer()
+{
+	FrameWorkItemResult frameWork = FrameWorkItem();
+	gStarGazer->startWork = frameWork.frameStartItem;
+	gStarGazer->inputWork = InputWorkItem();
+	gStarGazer->endWork = frameWork.frameEndItem;
+	gStarGazer->testRenderer = TestRenderItem();
+	gStarGazer->cameraControllerWork = CameraControlItem(gStarGazer->inputWork, GetRenderQueue(gStarGazer->testRenderer), GetCamera(gStarGazer->testRenderer));
+}
+
+void FreeStarGazer()
+{
+	FreeSysWorkItem(gStarGazer->startWork);
+	FreeSysWorkItem(gStarGazer->endWork);
+	FreeSysWorkItem(gStarGazer->inputWork);
+	FreeSysWorkItem(gStarGazer->cameraControllerWork);
+	FreeSysWorkItem(gStarGazer->testRenderer);
+}
 
 struct FrameLockData : public InputData
 {
@@ -32,7 +129,7 @@ void FrameEnd(FrameLock* lock)
 
 bool WorkerFrameComplete()
 {
-	return IsDone(gWorkMap->endWork);
+	return IsDone(gStarGazer->endWork);
 }
 
 
@@ -390,6 +487,9 @@ struct TestRenderer : public InputData
 	Color		texels[16];
 	RenderResource::TextureSlot textureSlot;
 
+	TextureHandle		eyeTexture[2];
+	RenderTextureHandle renderTexture[2];
+
 	PipelineHandle		pipeline;
 	VertexShaderHandle	vs;
 	PixelShaderHandle	ps;
@@ -550,22 +650,32 @@ WorkItem* TestRenderItem()
 	camData.SetXFov(3.14f / 2.f, 1280, 720);
 	UpdateCamera(testRenderer->queue, testRenderer->camera, camData);
 
-	TextureDesc texDesc = {};
-	texDesc.format = TEX_FORMAT_R8G8B8A8_UNORM;
-	texDesc.width = 4;
-	texDesc.height = 4;
-	texDesc.mipLevels = 1;
-	for (int i = 0; i < 16; i++)
 	{
-		testRenderer->texels[i] = _Color(0, 0, 0xFF, 0);
+		TextureDesc texDesc = {};
+		texDesc.format = TEX_FORMAT_R8G8B8A8_UNORM;
+		texDesc.width = 4;
+		texDesc.height = 4;
+		texDesc.mipLevels = 1;
+		for (int i = 0; i < 16; i++)
+		{
+			testRenderer->texels[i] = _Color(0, 0, 0xFF, 0);
+		}
+		testRenderer->texData.texels = &testRenderer->texels;
+		testRenderer->texData.texDataSize = TextureSize(texDesc.format, texDesc.width, texDesc.height, 1, 1);
+
+		testRenderer->textureSlot.textures = CreateTexture(testRenderer->queue, texDesc, &testRenderer->texData);
+
+		SamplerStateDesc samplerDesc = { SamplerStateDesc::FILTER_POINT, SamplerStateDesc::ADDRESS_CLAMP, SamplerStateDesc::ADDRESS_CLAMP };
+		testRenderer->textureSlot.sampler = CreateSampler(testRenderer->queue, samplerDesc);
 	}
-	testRenderer->texData.texels = &testRenderer->texels;
-	testRenderer->texData.texDataSize = TextureSize(texDesc.format, texDesc.width, texDesc.height, 1, 1);
 
-	testRenderer->textureSlot.textures = CreateTexture(testRenderer->queue, texDesc, &testRenderer->texData);
+	{
+		TextureDesc texDesc = {};
+		texDesc.format = TEX_FORMAT_R8G8B8A8_UNORM;
+		
 
-	SamplerStateDesc samplerDesc = { SamplerStateDesc::FILTER_POINT, SamplerStateDesc::ADDRESS_CLAMP, SamplerStateDesc::ADDRESS_CLAMP };
-	testRenderer->textureSlot.sampler = CreateSampler(testRenderer->queue, samplerDesc);
+	}
+	
 
 	InsertFence(testRenderer->queue, testRenderer->createResourceFence);
 
