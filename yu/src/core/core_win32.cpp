@@ -497,7 +497,7 @@ YU_INTERNAL ThreadReturn ThreadCall WindowThreadFunc(ThreadContext context)
 		Sleep(1);
 	}
 	
-	OutputDebugStringA("exit window thread\n");
+	//OutputDebugStringA("exit window thread\n");
 	return 0;
 }
 

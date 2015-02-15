@@ -185,5 +185,8 @@
     <ClInclude Include="..\src\stargazer\stargazer.h">
       <Filter>Source Files\stargazer</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\math\quaternion.h">
+      <Filter>Source Files\math</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

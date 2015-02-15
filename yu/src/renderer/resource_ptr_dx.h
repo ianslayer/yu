@@ -49,6 +49,7 @@ template<class T> inline DxResourcePtr<T>::DxResourcePtr(T* _ptr)
 	//refCount = ptr->Release();
 
 	ptr = _ptr;
+	//ptr->AddRef();
 }
 
 template<class T> inline DxResourcePtr<T>::DxResourcePtr(const DxResourcePtr<T>& _rhs)
@@ -62,13 +63,15 @@ template<class T> inline DxResourcePtr<T>::DxResourcePtr(const DxResourcePtr<T>&
 template<class T> inline DxResourcePtr<T>& DxResourcePtr<T>::operator=(T *_ptr)
 {
 	int refCount;
-	//if (_ptr)
-	//	refCount = _ptr->AddRef();
+
 	if (_ptr == ptr)
 		return *this;
 
 	if (ptr)
 		refCount = ptr->Release();
+
+	//if (_ptr)
+	//	refCount = _ptr->AddRef();
 
 	ptr = _ptr;
 	return *this;

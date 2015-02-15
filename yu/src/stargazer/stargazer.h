@@ -3,27 +3,12 @@ namespace yu
 {
 struct WorkItem;
 
-struct FrameWorkItemResult
-{
-	WorkItem* frameStartItem;
-	WorkItem* frameEndItem;
-};
+extern struct StarGazer* gStarGazer;
 
-struct StarGazer
-{
-//pre-defined work
-	WorkItem* startWork;
-	WorkItem* inputWork;
-	WorkItem* cameraControllerWork;
-	WorkItem* testRenderer;
-	WorkItem* endWork;
-};
-extern StarGazer* gStarGazer;
+void Clear(StarGazer* starGazer);
+void SubmitWork(StarGazer* starGazer);
 
-void Clear(StarGazer* workMap);
-void SubmitWork(StarGazer* workMap);
-
-void InitStarGazer();
+void InitStarGazer(Window& win);
 void FreeStarGazer();
 
 }

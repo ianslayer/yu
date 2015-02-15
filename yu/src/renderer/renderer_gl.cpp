@@ -12,7 +12,7 @@
 #include "renderer_impl.h"
 #include <new>
 
-void InitGLContext(const yu::Window& win, const yu::FrameBufferDesc& desc);
+void InitGLContext(const yu::Window& win, const yu::RendererDesc& desc);
 void SwapBuffer(yu::Window& win);
 namespace yu
 {
@@ -20,7 +20,7 @@ namespace yu
 struct InitGLParams
 {
 	Window			win;
-	FrameBufferDesc desc;
+	RendererDesc	desc;
 	CondVar			initGLCV;
 	Mutex			initGLCS;
 };
@@ -69,6 +69,12 @@ struct RendererGL : public Renderer
 };
 
 RendererGL* gRenderer;
+
+Renderer* GetRenderer()
+{
+	assert(gRenderer);
+	return gRenderer;
+}
 
 VertexShaderAPIData LoadVSFromFile(const char* path)
 {
@@ -149,8 +155,8 @@ YU_INTERNAL void ExecUpdateCameraCmd(RendererGL* renderer, CameraHandle camera, 
 	renderer->cameraList.Get(camera.id)->UpdateData(updateData);
 	CameraData* data = &renderer->cameraList.Get(camera.id)->GetMutable();
 	CameraConstant camConstant;
-	camConstant.viewMatrix =  Transpose(data->ViewMatrix());
-	camConstant.projectionMatrix = Transpose(data->PerspectiveMatrixGl());
+	camConstant.viewMatrix =  Transpose(ViewMatrix(data->position, data->lookAt, data->right));
+	camConstant.projectionMatrix = Transpose(PerspectiveMatrixGL(data->halfTanXFov, data->n, data->f, data->filmWidth, data->filmHeight) );
 	
 	CameraDataGL& glCam = renderer->glCameraList[camera.id];
 	
@@ -424,17 +430,22 @@ YU_INTERNAL void ExecRenderCmd(RendererGL* renderer, RenderQueue* queue, int ren
 	list->renderInProgress.store(false, std::memory_order_release);
 }
 
+YU_GLOBAL int gRenderThreadRunning;
 YU_INTERNAL bool ExecThreadCmd(RendererGL* renderer)
 {
 	bool frameEnd = false;
 	for (int i = 0; i < renderer->numQueue; i++)
 	{
-		RenderQueue* queue = renderer->renderQueue[i];
+		RenderQueue* queue = &renderer->renderQueue[i];
 		RenderThreadCmd cmd;
 		while (queue->cmdList.Dequeue(cmd))
 		{
 			switch(cmd.type)
 			{
+				case (RenderThreadCmd::STOP_RENDER_THREAD) :
+				{
+					gRenderThreadRunning = 0;
+				}break;
 				case (RenderThreadCmd::UPDATE_CAMERA):
 				{
 					ExecUpdateCameraCmd(renderer, cmd.updateCameraCmd.camera, cmd.updateCameraCmd.camData);
@@ -491,17 +502,19 @@ void ResizeBackBuffer(unsigned int width, unsigned int height, TextureFormat fmt
 
 }
 
-bool YuRunning();
 ThreadReturn ThreadCall RenderThread(ThreadContext context)
 {
 	InitGLParams* param = (InitGLParams*) context;
-	FrameBufferDesc frameBufferDesc;
+	RendererDesc rendererDesc;
 	param->initGLCS.Lock();
 	Window win = param->win;
-	frameBufferDesc = param->desc;
+	rendererDesc = param->desc;
+	rendererDesc.supportOvrRendering = false;
+	InitGLContext(param->win, rendererDesc);
 
-	InitGLContext(param->win, param->desc);
-
+	gRenderer = new RendererGL();
+	gRenderer->rendererDesc = rendererDesc;
+	gRenderThreadRunning = 1;
 	NotifyCondVar(param->initGLCV);
 	param->initGLCS.Unlock();
 
@@ -513,16 +526,16 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 	glBindVertexArray(globalVao);
 	*/
 	
-	while(YuRunning())
+	while (gRenderThreadRunning)
 	{
 		WaitForKick(lock);
 		glClearColor(1, 0, 0, 1);
-		glViewport(0, 0, frameBufferDesc.width, frameBufferDesc.height);
+		glViewport(0, 0, rendererDesc.width, rendererDesc.height);
 		glClear(GL_COLOR_BUFFER_BIT);
 		glDisable(GL_DEPTH_TEST);
 		glDisable(GL_CULL_FACE);
 		
-		while(!ExecThreadCmd(gRenderer) && YuRunning())
+		while (!ExecThreadCmd(gRenderer) && gRenderThreadRunning)
 			;
 
 		BaseDoubleBufferData::SwapDirty();
@@ -531,11 +544,14 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 		FrameComplete(lock);
 	}
 	
+
+	delete gRenderer;
+
 	return 0;
 }
 
 Thread	renderThread;
-void InitRenderThread(const Window& win, const FrameBufferDesc& desc)
+void InitRenderThread(const Window& win, const RendererDesc& desc)
 {
 	InitGLParams param;
 	param.initGLCS.Lock();
@@ -548,18 +564,20 @@ void InitRenderThread(const Window& win, const FrameBufferDesc& desc)
 	param.initGLCS.Unlock();
 }
 
+
+/*
 Renderer* CreateRenderer()
 {
-	gRenderer = New<RendererGL>(gSysArena);
+	gRenderer = new RendererGL();
 	return gRenderer;
 }
 
 void FreeRenderer(Renderer* renderer)
 {
 	RendererGL* rendererGL = (RendererGL*) renderer;
-	Delete(gSysArena, rendererGL);
+	delete rendererGL;
 }
-
+*/
 
 }
 

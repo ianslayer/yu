@@ -26,14 +26,17 @@ enum TextureFormat
 	NUM_TEX_FORMATS
 };
 
-struct FrameBufferDesc
+struct RendererDesc
 {
-	TextureFormat	format;
+	TextureFormat	frameBufferFormat;
 	double			refreshRate;
 	int				width;
 	int				height;
 	int				sampleCount;
 	bool			fullScreen;
+
+	bool			initOvrRendering;
+	bool			supportOvrRendering;
 };
 
 struct TextureDesc
@@ -77,40 +80,33 @@ struct SamplerStateDesc
 	AddressMode addressV;
 };
 
+Matrix4x4 ViewMatrix(Vector3 pos, Vector3 lookAt, Vector3 right);
+Matrix4x4 PerspectiveMatrixDX(float halfTanX, float n, float f, float filmWidth, float filmHeight); //z range 0~1, right handed
+Matrix4x4 PerspectiveMatrixDX(float upTan, float downTan, float leftTan, float rightTan, float n, float f);
+Matrix4x4 PerspectiveMatrixGL(float halfTanX, float n, float f, float filmWidth, float filmHeight); //z range -1~1, right handed
+Matrix4x4 PerspectiveMatrixGL(float upTan, float downTan, float leftTan, float rightTan, float n, float f);
+
 struct CameraData
 {
-	Matrix4x4 ViewMatrix() const;
-	Matrix4x4 InvViewMatrix() const;
-	Matrix4x4 PerspectiveMatrixDx() const;
-	Matrix4x4 InvPerspectiveMatrixDx() const;
-	Matrix4x4 PerspectiveMatrixGl() const;
-	Matrix4x4 InvPerspectiveMatrixGl() const;
-	
-	void      SetXFov(float angleRad, float filmWidth, float filmHeight);
-
-	void      DeriveProjectionParamter(float filmWidth, float filmHeight);
-
 	// view transform
-	Vector3 position ;
+	Vector3 position;
 
 	//right hand coordinate
-	Vector3 lookat ;//view space +z
-	Vector3 right ; //view space +x
-	//Vector3 down;    //view space +y, can be derived from lookat ^ right
-	Vector3 Down() const;
+	Vector3 lookAt;//view space +z
+	Vector3 right; //view space +x
 
-	float   xFov ;
+	float upTan;
+	float downTan;
+	float leftTan;
+	float rightTan;
 
-	//projection
+	float	filmWidth;
+	float	filmHeight;
+
 	float    n;
 	float	 f;
-
-	//following parameter is derived from fov, aspect ratio and near plane
-	float	 l;
-	float	 r;
-	float	 t;
-	float    b;
 };
+
 CameraData DefaultCamera();
 
 struct MeshData
@@ -168,9 +164,23 @@ struct RenderResource
 struct Renderer;
 struct RenderQueue;
 
+/*
 Renderer*		CreateRenderer();
 void			FreeRenderer(Renderer* renderer);
+*/
+
+Renderer*			GetRenderer();
+RenderTextureHandle	GetFrameBufferRenderTexture(Renderer* renderer);
+
+const RendererDesc& GetRendererDesc(Renderer* renderer);
+RenderQueue*	GetThreadLocalRenderQueue();
 RenderQueue*	CreateRenderQueue(Renderer* renderer);
+
+void			StartVRRendering(RenderQueue* queue);
+void			EndVRRendering(RenderQueue* queue);
+void			SetVRRenderTextures(RenderTextureHandle eyeRenderTexture[2]);
+Vector2i		GetVRTextureSize(int eye);
+float			GetHmdEyeHeight();
 
 CameraHandle	CreateCamera(RenderQueue* queue);
 CameraData		GetCameraData(RenderQueue* queue, CameraHandle handle);
@@ -198,9 +208,11 @@ PixelShaderHandle	CreatePixelShader(RenderQueue* queue, const PixelShaderAPIData
 PipelineHandle		CreatePipeline(RenderQueue* queue, const PipelineData& data);
 
 TextureHandle		CreateTexture(RenderQueue* queue, const TextureDesc& desc, TextureMipData* initData = nullptr);
+void				FreeTexture(TextureHandle texture);
 size_t				TextureSize(TextureFormat format, int width, int height, int depth, int mipLevels);
 size_t				TextureLevelSize(TextureFormat format, int width, int height, int depth, int mipSlice);
 RenderTextureHandle	CreateRenderTexture(RenderQueue* queue, const RenderTextureDesc& desc);
+void				FreeRenderTexture(RenderTextureHandle renderTexture);
 SamplerHandle		CreateSampler(RenderQueue* queue, const SamplerStateDesc& desc);
 
 FenceHandle			CreateFence(RenderQueue* queue); //TODO: implement true gpu fence, bool createGpuFence = false
@@ -210,13 +222,13 @@ bool				IsCPUComplete(RenderQueue* queue, FenceHandle fence);
 void				WaitFence(RenderQueue* queue, FenceHandle fence);
 void				Reset(RenderQueue* queue, FenceHandle fence);
 
-void				SetRenderTexture(RenderQueue* queue, RenderTextureHandle renderTexture);
-void				Render(RenderQueue* queue, CameraHandle cam, MeshHandle mesh, PipelineHandle pipeline, const RenderResource& resource);
+void				Render(RenderQueue* queue, RenderTextureHandle renderTexture, CameraHandle cam, MeshHandle mesh, PipelineHandle pipeline, const RenderResource& resource);
 
 void				Flush(RenderQueue* queue);
 void				Swap(RenderQueue* queue, bool vsync = true);
 
-void				InitRenderThread(const Window& win, const FrameBufferDesc& desc);
+void				InitRenderThread(const Window& win, const RendererDesc& desc);
+void				StopRenderThread(RenderQueue* queue);
 
 }
 

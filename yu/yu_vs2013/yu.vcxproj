@@ -170,6 +170,7 @@
     <ClInclude Include="..\src\core\worker.h" />
     <ClInclude Include="..\src\core\worker_impl.h" />
     <ClInclude Include="..\src\math\matrix.h" />
+    <ClInclude Include="..\src\math\quaternion.h" />
     <ClInclude Include="..\src\math\vector.h" />
     <ClInclude Include="..\src\math\yu_math.h" />
     <ClInclude Include="..\src\renderer\color.h" />

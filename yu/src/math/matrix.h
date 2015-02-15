@@ -3,6 +3,7 @@
 
 #include "yu_math.h"
 #include "vector.h"
+#include "quaternion.h"
 #include "../core/string.h"
 
 namespace yu
@@ -269,6 +270,8 @@ struct Matrix4x4
 
    explicit Matrix4x4(const float m[4][4]);
 
+   explicit Matrix4x4(const Quaternion& q);
+
    void Set(float m00, float m01, float m02, float m03,
             float m10, float m11, float m12, float m13,
             float m20, float m21, float m22, float m23,
@@ -330,6 +333,19 @@ inline Matrix4x4::Matrix4x4(const float* _mIn)
 inline Matrix4x4::Matrix4x4(const float m[4][4])
 {
 	yu::memcpy(FloatPtr(), m, sizeof(float) * 16 );
+}
+
+inline Matrix4x4::Matrix4x4(const Quaternion& q)
+{
+	float ww = q.w*q.w;
+	float xx = q.x*q.x;
+	float yy = q.y*q.y;
+	float zz = q.z*q.z;
+
+	row[0][0] = ww + xx - yy - zz;       row[0][1] = 2 * (q.x*q.y - q.w*q.z); row[0][2] = 2 * (q.x*q.z + q.w*q.y); row[0][3] = 0;
+	row[1][0] = 2 * (q.x*q.y + q.w*q.z); row[1][1] = ww - xx + yy - zz;       row[1][2] = 2 * (q.y*q.z - q.w*q.x); row[1][3] = 0;
+	row[2][0] = 2 * (q.x*q.z - q.w*q.y); row[2][1] = 2 * (q.y*q.z + q.w*q.x); row[2][2] = ww - xx - yy + zz;       row[2][3] = 0;
+	row[3][0] = 0;                       row[3][1] = 0;                       row[3][2] = 0;                       row[3][3] = 1;
 }
 
 inline Vector4& Matrix4x4::operator[](int _row)

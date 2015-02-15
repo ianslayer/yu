@@ -1,4 +1,5 @@
 #include "worker.h"
+#include "../renderer/renderer.h"
 
 namespace yu
 {
@@ -62,6 +63,7 @@ struct WorkerThread
 	Thread					thread;
 	ArenaAllocator			workerFrameArena;
 	Array<WorkItem*>		retiredItemPermitList; //TODO: move this into retired function, this should use a stack allocator (alloca)
+	struct RenderQueue*		renderQueue;
 } YU_POST_ALIGN(CACHE_LINE);
 
 
@@ -194,6 +196,11 @@ WorkerThread* GetWorkerThread()
 	return worker;
 }
 
+struct RenderQueue*	GetThreadLocalRenderQueue()
+{
+	return worker->renderQueue;
+}
+
 int GetWorkerThreadIdx()
 {
 	return worker->id;
@@ -260,6 +267,9 @@ void Complete(WorkItem* item, Array<WorkItem*>& permitList)
 ThreadReturn ThreadCall WorkerThreadFunc(ThreadContext context)
 {
 	worker = (WorkerThread*)context;
+	Renderer* renderer = GetRenderer();
+	worker->renderQueue = CreateRenderQueue(renderer);
+
 	Log("Worker thread:%d started\n", worker->id);
 
 	while (YuRunning())
@@ -281,6 +291,8 @@ bool WorkerFrameComplete();
 void GetMainThreadWorker()
 {
 	worker = &gWorkerSystem->workerThread[0];
+	Renderer* renderer = GetRenderer();
+	worker->renderQueue = CreateRenderQueue(renderer);
 }
 void MainThreadWorker()
 {

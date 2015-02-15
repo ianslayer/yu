@@ -16,6 +16,9 @@
 #include <new>
 #include <d3d11.h>
 
+#define   OVR_D3D_VERSION 11
+#include "../../3rd_party/ovr/Src/OVR_CAPI_D3D.h"
+
 typedef HRESULT WINAPI  LPCREATEDXGIFACTORY(REFIID, void ** );
 typedef HRESULT WINAPI  LPD3D11CREATEDEVICE(IDXGIAdapter*, D3D_DRIVER_TYPE, HMODULE, UINT32, D3D_FEATURE_LEVEL*, UINT, UINT32, ID3D11Device**, D3D_FEATURE_LEVEL*, ID3D11DeviceContext** );
 
@@ -81,6 +84,25 @@ struct PipelineDx11
 	DxResourcePtr<ID3D11PixelShader> ps;
 };
 
+struct RenderDeviceDx11
+{
+	IDXGIFactory1*			dxgiFactory1 = nullptr;
+
+	IDXGIAdapter1*			dxgiAdapter = nullptr;
+	IDXGIOutput*			dxgiOutput = nullptr;
+	IDXGISwapChain*			dxgiSwapChain = nullptr;
+
+	ID3D11Device*			d3d11Device = nullptr;
+	ID3D11DeviceContext*	d3d11DeviceContext = nullptr;
+	SpscFifo<RenderThreadCmd, 16> renderThreadCmdQueue;
+	bool					goingFullScreen = false;
+
+	RendererDesc			rendererDesc;
+};
+
+YU_GLOBAL RenderDeviceDx11* gDx11Device;
+YU_GLOBAL int gRenderThreadRunning;
+
 struct RendererDx11 : public Renderer
 {
 	MeshDataDx11		dx11MeshList[MAX_MESH];
@@ -92,13 +114,22 @@ struct RendererDx11 : public Renderer
 	RenderTextureDx11	dx11RenderTextureList[MAX_TEXTURE];
 	SamplerDx11			dx11SamplerList[MAX_SAMPLER];
 	UINT prevNumPSSRV = 0;
+
 };
 
 YU_GLOBAL RendererDx11* gRenderer;
 
+Renderer* GetRenderer()
+{
+	assert(gRenderer);
+	return gRenderer;
+}
+/*
 Renderer* CreateRenderer()
 {
-	RendererDx11* renderer = New<RendererDx11>(gSysArena);
+	RendererDx11* renderer = new RendererDx11();
+	renderer->rendererDesc = gDx11Device->rendererDesc;
+
 	gRenderer = renderer;
 	return renderer;
 }
@@ -109,24 +140,9 @@ void FreeRenderer(Renderer* renderer)
 
 	dx11Renderer->~RendererDx11();
 }
+*/
 
-struct RenderDeviceDx11
-{
-	IDXGIFactory1*			dxgiFactory1 = nullptr;
-	
-	IDXGIAdapter1*			dxgiAdapter = nullptr;
-	IDXGIOutput*			dxgiOutput = nullptr;
-	IDXGISwapChain*			dxgiSwapChain = nullptr;
 
-	ID3D11Device*			d3d11Device = nullptr;
-	ID3D11DeviceContext*	d3d11DeviceContext = nullptr;
-	SpscFifo<RenderThreadCmd, 16> renderThreadCmdQueue;
-	bool					goingFullScreen = false;
-
-	FrameBufferDesc			frameBufferDesc;
-};
-
-YU_GLOBAL RenderDeviceDx11* gDx11Device;
 
 YU_INTERNAL DXGI_FORMAT DXGIFormat(TextureFormat fmt)
 {
@@ -153,18 +169,18 @@ YU_INTERNAL TextureFormat TextureFormatFromDxgi(DXGI_FORMAT fmt)
 struct InitDX11Param
 {
 	Window			win;
-	FrameBufferDesc	desc;
+	RendererDesc	desc;
 	CondVar			initDx11CV;
 	Mutex			initDx11CS;
 };
 
-YU_INTERNAL bool SetFullScreen(const FrameBufferDesc& desc)
+YU_INTERNAL bool SetFullScreen(const RendererDesc& desc)
 {
 	if (desc.fullScreen)
 	{
 		DXGI_MODE_DESC desiredMode;
 		DXGI_MODE_DESC matchMode;
-		desiredMode.Format = DXGIFormat(desc.format);
+		desiredMode.Format = DXGIFormat(desc.frameBufferFormat);
 		desiredMode.Width = desc.width;
 		desiredMode.Height = desc.height;
 		desiredMode.RefreshRate.Numerator = (UINT)floor(desc.refreshRate + 0.5);
@@ -201,11 +217,11 @@ YU_INTERNAL bool SetFullScreen(const FrameBufferDesc& desc)
 	return false;
 }
 
-YU_INTERNAL bool InitDX11(const Window& win, const FrameBufferDesc& desc)
+YU_INTERNAL bool InitDX11(const Window& win, const RendererDesc& desc)
 {
 	gDx11Device = new RenderDeviceDx11();
 
-	gDx11Device->frameBufferDesc = desc;
+	gDx11Device->rendererDesc = desc;
 
 	hModuleDX11 = LoadLibraryA("d3d11.dll");
 
@@ -330,7 +346,7 @@ YU_INTERNAL bool InitDX11(const Window& win, const FrameBufferDesc& desc)
 		sd.BufferCount = 1;
 		sd.BufferDesc.Width = desc.width;
 		sd.BufferDesc.Height = desc.height;
-		sd.BufferDesc.Format = DXGIFormat(desc.format);
+		sd.BufferDesc.Format = DXGIFormat(desc.frameBufferFormat);
 		sd.BufferDesc.RefreshRate.Numerator = 0; //this is important, if not set to zero, DXGI will complain when goto full screen
 		sd.BufferDesc.RefreshRate.Denominator = 1;
 		sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -350,6 +366,18 @@ YU_INTERNAL bool InitDX11(const Window& win, const FrameBufferDesc& desc)
 				SetFullScreen(desc);
 			}
 
+			//set frames of latency
+			IDXGIDevice1* dxgiDevice1 = nullptr;
+			hr = gDx11Device->d3d11Device->QueryInterface(__uuidof(IDXGIDevice1), (void**)&dxgiDevice1);
+			if (SUCCEEDED(hr))
+			{
+				hr = dxgiDevice1->SetMaximumFrameLatency(1);
+				if (FAILED(hr))
+				{
+					Log("error: IDXGIDevice1 failed to set maximum frame latency\n");
+				}
+				dxgiDevice1->Release();
+			}
 			return true;
 		}
 
@@ -363,9 +391,10 @@ YU_INTERNAL bool InitDX11(const Window& win, const FrameBufferDesc& desc)
 
 YU_INTERNAL void FreeDX11()
 {
-	OutputDebugStringA("free dx11\n");
+	//OutputDebugStringA("free dx11\n");
 	ULONG refCount;
-	
+
+
 	refCount = gDx11Device->dxgiOutput->Release();
 	refCount = gDx11Device->dxgiSwapChain->Release();
 	refCount = gDx11Device->dxgiAdapter->Release();
@@ -373,6 +402,12 @@ YU_INTERNAL void FreeDX11()
 	refCount = gDx11Device->d3d11Device->Release();
 
 	refCount = gDx11Device->dxgiFactory1->Release();
+
+	if (gOvrDevice->initialized)
+	{
+		ovrHmd_Destroy(gOvrDevice->hmd);
+		ovr_Shutdown();
+	}
 
 	delete gDx11Device;
 }
@@ -619,12 +654,12 @@ YU_INTERNAL void ExecUpdateMeshCmd(RendererDx11* renderer, MeshHandle mesh, u32 
 
 YU_INTERNAL void ExecUpdateCameraCmd(RendererDx11* renderer, CameraHandle camera, const CameraData& updateData)
 {
-	renderer->cameraList.Get(camera.id)->UpdateData(updateData);
-	CameraData* data = &renderer->cameraList.Get(camera.id)->GetMutable();
+	(renderer->cameraDataList + camera.id)->UpdateData(updateData);
+	CameraData* data = &(renderer->cameraDataList + camera.id)->GetMutable();
 	CameraDataDx11* dx11Data = &renderer->dx11CameraList[camera.id];
 	CameraConstant camConstant;
-	camConstant.viewMatrix = data->ViewMatrix();
-	camConstant.projectionMatrix = data->PerspectiveMatrixDx();
+	camConstant.viewMatrix = ViewMatrix(data->position, data->lookAt, data->right);
+	camConstant.projectionMatrix = PerspectiveMatrixDX(data->upTan, data->downTan, data->leftTan, data->rightTan, data->n, data->f);
 
 	if (!dx11Data->constantBuffer)
 	{
@@ -807,7 +842,7 @@ YU_INTERNAL void ExecCreateTextureCmd(RendererDx11* renderer, TextureHandle text
 
 YU_INTERNAL void ExecCreateRenderTextureCmd(RendererDx11* renderer, RenderTextureHandle& renderTexture, RenderTextureDesc& desc)
 {
-	TextureDesc& refTextureDesc = *renderer->textureList.Get(desc.refTexture.id);
+	TextureDesc& refTextureDesc = renderer->textureDescList[desc.refTexture.id];
 	Texture2DDx11& dx11Texture = renderer->dx11TextureList[desc.refTexture.id];
 
 	D3D11_RENDER_TARGET_VIEW_DESC dx11RTDesc;
@@ -881,7 +916,7 @@ YU_INTERNAL void ExecCreateSamplerCmd(RendererDx11* renderer, SamplerHandle samp
 
 YU_INTERNAL void ExecInsertFenceCmd(RendererDx11* renderer, FenceHandle fenceHandle)
 {
-	Fence* fence = renderer->fenceList.Get(fenceHandle.id);
+	Fence* fence = renderer->fenceList + fenceHandle.id;
 	fence->cpuExecuted = true;
 }
 
@@ -899,23 +934,28 @@ YU_INTERNAL void ExecRenderCmd(RendererDx11* renderer, RenderQueue* queue, int r
 	for (int i = 0; i < list->cmdCount; i++)
 	{
 		RenderCmd& cmd = list->cmd[i];
-		MeshHandle& handle = cmd.mesh;
-		CameraHandle& camHandle = cmd.cam;
-		PipelineHandle& pipelineHandle = cmd.pipeline;
+		RenderTextureHandle& renderTexture = cmd.renderTexture;
+		MeshHandle& mesh = cmd.mesh;
+		CameraHandle& camera = cmd.cam;
+		PipelineHandle& pipeline = cmd.pipeline;
 		RenderResource& resources = cmd.resources;
 
 		//CameraData* data = &renderer->cameraList.Get(camHandle.id)->GetMutable();
 
 		gDx11Device->d3d11DeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		MeshDataDx11* mesh = &renderer->dx11MeshList[handle.id];
-		CameraDataDx11* cam = &renderer->dx11CameraList[camHandle.id];
-		PipelineDx11* pipeline = &renderer->dx11PipelineList[pipelineHandle.id];
+		RenderTextureDx11* dx11RenderTexture = &renderer->dx11RenderTextureList[renderTexture.id];
+		MeshDataDx11* dx11Mesh = &renderer->dx11MeshList[mesh.id];
+		CameraDataDx11* dx11Camera = &renderer->dx11CameraList[camera.id];
+		PipelineDx11* dx11Pipeline = &renderer->dx11PipelineList[pipeline.id];
 
-		gDx11Device->d3d11DeviceContext->VSSetShader(pipeline->vs, nullptr, 0);
-		gDx11Device->d3d11DeviceContext->PSSetShader(pipeline->ps, nullptr, 0);
+		ID3D11RenderTargetView* d3d11RenderTargetView = dx11RenderTexture->renderTargetView;
+		gDx11Device->d3d11DeviceContext->OMSetRenderTargets(1, &d3d11RenderTargetView, nullptr);
 
-		ID3D11Buffer* constantBuffer = cam->constantBuffer;
+		gDx11Device->d3d11DeviceContext->VSSetShader(dx11Pipeline->vs, nullptr, 0);
+		gDx11Device->d3d11DeviceContext->PSSetShader(dx11Pipeline->ps, nullptr, 0);
+
+		ID3D11Buffer* constantBuffer = dx11Camera->constantBuffer;
 		gDx11Device->d3d11DeviceContext->VSSetConstantBuffers(0, 1, &constantBuffer);
 
 		if (renderer->prevNumPSSRV > resources.numPsTexture)
@@ -940,10 +980,10 @@ YU_INTERNAL void ExecRenderCmd(RendererDx11* renderer, RenderQueue* queue, int r
 
 		UINT stride = sizeof(VertexP3C4);
 		UINT offset = 0;
-		ID3D11Buffer* vertexBuffer = mesh->vertexBuffer;
-		gDx11Device->d3d11DeviceContext->IASetInputLayout(mesh->inputLayout);
+		ID3D11Buffer* vertexBuffer = dx11Mesh->vertexBuffer;
+		gDx11Device->d3d11DeviceContext->IASetInputLayout(dx11Mesh->inputLayout);
 		gDx11Device->d3d11DeviceContext->IASetVertexBuffers(0, 1, &vertexBuffer, &stride, &offset);
-		gDx11Device->d3d11DeviceContext->IASetIndexBuffer(mesh->indexBuffer, DXGI_FORMAT_R32_UINT, 0);
+		gDx11Device->d3d11DeviceContext->IASetIndexBuffer(dx11Mesh->indexBuffer, DXGI_FORMAT_R32_UINT, 0);
 
 		gDx11Device->d3d11DeviceContext->DrawIndexed(list->cmd[i].numIndex, 0, 0);
 	}
@@ -958,6 +998,7 @@ YU_INTERNAL void ExecRenderCmd(RendererDx11* renderer, RenderQueue* queue, int r
 
 }
 
+/*
 YU_INTERNAL void ExecThreadCmd()
 {
 	RenderThreadCmd cmd;
@@ -973,14 +1014,14 @@ YU_INTERNAL void ExecThreadCmd()
 
 		}
 	}
-}
+}*/
 
 YU_INTERNAL bool ExecThreadCmd(RendererDx11* renderer)
 {
 	bool frameEnd = false;
 	for (int i = 0; i < renderer->numQueue; i++)
 	{
-		RenderQueue* queue = renderer->renderQueue[i];
+		RenderQueue* queue = &renderer->renderQueue[i];
 		RenderThreadCmd cmd;
 		while (queue->cmdList.Dequeue(cmd))
 		{
@@ -990,6 +1031,18 @@ YU_INTERNAL bool ExecThreadCmd(RendererDx11* renderer)
 				{
 					RenderThreadCmd::ResizeBufferCmd resizeCmd = cmd.resizeBuffCmd;
 					ExecResizeBackBufferCmd(resizeCmd.width, resizeCmd.height, resizeCmd.fmt);
+				}break;
+				case(RenderThreadCmd::START_VR_MODE) :
+				{
+					queue->renderer->vrRendering = true;
+				}break;
+				case(RenderThreadCmd::STOP_VR_MODE) :
+				{
+					queue->renderer->vrRendering = false;
+				}break;
+				case(RenderThreadCmd::STOP_RENDER_THREAD) :
+				{
+					gRenderThreadRunning = 0;
 				}break;
 				case (RenderThreadCmd::CREATE_MESH) :
 				{
@@ -1057,33 +1110,116 @@ YU_INTERNAL bool ExecThreadCmd(RendererDx11* renderer)
 	return frameEnd;
 }
 
-bool YuRunning();
 void WaitForKick(FrameLock* lock);
 ThreadReturn ThreadCall RenderThread(ThreadContext context)
 {
 	InitDX11Param* param = (InitDX11Param*)context;
 	param->initDx11CS.Lock();
-	InitDX11(param->win, param->desc);
-	param->initDx11CS.Unlock();
-	NotifyCondVar(param->initDx11CV);
 
+	OvrDevice* ovrDevice = gOvrDevice = new OvrDevice;
+
+	if (param->desc.initOvrRendering)
+	{
+		ovrDevice->initialized = ovr_Initialize();
+
+		param->desc.supportOvrRendering = false;
+		if (ovrDevice->initialized)
+		{
+			ovrDevice->hmd = ovrHmd_Create(0);
+
+			if (ovrDevice->hmd)
+			{
+
+				bool windowed = (ovrDevice->hmd->HmdCaps & ovrHmdCap_ExtendDesktop) ? false : true;
+				param->desc.width = ovrDevice->hmd->Resolution.w;
+				param->desc.height = ovrDevice->hmd->Resolution.h;
+
+				param->desc.supportOvrRendering = true;
+			}
+			else
+			{
+				Log("error, RenderThread: ovr create hmd failed\n");
+			}
+		}
+	}
+
+	bool initDx11Success = InitDX11(param->win, param->desc);
 
 	ID3D11Texture2D* backBufferTexture;
 	HRESULT hr = gDx11Device->dxgiSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&backBufferTexture);
 
-	ID3D11RenderTargetView* renderTarget;
-	hr = gDx11Device->d3d11Device->CreateRenderTargetView(backBufferTexture, NULL, &renderTarget);
+	ID3D11RenderTargetView* backBufferRenderTarget;
+	hr = gDx11Device->d3d11Device->CreateRenderTargetView(backBufferTexture, NULL, &backBufferRenderTarget);
 	
 	if (SUCCEEDED(hr))
 	{
-		Log("successfully created render target\n");
+		//Log("successfully created render target\n");
 	}
+	else
+	{
+		Log("error, RenderThread: dx11 create frame buffer failed\n");
+		return 1;
+	}
+
+	{
+
+		if (ovrDevice->initialized && ovrDevice->hmd)
+		{
+			ovrHmd_AttachToWindow(ovrDevice->hmd, param->win.hwnd, nullptr, nullptr);
+			ovrHmd_SetEnabledCaps(ovrDevice->hmd, ovrHmdCap_LowPersistence | ovrHmdCap_DynamicPrediction);
+			// Start the sensor which informs of the Rift's pose and motion
+			ovrHmd_ConfigureTracking(ovrDevice->hmd, ovrTrackingCap_Orientation | ovrTrackingCap_MagYawCorrection |
+				ovrTrackingCap_Position, 0);
+
+			ovrD3D11Config d3d11cfg;
+			d3d11cfg.D3D11.Header.API = ovrRenderAPI_D3D11;
+			ovrSizei backBufferSize = { ovrDevice->hmd->Resolution.w, ovrDevice->hmd->Resolution.h };
+			d3d11cfg.D3D11.Header.BackBufferSize = backBufferSize;
+			d3d11cfg.D3D11.Header.Multisample = 1;
+			d3d11cfg.D3D11.pDevice = gDx11Device->d3d11Device;
+			d3d11cfg.D3D11.pDeviceContext = gDx11Device->d3d11DeviceContext;
+			d3d11cfg.D3D11.pBackBufferRT = backBufferRenderTarget;
+			d3d11cfg.D3D11.pSwapChain = gDx11Device->dxgiSwapChain;
+
+			if (!ovrHmd_ConfigureRendering(ovrDevice->hmd, &d3d11cfg.Config,
+				ovrDistortionCap_Chromatic | ovrDistortionCap_Vignette |
+				ovrDistortionCap_TimeWarp | ovrDistortionCap_Overdrive,
+				ovrDevice->hmd->DefaultEyeFov, ovrDevice->eyeRenderDesc))
+			{
+				Log("error: RenderThread: ovrHmd_ConfigureRendering failed\n");
+				return 1;
+			}
+		}
+
+	}
+
+	RendererDx11* renderer = new RendererDx11;
+	renderer->rendererDesc = gDx11Device->rendererDesc;
+
+	//set frame buffer to render texture id 0
+	{
+		renderer->frameBuffer.id = renderer->renderTextureIdList.Alloc();
+		ULONG refCount = backBufferRenderTarget->AddRef(); //hack to prevent crash when exit
+		renderer->dx11RenderTextureList[renderer->frameBuffer.id].renderTargetView = backBufferRenderTarget;
+	}
+
+	gRenderer = renderer;
+
+	param->initDx11CS.Unlock();
+	NotifyCondVar(param->initDx11CV);
+
+	if (!initDx11Success)
+	{
+		Log("error, RenderThread: InitDx11 failed\n");
+		return 1;
+	}
+	gRenderThreadRunning = 1;
 
 	FrameLock* frameLock = AddFrameLock(); //TODO: seperate render thread kick from others, shoot and forget	
 	u64 frameCount = 0;
 	unsigned int laps = 100;
 	unsigned int f = 0;
-	while (YuRunning())
+	while (gRenderThreadRunning)
 	{
 		PerfTimer innerTimer;
 		PerfTimer kTimer;
@@ -1100,23 +1236,23 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 		innerTimer.Start();
 
 		float clearColor[4] = {0.7f, 0.7f, 0.7f, 0.7f};
-		gDx11Device->d3d11DeviceContext->ClearRenderTargetView(renderTarget, clearColor);
-		gDx11Device->d3d11DeviceContext->OMSetRenderTargets(1, &renderTarget, nullptr);
+		gDx11Device->d3d11DeviceContext->ClearRenderTargetView(backBufferRenderTarget, clearColor);
+		gDx11Device->d3d11DeviceContext->OMSetRenderTargets(1, &backBufferRenderTarget, nullptr);
 		
 		D3D11_VIEWPORT viewport;
 		viewport.TopLeftX = 0;
 		viewport.TopLeftY = 0;
-		viewport.Width = (float)gDx11Device->frameBufferDesc.width;
-		viewport.Height = (float)gDx11Device->frameBufferDesc.height;
+		viewport.Width = (float)gDx11Device->rendererDesc.width;
+		viewport.Height = (float)gDx11Device->rendererDesc.height;
 		viewport.MinDepth = 0;
 		viewport.MaxDepth = 1;
 		gDx11Device->d3d11DeviceContext->RSSetViewports(1, &viewport);
 
 
-		ExecThreadCmd();
+		//ExecThreadCmd();
 
 		bool frameEnd = false;
-		while (!frameEnd && YuRunning())
+		while (!frameEnd && gRenderThreadRunning)
 			frameEnd =ExecThreadCmd(gRenderer);
 
 		BaseDoubleBufferData::SwapDirty();
@@ -1142,13 +1278,15 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 	}
 	
 	SAFE_RELEASE(backBufferTexture);
-	SAFE_RELEASE(renderTarget);
+	SAFE_RELEASE(backBufferRenderTarget);
+
+	delete renderer;
 
 	FreeDX11();
 	return 0;
 }
 
-void InitRenderThread(const Window& win, const FrameBufferDesc& desc)
+void InitRenderThread(const Window& win, const RendererDesc& desc)
 {
 	InitDX11Param param;
 	param.initDx11CS.Lock();

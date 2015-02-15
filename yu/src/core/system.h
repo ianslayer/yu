@@ -41,7 +41,7 @@ struct Window
 		MOUSE_CAPTURE,
 		MOUSE_FREE,
 	}; 
-	MouseMode	mode = MOUSE_CAPTURE;
+	MouseMode	mode = MOUSE_FREE;
 };
 
 struct InputEvent

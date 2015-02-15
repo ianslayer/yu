@@ -4,6 +4,17 @@
 #include "../core/free_list.h"
 #include "renderer.h"
 
+
+#include "../../3rd_party/ovr/Src/OVR_CAPI.h"
+#if defined YU_OS_WIN32
+	#if defined YU_CPU_X86_64
+		#pragma comment(lib, "../3rd_party/ovr/Lib/x64/VS2013/libovr64.lib")
+	#elif defined YU_CPU_X86
+		#pragma comment(lib, "../3rd_party/ovr/Lib/Win32/VS2013/libovr.lib")
+	#endif
+#pragma comment(lib, "ws2_32.lib") //what's this???
+#endif
+
 namespace yu
 {
 
@@ -14,94 +25,81 @@ CameraData DefaultCamera()
 	cam.position = _Vector3(0, 0, 0);
 
 	//right hand coordinate
-	cam.lookat = _Vector3(-1, 0, 0);//view space +z
+	cam.lookAt = _Vector3(-1, 0, 0);//view space +z
 	cam.right = _Vector3(0, 1, 0); //view space +x
 	//Vector3 down;    //view space +y, can be derived from lookat ^ right
 
-	cam.xFov = 3.14f / 2.f;
+	cam.leftTan = cam.rightTan = tan(3.14f / 4.f);
+	cam.upTan = cam.downTan = cam.leftTan * (720.f / 1280.f);
 
 	//projection
 	cam.n = 0.1f;
 	cam.f = 3000.f;
 
-	cam.DeriveProjectionParamter(1280, 720);
+	cam.filmWidth = 1280;
+	cam.filmHeight = 720;
 
 	return cam;
 }
 
-Matrix4x4 CameraData::ViewMatrix() const
+Matrix4x4 ViewMatrix(Vector3 pos, Vector3 lookAt, Vector3 right) 
 {
-	Vector3 down = Down();
+	Vector3 down = cross(lookAt, right);
 	return Matrix4x4(right.x, right.y, right.z,0,
 					 down.x, down.y, down.z, 0,
-					 lookat.x, lookat.y, lookat.z, 0,
-					 0, 0, 0, 1) * Translate(-position);
-}
-Matrix4x4 CameraData::InvViewMatrix() const
-{
-	Matrix4x4 viewMatrix = ViewMatrix(); 
-	return InverseAffine(viewMatrix);
+					 lookAt.x, lookAt.y, lookAt.z, 0,
+					 0, 0, 0, 1) * Translate(-pos);
 }
 
-Vector3 CameraData::Down() const
+Matrix4x4 PerspectiveMatrixDX(float upTan, float downTan, float leftTan, float rightTan, float n, float f)
 {
-	return cross(lookat, right);
-}
+	float r = n * rightTan;
+	float l = -n * leftTan;
 
-void CameraData::SetXFov(float angleRad, float filmWidth, float filmHeight)
-{
-	xFov = angleRad;
-	DeriveProjectionParamter(filmWidth, filmHeight);
-}
+	float t = n * upTan;
+	float b = -n * downTan;
 
-void CameraData::DeriveProjectionParamter(float filmWidth, float filmHeight)
-{
-	r = n* tanf(xFov/2.f);
-	t = r * filmHeight / filmHeight;
-
-	l = -r;
-	b = -t;
-}
-
-Matrix4x4 CameraData::PerspectiveMatrixDx() const
-{
 	float width = r - l;
 	float height = t - b;
-
-	//use complementary z
 	float depth = f - n;
 
 	return Scale(_Vector3(1, -1, 1)) * Matrix4x4(2.f * n / width, 0.f, -(l + r) / width, 0.f,
-					0.f, 2.f * n / height, -(t + b) / height,0.f,
-					0.f, 0.f, -n/ depth, (n * f) / depth,
-					0.f, 0.f, 1.f, 0.f);
-}
-
-Matrix4x4 CameraData::PerspectiveMatrixGl() const
-{
-	float width = r - l;
-	float height = t - b;
-
-	float depth = f - n;
-	
-	/*
-	return Scale(_Vector3(1, -1, 1)) * 
-		Matrix4x4(1, 0, 0, 0,
-				0, 1, 0, 0,
-				0, 0, 2, -1,
-				0, 0, 0, 1
-		) * 
-		Matrix4x4(2.f * n / width, 0.f, -(l + r) / width, 0.f,
 		0.f, 2.f * n / height, -(t + b) / height, 0.f,
 		0.f, 0.f, -n / depth, (n * f) / depth,
 		0.f, 0.f, 1.f, 0.f);
-		*/
+}
+
+
+Matrix4x4 PerspectiveMatrixDX(float halfTanX, float n, float f, float filmWidth, float filmHeight)
+{
+	float upTan = halfTanX * (filmHeight/  filmWidth);
+	return PerspectiveMatrixDX(upTan, upTan, halfTanX, halfTanX, n, f);
+}
+
+Matrix4x4 PerspectiveMatrixGL(float upTan, float downTan, float leftTan, float rightTan, float n, float f)
+{
+	float r = n * rightTan;
+	float l = -n * leftTan;
+
+	float t = n * upTan;
+	float b = -n * downTan;
+
+	float width = r - l;
+	float height = t - b;
+	float depth = f - n;
 
 	return Scale(_Vector3(1, -1, 1)) *
 		Matrix4x4(2.f * n / width, 0.f, -(l + r) / width, 0.f,
 		0.f, 2.f * n / height, -(t + b) / height, 0.f,
 		0.f, 0.f, -(n + f) / depth, (2.f * n * f) / depth,
 		0.f, 0.f, 1.f, 0.f);
+}
+
+
+Matrix4x4 PerspectiveMatrixGL(float halfTanX, float n, float f, float filmWidth, float filmHeight)
+{
+	float upTan = halfTanX * (filmHeight / filmWidth);
+	return PerspectiveMatrixGL(upTan, upTan, halfTanX, halfTanX, n, f);
 }
 
 #define MAX_CAMERA 256
@@ -124,6 +122,11 @@ struct RenderThreadCmd
 	enum CommandType
 	{
 		RESIZE_BUFFER,
+
+		STOP_RENDER_THREAD,
+
+		START_VR_MODE,
+		STOP_VR_MODE,
 
 		CREATE_MESH,
 		CREATE_CAMERA,
@@ -155,7 +158,7 @@ struct RenderThreadCmd
 		unsigned int	height;
 		TextureFormat		fmt;
 	};
-	
+
 	struct CreateMeshCmd
 	{
 		MeshHandle	mesh;
@@ -262,6 +265,7 @@ struct RenderThreadCmd
 struct RenderCmd
 {
 	CameraHandle	cam;
+	RenderTextureHandle	renderTexture;
 	MeshHandle		mesh;
 	PipelineHandle	pipeline;
 	RenderResource	resources;
@@ -371,26 +375,62 @@ struct MeshRenderData
 
 struct Renderer
 {
-	FreeList<DoubleBufferCameraData, MAX_CAMERA>		cameraList;
-	FreeList<MeshRenderData, MAX_MESH>					meshList;
-	FreeList<VertexShaderData, MAX_SHADER>				vertexShaderList;
-	FreeList<PixelShaderData, MAX_SHADER>				pixelShaderList;
-	FreeList<PipelineData, MAX_PIPELINE>				pipelineList;
-	FreeList<TextureDesc, MAX_TEXTURE>					textureList;
-	FreeList<RenderTextureDesc, MAX_RENDER_TEXTURE>		renderTextureList;
-	FreeList<SamplerStateDesc, MAX_SAMPLER>				samplerList;
-	FreeList<Fence, MAX_FENCE>							fenceList;
-	FreeList<RenderQueue, MAX_RENDER_QUEUE>				renderQueueList; //generally one queue per worker thread
-	RenderQueue											*renderQueue[MAX_RENDER_QUEUE];
-	int													numQueue = 0;
+	IndexFreeList<MAX_CAMERA>							cameraIdList;
+	DoubleBufferCameraData								cameraDataList[MAX_CAMERA];
+
+	IndexFreeList<MAX_MESH>								meshIdList;
+	MeshRenderData										meshList[MAX_MESH];
+	
+	IndexFreeList<MAX_SHADER>							vertexShaderIdList;
+	IndexFreeList<MAX_SHADER>							pixelShaderIdList;
+
+	IndexFreeList<MAX_PIPELINE>							pipelineIdList;
+
+	IndexFreeList<MAX_TEXTURE>							textureIdList;
+	TextureDesc											textureDescList[MAX_TEXTURE];
+	
+	IndexFreeList<MAX_RENDER_TEXTURE>					renderTextureIdList;
+	RenderTextureDesc									renderTextureDescList[MAX_RENDER_TEXTURE];
+
+	IndexFreeList<MAX_SAMPLER>							samplerIdList;
+	SamplerStateDesc									samplerDescList[MAX_SAMPLER];
+
+	IndexFreeList<MAX_FENCE>							fenceIdList;
+	Fence												fenceList[MAX_FENCE];
+	
+	RenderQueue											renderQueue[MAX_RENDER_QUEUE];
+	std::atomic<int>									numQueue;
+
+	RenderTextureHandle									frameBuffer;
+
+	RendererDesc										rendererDesc;
+
+
+	bool												vrRendering = false;
+	RenderTextureHandle									eyeRenderTexture[2];
 };
+
+RenderTextureHandle	GetFrameBufferRenderTexture(Renderer* renderer)
+{
+	return renderer->frameBuffer;
+}
+
+const RendererDesc& GetRendererDesc(Renderer* renderer)
+{
+	return renderer->rendererDesc;
+}
 
 RenderQueue* CreateRenderQueue(Renderer* renderer)
 {
+	/*
 	int queueIdx = renderer->renderQueueList.Alloc();
 	RenderQueue* queue = renderer->renderQueueList.Get(queueIdx);
 	renderer->renderQueue[renderer->numQueue] = queue;
 	renderer->numQueue++;
+	*/
+
+	int queueIdx = renderer->numQueue.fetch_add(1);
+	RenderQueue* queue = &renderer->renderQueue[queueIdx];
 
 	queue->renderer = renderer;
 	return queue;
@@ -460,11 +500,78 @@ YU_INTERNAL void InterleaveVertexBuffer(void* vertexBuffer, MeshData* meshData, 
 	
 }
 
+void StopRenderThread(RenderQueue* queue)
+{
+	//gRenderThreadRunning = false;
+	RenderThreadCmd cmd;
+	cmd.type = RenderThreadCmd::STOP_RENDER_THREAD;
+	BlockEnqueueCmd(queue, cmd);
+}
+
+struct OvrDevice
+{
+	ovrHmd				hmd = nullptr;                  // The handle of the headset
+	bool				hmdDetected = false;
+	ovrBool				initialized = false;
+	ovrEyeRenderDesc	eyeRenderDesc[2];
+};
+
+YU_GLOBAL OvrDevice* gOvrDevice;
+
+void StartVRRendering(RenderQueue* queue)
+{
+	Renderer* renderer = queue->renderer;
+	if (renderer->rendererDesc.supportOvrRendering)
+	{
+		RenderThreadCmd cmd;
+		cmd.type = RenderThreadCmd::START_VR_MODE;
+		BlockEnqueueCmd(queue, cmd);
+	}
+}
+
+void EndVRRendering(RenderQueue* queue)
+{
+	Renderer* renderer = queue->renderer;
+	if (renderer->rendererDesc.supportOvrRendering)
+	{
+		RenderThreadCmd cmd;
+		cmd.type = RenderThreadCmd::STOP_VR_MODE;
+		BlockEnqueueCmd(queue, cmd);
+	}
+}
+
+float GetHmdEyeHeight()
+{
+	float eyeHeight = 0.f;
+	ovrPosef eyeRenderPose[2];
+	if (gOvrDevice && gOvrDevice->hmd)
+	{
+		eyeHeight = ovrHmd_GetFloat(gOvrDevice->hmd, OVR_KEY_EYE_HEIGHT, eyeHeight);
+
+		ovrVector3f hmdToEyeViewOffset[2] = { gOvrDevice->eyeRenderDesc[0].HmdToEyeViewOffset,
+			gOvrDevice->eyeRenderDesc[0].HmdToEyeViewOffset };
+
+		ovrHmd_GetEyePoses(gOvrDevice->hmd, 0, hmdToEyeViewOffset, eyeRenderPose, NULL);
+
+	}
+	return eyeHeight;
+}
+
+Vector2i GetVRTextureSize(int eye)
+{
+	ovrSizei idealSize = ovrHmd_GetFovTextureSize(gOvrDevice->hmd, (ovrEyeType)eye, gOvrDevice->hmd->DefaultEyeFov[eye], 1.0f);
+	Vector2i size;
+	size.w = idealSize.w;
+	size.h = idealSize.h;
+	return size;
+}
+
+
 MeshHandle	CreateMesh(RenderQueue* queue, u32 numVertices, u32 numIndices, u32 vertChannelMask)
 {
 	MeshHandle mesh;
-	mesh.id = queue->renderer->meshList.Alloc();
-	MeshRenderData* renderData = queue->renderer->meshList.Get(mesh.id);
+	mesh.id = queue->renderer->meshIdList.Alloc();
+	MeshRenderData* renderData = queue->renderer->meshList + mesh.id;
 	renderData->channelMask = vertChannelMask;
 	renderData->numVertices = numVertices;
 	renderData->numIndices = numIndices;
@@ -483,7 +590,7 @@ MeshHandle	CreateMesh(RenderQueue* queue, u32 numVertices, u32 numIndices, u32 v
 
 void FreeMesh(RenderQueue* queue, MeshHandle mesh) //TODO : cleanup render thread data
 {
-	queue->renderer->meshList.Free(mesh.id);
+	queue->renderer->meshIdList.DeferredFree(mesh.id);
 }
 
 /*
@@ -500,7 +607,7 @@ void UpdateMesh(RenderQueue* queue, MeshHandle mesh,
 
 	Renderer* renderer = queue->renderer;
 
-	MeshRenderData* meshRenderData = renderer->meshList.Get(mesh.id);
+	MeshRenderData* meshRenderData = renderer->meshList + mesh.id;
 	if (meshRenderData->channelMask != inputSubMesh->channelMask)
 	{
 		Log("error: UpdateMesh trying to update mesh in different vertex layout\n");
@@ -529,7 +636,7 @@ void UpdateMesh(RenderQueue* queue, MeshHandle mesh,
 VertexShaderHandle CreateVertexShader(RenderQueue* queue, const VertexShaderAPIData& data)
 {
 	VertexShaderHandle vertexShader;
-	vertexShader.id = queue->renderer->vertexShaderList.Alloc();
+	vertexShader.id = queue->renderer->vertexShaderIdList.Alloc();
 
 	RenderThreadCmd cmd;
 	cmd.type = RenderThreadCmd::CREATE_VERTEX_SHADER;
@@ -545,7 +652,7 @@ VertexShaderHandle CreateVertexShader(RenderQueue* queue, const VertexShaderAPID
 PixelShaderHandle CreatePixelShader(RenderQueue* queue, const PixelShaderAPIData& data)
 {
 	PixelShaderHandle pixelShader;
-	pixelShader.id = queue->renderer->pixelShaderList.Alloc();
+	pixelShader.id = queue->renderer->pixelShaderIdList.Alloc();
 
 	RenderThreadCmd cmd;
 	cmd.type = RenderThreadCmd::CREATE_PIXEL_SHADER;
@@ -560,7 +667,7 @@ PixelShaderHandle CreatePixelShader(RenderQueue* queue, const PixelShaderAPIData
 PipelineHandle CreatePipeline(RenderQueue* queue, const PipelineData& data)
 {
 	PipelineHandle pipeline;
-	pipeline.id = queue->renderer->pipelineList.Alloc();
+	pipeline.id = queue->renderer->pipelineIdList.Alloc();
 	RenderThreadCmd cmd;
 	cmd.type = RenderThreadCmd::CREATE_PIPELINE;
 	cmd.createPipelineCmd.pipeline = pipeline;
@@ -649,8 +756,8 @@ size_t TextureSize(TextureFormat format, int width, int height, int depth, int m
 TextureHandle CreateTexture(RenderQueue* queue, const TextureDesc& desc, TextureMipData* initData)
 {
 	TextureHandle texture;
-	texture.id = queue->renderer->textureList.Alloc();
-	TextureDesc& texDesc = *queue->renderer->textureList.Get(texture.id);
+	texture.id = queue->renderer->textureIdList.Alloc();
+	TextureDesc& texDesc = queue->renderer->textureDescList[texture.id];
 	texDesc = desc;
 
 	RenderThreadCmd cmd;
@@ -666,8 +773,8 @@ TextureHandle CreateTexture(RenderQueue* queue, const TextureDesc& desc, Texture
 RenderTextureHandle CreateRenderTexture(RenderQueue* queue, const RenderTextureDesc& desc)
 {
 	RenderTextureHandle renderTexture;
-	renderTexture.id = queue->renderer->textureList.Alloc();
-	RenderTextureDesc& rtDesc = *queue->renderer->renderTextureList.Get(renderTexture.id);
+	renderTexture.id = queue->renderer->renderTextureIdList.Alloc();
+	RenderTextureDesc& rtDesc = queue->renderer->renderTextureDescList[renderTexture.id];
 	rtDesc = desc;
 
 	RenderThreadCmd cmd;
@@ -681,8 +788,8 @@ RenderTextureHandle CreateRenderTexture(RenderQueue* queue, const RenderTextureD
 SamplerHandle CreateSampler(RenderQueue* queue, const SamplerStateDesc& desc)
 {
 	SamplerHandle sampler;
-	sampler.id = queue->renderer->samplerList.Alloc();
-	SamplerStateDesc& samplerDesc = *queue->renderer->samplerList.Get(sampler.id);
+	sampler.id = queue->renderer->samplerIdList.Alloc();
+	SamplerStateDesc& samplerDesc = queue->renderer->samplerDescList[sampler.id];
 	samplerDesc = desc;
 
 	RenderThreadCmd cmd;
@@ -697,8 +804,8 @@ SamplerHandle CreateSampler(RenderQueue* queue, const SamplerStateDesc& desc)
 FenceHandle CreateFence(RenderQueue* queue)
 {
 	FenceHandle fence;
-	fence.id = queue->renderer->fenceList.Alloc();
-	queue->renderer->fenceList.Get(fence.id)->cpuExecuted = false;
+	fence.id = queue->renderer->fenceIdList.Alloc();
+	queue->renderer->fenceList[fence.id].cpuExecuted = false;
 	RenderThreadCmd cmd;
 	cmd.type = RenderThreadCmd::CREATE_FENCE;
 	cmd.createFenceCmd.fence = fence;
@@ -719,7 +826,7 @@ void InsertFence(RenderQueue* queue, FenceHandle fence)
 
 bool IsCPUComplete(RenderQueue* queue, FenceHandle fenceHandle)
 {
-	Fence* fence = queue->renderer->fenceList.Get(fenceHandle.id);
+	Fence* fence = queue->renderer->fenceList + fenceHandle.id;
 	return fence->cpuExecuted;
 }
 
@@ -731,24 +838,24 @@ void WaitFence(RenderQueue* queue, FenceHandle fence) //TODO: consider proper wa
 
 void Reset(RenderQueue* queue, FenceHandle fence)
 {
-	assert(queue->renderer->fenceList.Get(fence.id)->cpuExecuted == true);
-	queue->renderer->fenceList.Get(fence.id)->cpuExecuted = false;
+	assert(queue->renderer->fenceList[fence.id].cpuExecuted == true);
+	queue->renderer->fenceList[fence.id].cpuExecuted = false;
 }
 
 CameraHandle CreateCamera(RenderQueue* queue)
 {
-	CameraHandle handle;
-	handle.id = queue->renderer->cameraList.Alloc();
-	DoubleBufferCameraData* camData = queue->renderer->cameraList.Get(handle.id);
+	CameraHandle camera;
+	camera.id = queue->renderer->cameraIdList.Alloc();
+	DoubleBufferCameraData* camData = queue->renderer->cameraDataList + camera.id;
 	CameraData defaultCamera = DefaultCamera();
 	camData->InitData(defaultCamera);
-	UpdateCamera(queue, handle, defaultCamera);
-	return handle;
+	UpdateCamera(queue, camera, defaultCamera);
+	return camera;
 }
 
 CameraData GetCameraData(RenderQueue* queue, CameraHandle handle)
 {
-	return queue->renderer->cameraList.Get(handle.id)->GetConst();
+	return (queue->renderer->cameraDataList + handle.id)->GetConst();
 }
 
 void UpdateCamera(RenderQueue* queue, CameraHandle camera, const CameraData& cameraData)
@@ -762,7 +869,7 @@ void UpdateCamera(RenderQueue* queue, CameraHandle camera, const CameraData& cam
 	BlockEnqueueCmd(queue, cmd);
 }
 
-void Render(RenderQueue* queue, CameraHandle cam, MeshHandle mesh, PipelineHandle pipeline, const RenderResource& resources)
+void Render(RenderQueue* queue, RenderTextureHandle renderTexture, CameraHandle cam, MeshHandle mesh, PipelineHandle pipeline, const RenderResource& resources)
 {
 	RenderList* list;
 	int listIndex;
@@ -787,8 +894,9 @@ void Render(RenderQueue* queue, CameraHandle cam, MeshHandle mesh, PipelineHandl
 	}
 ListFound:
 	
-	MeshRenderData* meshRenderData = queue->renderer->meshList.Get(mesh.id);
+	MeshRenderData* meshRenderData = queue->renderer->meshList + mesh.id;
 	RenderCmd& cmd = list->cmd[list->cmdCount];
+	cmd.renderTexture = renderTexture;
 	cmd.cam = cam;
 	cmd.mesh = mesh;
 	cmd.pipeline = pipeline;

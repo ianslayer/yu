@@ -15,8 +15,10 @@ void KickStart();
 void WaitFrameComplete();
 void FakeKickStart();
 
-std::atomic<int> gYuRunning;
-std::atomic<int> gYuInitialized;
+YU_GLOBAL std::atomic<int> gYuRunning;
+YU_GLOBAL std::atomic<int> gYuInitialized;
+YU_GLOBAL RenderQueue*	gRenderQueue; //for shutdown render thread
+
 void InitYu()
 {
 	InitSysLog();
@@ -38,23 +40,23 @@ void InitYu()
 
 	gWindowManager->mainWindow = gWindowManager->CreateWin(rect);
 	
-	FrameBufferDesc frameBufferDesc;
-	frameBufferDesc.format = TEX_FORMAT_R8G8B8A8_UNORM;
-	frameBufferDesc.fullScreen = false;
-	frameBufferDesc.width = (int) rect.width;
-	frameBufferDesc.height = (int) rect.height;
-	frameBufferDesc.refreshRate = 60;
-	frameBufferDesc.sampleCount = 1;
+	RendererDesc rendererDesc = {};
+	rendererDesc.frameBufferFormat = TEX_FORMAT_R8G8B8A8_UNORM;
+	rendererDesc.fullScreen = false;
+	rendererDesc.width = (int)rect.width;
+	rendererDesc.height = (int)rect.height;
+	rendererDesc.refreshRate = 60;
+	rendererDesc.sampleCount = 1;
+	rendererDesc.initOvrRendering = true;
 	//InitSound();
-	InitRenderThread(gWindowManager->mainWindow, frameBufferDesc);
-
+	InitRenderThread(gWindowManager->mainWindow, rendererDesc);
 
 	InitWorkerSystem();
 
+	InitStarGazer(gWindowManager->mainWindow);
 
-	InitStarGazer();
-
-
+	Renderer* renderer = GetRenderer();
+	gRenderQueue = GetThreadLocalRenderQueue();;
 }
 
 void FreeYu()
@@ -63,15 +65,19 @@ void FreeYu()
 
 	//gWindowManager->CloseWin(gWindowManager->mainWindow);
 
+	FreeStarGazer();
+
+	StopRenderThread(gRenderQueue);
+
 	while (!AllThreadsExited())
 	{
 		FakeKickStart();//make sure all thread proceed to exit
 	}
 
-	FreeStarGazer();
 
 	FreeWindowManager();
 	FreeWorkerSystem();
+
 	FreeThreadRuntime();
 	FreeSysStrTable();
 	FreeSysAllocator();

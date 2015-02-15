@@ -43,7 +43,7 @@ YU_INTERNAL LRESULT CALLBACK FakeWndProc(HWND hWnd, UINT message, WPARAM wParam,
 }
 
 
-void InitGLContext(const yu::Window& win, const yu::FrameBufferDesc& desc)
+void InitGLContext(const yu::Window& win, const yu::RendererDesc& desc)
 {
 	//create fake window
 	WNDCLASSEX wcex;
