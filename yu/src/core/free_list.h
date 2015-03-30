@@ -44,8 +44,8 @@ struct IndexFreeList
 	{
 		int numFreedId = numDeferredFreed.load(std::memory_order_acquire);
 		
-//		int EndFreeIdx = numAlloced.load();
-		int StartFreeIdx = EndFreeIdx - numFreedId;
+		int endFreeIdx = numAlloced.load();
+		int StartFreeIdx = endFreeIdx - numFreedId;
 
 		for (int i = 0; i < numFreedId; i++)
 		{
@@ -63,61 +63,6 @@ struct IndexFreeList
 	int deferredFreeInices[num];
 	std::atomic<int> numDeferredFreed;
 };
-
-template<class T, int num> struct FreeList
-{
-	FreeList() : numAlloced(0)
-	{
-		for (int i = 0; i < num; i++)
-			freeObject[i] = i;
-	}
-
-	int Alloc()
-	{
-		int allocIdx = numAlloced.fetch_add(1, std::memory_order_acquire);
-		assert(allocIdx < num);
-
-		if (allocIdx >= num)
-			return -1;
-
-		int allocObj = freeObject[allocIdx];
-#if defined YU_DEBUG
-		freeObject[allocIdx] = -1;
-#endif
-		return allocObj;
-	}
-
-	void Free(int index)
-	{
-		assert((index >= 0) && (index < num));
-		int freeIdx = numAlloced.fetch_sub(1, std::memory_order_acquire);
-		freeIdx--;
-		assert((freeIdx >= 0) && (freeIdx < num));
-		freeObject[freeIdx] = index;
-	}
-
-	T* Get(int index)
-	{
-		assert((index >= 0) && (index < num));
-		return &object[index];
-	}
-
-	const T* Get(int index) const
-	{
-		assert((index >= 0) && (index < num));
-		return &object[index];
-	}
-
-	int Available()
-	{
-		return num - numAlloced;
-	}
-
-	int	freeObject[num];
-	T	object[num];
-	std::atomic<int> numAlloced;
-};
-
 
 }
 

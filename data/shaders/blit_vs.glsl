@@ -18,9 +18,9 @@ out VS_OUTPUT
 
 void main(void)
 {
-	mat4x4 viewProjMatrix = projectionMatrix * viewMatrix;
 	Out.texcoord = vec2(texcoord.x, 1-texcoord.y);
-	gl_Position = Out.position = viewProjMatrix * vec4(position, 1);
+	
+	gl_Position = Out.position = vec4(position, 1);
 }
 
 																																																																																		

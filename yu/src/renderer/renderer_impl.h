@@ -140,6 +140,12 @@ struct RenderThreadCmd
 		CREATE_VERTEX_SHADER,
 		CREATE_PIXEL_SHADER,
 		CREATE_PIPELINE,
+		
+#if defined YU_DEBUG || defined YU_TOOL
+		RELOAD_VERTEX_SHADER,
+		RELOAD_PIXEL_SHADER,
+		RELOAD_PIPELINE,
+#endif
 
 		CREATE_TEXTURE,
 		CREATE_RENDER_TEXTURE,
@@ -185,14 +191,14 @@ struct RenderThreadCmd
 
 	struct CreateVertexShaderCmd
 	{
-		VertexShaderHandle vertexShader;
-		VertexShaderAPIData data;
+		VertexShaderHandle	vertexShader;
+		DataBlob			data;
 	};
 
 	struct CreatePixelShaderCmd
 	{
-		PixelShaderHandle pixelShader;
-		PixelShaderAPIData data;
+		PixelShaderHandle	pixelShader;
+		DataBlob			data;
 	};
 
 	struct CreatePipelineCmd
@@ -200,6 +206,13 @@ struct RenderThreadCmd
 		PipelineHandle	pipeline;
 		PipelineData	data;
 	};
+	
+#if defined (YU_DEBUG) || defined (YU_TOOL)
+	struct ReloadPipelineCmd
+	{
+		PipelineHandle pipeline;
+	};
+#endif
 
 	struct CreateTextureCmd
 	{
@@ -385,6 +398,7 @@ struct Renderer
 	IndexFreeList<MAX_SHADER>							pixelShaderIdList;
 
 	IndexFreeList<MAX_PIPELINE>							pipelineIdList;
+	PipelineData										pipelineDataList[MAX_PIPELINE];
 
 	IndexFreeList<MAX_TEXTURE>							textureIdList;
 	TextureDesc											textureDescList[MAX_TEXTURE];
@@ -546,23 +560,26 @@ float GetHmdEyeHeight()
 	ovrPosef eyeRenderPose[2];
 	if (gOvrDevice && gOvrDevice->hmd)
 	{
+#if defined YU_OS_WIN32
 		eyeHeight = ovrHmd_GetFloat(gOvrDevice->hmd, OVR_KEY_EYE_HEIGHT, eyeHeight);
 
 		ovrVector3f hmdToEyeViewOffset[2] = { gOvrDevice->eyeRenderDesc[0].HmdToEyeViewOffset,
 			gOvrDevice->eyeRenderDesc[0].HmdToEyeViewOffset };
 
 		ovrHmd_GetEyePoses(gOvrDevice->hmd, 0, hmdToEyeViewOffset, eyeRenderPose, NULL);
-
+#endif
 	}
 	return eyeHeight;
 }
 
 Vector2i GetVRTextureSize(int eye)
 {
-	ovrSizei idealSize = ovrHmd_GetFovTextureSize(gOvrDevice->hmd, (ovrEyeType)eye, gOvrDevice->hmd->DefaultEyeFov[eye], 1.0f);
 	Vector2i size;
+#if defined YU_OS_WIN32
+	ovrSizei idealSize = ovrHmd_GetFovTextureSize(gOvrDevice->hmd, (ovrEyeType)eye, gOvrDevice->hmd->DefaultEyeFov[eye], 1.0f);
 	size.w = idealSize.w;
 	size.h = idealSize.h;
+#endif
 	return size;
 }
 
@@ -633,7 +650,7 @@ void UpdateMesh(RenderQueue* queue, MeshHandle mesh,
 	BlockEnqueueCmd(queue, cmd);
 }
 
-VertexShaderHandle CreateVertexShader(RenderQueue* queue, const VertexShaderAPIData& data)
+VertexShaderHandle CreateVertexShader(RenderQueue* queue, const DataBlob& data)
 {
 	VertexShaderHandle vertexShader;
 	vertexShader.id = queue->renderer->vertexShaderIdList.Alloc();
@@ -649,7 +666,7 @@ VertexShaderHandle CreateVertexShader(RenderQueue* queue, const VertexShaderAPID
 }
 
 
-PixelShaderHandle CreatePixelShader(RenderQueue* queue, const PixelShaderAPIData& data)
+PixelShaderHandle CreatePixelShader(RenderQueue* queue, const DataBlob& data)
 {
 	PixelShaderHandle pixelShader;
 	pixelShader.id = queue->renderer->pixelShaderIdList.Alloc();
@@ -678,12 +695,46 @@ PipelineHandle CreatePipeline(RenderQueue* queue, const PipelineData& data)
 	return pipeline;
 }
 
+#if defined (YU_DEBUG) || defined (YU_TOOL)
+
+void ReloadVertexShader(RenderQueue* queue, VertexShaderHandle vertexShader, const DataBlob& data)
+{
+	RenderThreadCmd cmd;
+	cmd.type = RenderThreadCmd::RELOAD_VERTEX_SHADER;
+	cmd.createVSCmd.vertexShader = vertexShader;
+	cmd.createVSCmd.data = data;
+
+	BlockEnqueueCmd(queue, cmd);
+}
+
+void ReloadPixelShader(RenderQueue* queue, PixelShaderHandle pixelShader, const DataBlob& data)
+{
+	RenderThreadCmd cmd;
+	cmd.type = RenderThreadCmd::RELOAD_PIXEL_SHADER;
+	cmd.createPSCmd.pixelShader = pixelShader;
+	cmd.createPSCmd.data = data;
+
+	BlockEnqueueCmd(queue, cmd);
+}
+
+void ReloadPipeline(RenderQueue* queue, PipelineHandle pipeline, const PipelineData& pipelineData)
+{
+	RenderThreadCmd cmd;
+	cmd.type = RenderThreadCmd::RELOAD_PIPELINE;
+	cmd.createPipelineCmd.pipeline = pipeline;
+	cmd.createPipelineCmd.data = pipelineData;
+}
+#endif
+
 int TexelSize(TextureFormat format)
 {
 	switch (format)
 	{
 	case TEX_FORMAT_R8G8B8A8_UNORM:
 	case TEX_FORMAT_R8G8B8A8_UNORM_SRGB:
+		return 4;
+
+	case TEX_FORMAT_R16G16_FLOAT:
 		return 4;
 
 	case TEX_FORMAT_UNKNOWN:
@@ -753,6 +804,7 @@ size_t TextureSize(TextureFormat format, int width, int height, int depth, int m
 	return size;
 }
 
+//TODO: copy init data to scratch buffer so front end can manage TextureMipData life time
 TextureHandle CreateTexture(RenderQueue* queue, const TextureDesc& desc, TextureMipData* initData)
 {
 	TextureHandle texture;

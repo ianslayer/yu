@@ -23,6 +23,8 @@ enum TextureFormat
 	TEX_FORMAT_R8G8B8A8_UNORM,
 	TEX_FORMAT_R8G8B8A8_UNORM_SRGB,
 
+	TEX_FORMAT_R16G16_FLOAT,
+	
 	NUM_TEX_FORMATS
 };
 
@@ -130,20 +132,6 @@ struct MeshData
 	u32			channelMask = 0;
 };
 
-struct VertexShaderData
-{
-#if defined YU_DEBUG || defined YU_TOOL
-	StringRef sourcePath;
-#endif
-};
-
-struct PixelShaderData
-{
-#if defined YU_DEBUG || defined YU_TOOL
-	StringRef sourcePath;
-#endif
-};
-
 struct PipelineData //TODO: add vertex format, render state etc
 {
 	VertexShaderHandle vs;
@@ -198,14 +186,17 @@ void			UpdateMesh(RenderQueue* queue, MeshHandle handle,
 				u32 startVert, u32 startIndex,
 				MeshData* subMeshdata);
 
+struct DataBlob;
+VertexShaderHandle	CreateVertexShader(RenderQueue* queue, const DataBlob& shaderData);
+PixelShaderHandle	CreatePixelShader(RenderQueue* queue, const DataBlob& shaderData);
 
-struct VertexShaderAPIData;
-struct PixelShaderAPIData;
+PipelineHandle		CreatePipeline(RenderQueue* queue, const PipelineData& pipelineData);
 
-VertexShaderHandle	CreateVertexShader(RenderQueue* queue, const VertexShaderAPIData& data);
-PixelShaderHandle	CreatePixelShader(RenderQueue* queue, const PixelShaderAPIData& data);
-
-PipelineHandle		CreatePipeline(RenderQueue* queue, const PipelineData& data);
+#if defined (YU_DEBUG) || defined (YU_TOOL)
+void				ReloadVertexShader(RenderQueue* queue, VertexShaderHandle vs, const DataBlob& data);
+void				ReloadPixelShader(RenderQueue* queue, PixelShaderHandle ps, const DataBlob& data);
+void				ReloadPipeline(RenderQueue* queue, PipelineHandle& pipeline, const PipelineData& pipelineData);
+#endif
 
 TextureHandle		CreateTexture(RenderQueue* queue, const TextureDesc& desc, TextureMipData* initData = nullptr);
 void				FreeTexture(TextureHandle texture);
@@ -223,6 +214,8 @@ void				WaitFence(RenderQueue* queue, FenceHandle fence);
 void				Reset(RenderQueue* queue, FenceHandle fence);
 
 void				Render(RenderQueue* queue, RenderTextureHandle renderTexture, CameraHandle cam, MeshHandle mesh, PipelineHandle pipeline, const RenderResource& resource);
+
+void				Render(RenderQueue* queue, RenderTextureHandle eyeTexture[2], CameraHandle eye[2], MeshHandle mesh, PipelineHandle pipeline, const RenderResource& resource);
 
 void				Flush(RenderQueue* queue);
 void				Swap(RenderQueue* queue, bool vsync = true);

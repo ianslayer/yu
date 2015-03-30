@@ -252,6 +252,7 @@ YU_INTERNAL LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 
 		break;
 	case WM_MOUSEWHEEL:
+	//TODO: add mouse location to wheel event
 		ev.type = InputEvent::MOUSE;
 		int scroll;
 		scroll = GET_WHEEL_DELTA_WPARAM(wParam);

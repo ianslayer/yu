@@ -8,7 +8,6 @@
 #include "../core/file.h"
 #include "renderer.h"
 #include "gl_utility.h"
-#include "shader.h"
 #include "renderer_impl.h"
 #include <new>
 
@@ -58,14 +57,24 @@ struct TextureGL
 	GLuint texId = 0;
 };
 
+struct RenderTextureGL
+{
+	GLuint	fboId = 0;
+	bool	dirty = true;
+};
+
 struct RendererGL : public Renderer
 {
 	VertexShaderGL		glVertexShaderList[MAX_SHADER];
 	PixelShaderGL		glPixelShaderList[MAX_SHADER];
 	PipelineGL			glPipelineList[MAX_PIPELINE];
-	CameraDataGL			glCameraList[MAX_CAMERA];
+	CameraDataGL		glCameraList[MAX_CAMERA];
 	MeshDataGL			glMeshList[MAX_MESH];
 	TextureGL			glTextureList[MAX_TEXTURE];
+	RenderTextureGL		glRenderTextureList[MAX_RENDER_TEXTURE];
+	
+	RenderTextureHandle	currentRenderTexture;
+	
 };
 
 RendererGL* gRenderer;
@@ -76,87 +85,13 @@ Renderer* GetRenderer()
 	return gRenderer;
 }
 
-VertexShaderAPIData LoadVSFromFile(const char* path)
-{
-	VertexShaderAPIData vsData = {};
-#if defined YU_DEBUG || defined YU_TOOL
-	vsData.sourcePath = InternStr(path);
-#endif
-
-	size_t fileSize = FileSize(path);
-	vsData.shaderSource = (GLchar*)gDefaultAllocator->Alloc(fileSize);
-	ReadFile(path, vsData.shaderSource, fileSize);
-	vsData.shaderSize = (GLint) fileSize;
-	return vsData;
-}
-
-PixelShaderAPIData LoadPSFromFile(const char* path)
-{
-	PixelShaderAPIData psData = {};
-#if defined YU_DEBUG || defined YU_TOOL
-	psData.sourcePath = InternStr(path);
-#endif
-	size_t fileSize = FileSize(path);
-	psData.shaderSource = (GLchar*)gDefaultAllocator->Alloc(fileSize);
-	ReadFile(path, psData.shaderSource, fileSize);
-	psData.shaderSize = (GLint) fileSize;
-	return psData;
-}
-
-struct GLCompileResult
-{
-	GLuint shader;
-	bool		compileSuccess;
-};
-
-YU_INTERNAL GLCompileResult CompileShader(const char* sourcePath, GLchar* shaderSource, GLint shaderSize, GLuint shaderType)
-{
-	GLCompileResult result = {};
-	if(shaderSource == nullptr || shaderSize == 0)
-	{
-#if defined (YU_DEBUG) || defined (YU_TOOL)
-		Log("shader source is empty: %s\n", sourcePath);
-#endif
-		return result;
-	}
-	
-	GLuint shader = glCreateShader(shaderType);
-	glShaderSource(shader, 1, &shaderSource, &shaderSize);
-	glCompileShader(shader);
-
-	GLint compiled;
-
-	glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
-	if (compiled != GL_FALSE)
-	{
-#if defined (YU_DEBUG) || defined (YU_TOOL)
-		Log("compile shader: %s success\n", sourcePath);
-#endif
-		result.shader = shader;
-		result.compileSuccess = true;
-	}
-	else
-	{
-		char errorLog[4096];
-		GLint logWrittenLength = 0;
-     glGetShaderInfoLog(shader, 4096, &logWrittenLength, errorLog);
-#if defined (YU_DEBUG) || defined (YU_TOOL)
-		Log("compile shader: %s failed\n", sourcePath);
-#endif
-		Log("shader compile error: \n %s \n", errorLog);
-		glDeleteShader(shader);
-	}
-	
-	return result;
-}
-
 YU_INTERNAL void ExecUpdateCameraCmd(RendererGL* renderer, CameraHandle camera, const CameraData& updateData)
 {
-	renderer->cameraList.Get(camera.id)->UpdateData(updateData);
-	CameraData* data = &renderer->cameraList.Get(camera.id)->GetMutable();
+	renderer->cameraDataList[camera.id].UpdateData(updateData);
+	CameraData* data = &renderer->cameraDataList[camera.id].GetMutable();
 	CameraConstant camConstant;
 	camConstant.viewMatrix =  Transpose(ViewMatrix(data->position, data->lookAt, data->right));
-	camConstant.projectionMatrix = Transpose(PerspectiveMatrixGL(data->halfTanXFov, data->n, data->f, data->filmWidth, data->filmHeight) );
+	camConstant.projectionMatrix = Transpose(PerspectiveMatrixGL(data->leftTan, data->n, data->f, data->filmWidth, data->filmHeight) );
 	
 	CameraDataGL& glCam = renderer->glCameraList[camera.id];
 	
@@ -183,7 +118,6 @@ u32 channelMask, MeshData* meshData)
 	glGenVertexArrays(1, &glMesh.vaoId);
 	glBindVertexArray(glMesh.vaoId);
 	glGenBuffers(1, &glMesh.vboId);
-	glBindBuffer(GL_ARRAY_BUFFER, glMesh.vboId);
 	glBindBuffer(GL_ARRAY_BUFFER, glMesh.vboId);
 
 	glDisableVertexAttribArray(0);
@@ -270,6 +204,7 @@ YU_INTERNAL GLenum GLSizedTexFormat(TextureFormat fmt)
 	{
 		case TEX_FORMAT_R8G8B8A8_UNORM: return GL_RGBA8;
 		case TEX_FORMAT_R8G8B8A8_UNORM_SRGB: return GL_SRGB8_ALPHA8;
+		case TEX_FORMAT_R16G16_FLOAT: return GL_RG16F;
 	}
 	Log("error, GLSizedTexFormat: unknown texture format\n");
 	return 0;
@@ -296,6 +231,15 @@ YU_INTERNAL TexFormatGL GLTexFormat(TextureFormat fmt)
 			glFormat.format = GL_SRGB_ALPHA; 		//TODO: is this correct?
 			glFormat.type = GL_UNSIGNED_BYTE;
 		}break;
+		case TEX_FORMAT_R16G16_FLOAT:
+		{
+			glFormat.format = GL_RG16;
+			glFormat.type = GL_HALF_FLOAT;
+		}break;
+		default:
+		{
+			Log("error, GLTexFormat: unknown texture format\n");
+		}
 	}
 	return glFormat;
 }
@@ -326,13 +270,67 @@ YU_INTERNAL void ExecCreateTextureCmd(RendererGL*renderer, TextureHandle texture
 	}
 }
 
-YU_INTERNAL void ExecCreateVertexShader(RendererGL* renderer, VertexShaderHandle vertexShader, VertexShaderAPIData& shaderData)
+YU_INTERNAL void ExecCreateRenderTexture(RendererGL* renderer, RenderTextureHandle renderTexture, const RenderTextureDesc& rtDesc)
+{
+	GLuint fboId;
+	glGenFramebuffers(1, &fboId);
+	renderer->glRenderTextureList[renderTexture.id].fboId = fboId;
+}
+
+struct GLCompileResult
+{
+	GLuint	shader;
+	bool	compileSuccess;
+};
+
+YU_INTERNAL GLCompileResult CompileShader(const char* sourcePath, GLchar* shaderSource, GLint shaderSize, GLuint shaderType)
+{
+	GLCompileResult result = {};
+	if(shaderSource == nullptr || shaderSize == 0)
+	{
+#if defined (YU_DEBUG) || defined (YU_TOOL)
+		Log("shader source is empty: %s\n", sourcePath);
+#endif
+		return result;
+	}
+	
+	GLuint shader = glCreateShader(shaderType);
+	glShaderSource(shader, 1, &shaderSource, &shaderSize);
+	glCompileShader(shader);
+
+	GLint compiled;
+
+	glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
+	if (compiled != GL_FALSE)
+	{
+#if defined (YU_DEBUG) || defined (YU_TOOL)
+		Log("compile shader: %s success\n", sourcePath);
+#endif
+		result.shader = shader;
+		result.compileSuccess = true;
+	}
+	else
+	{
+		char errorLog[4096];
+		GLint logWrittenLength = 0;
+     glGetShaderInfoLog(shader, 4096, &logWrittenLength, errorLog);
+#if defined (YU_DEBUG) || defined (YU_TOOL)
+		Log("compile shader: %s failed\n", sourcePath);
+#endif
+		Log("shader compile error: \n %s \n", errorLog);
+		glDeleteShader(shader);
+	}
+	
+	return result;
+}
+
+YU_INTERNAL void ExecCreateVertexShader(RendererGL* renderer, VertexShaderHandle vertexShader, const DataBlob& shaderData)
 {
 	const char* sourcePath = nullptr;
 #if defined (YU_DEBUG) || defined (YU_TOOL)
 	sourcePath = shaderData.sourcePath.str;
 #endif
-	GLCompileResult compileResult = CompileShader(sourcePath, shaderData.shaderSource, shaderData.shaderSize, GL_VERTEX_SHADER);
+	GLCompileResult compileResult = CompileShader(sourcePath, (GLchar*)shaderData.data, (GLint)shaderData.dataLen, GL_VERTEX_SHADER);
 	if(compileResult.compileSuccess)
 	{
 		VertexShaderGL& glShader = renderer->glVertexShaderList[vertexShader.id];
@@ -344,13 +342,13 @@ YU_INTERNAL void ExecCreateVertexShader(RendererGL* renderer, VertexShaderHandle
 	}
 }
 
-YU_INTERNAL void ExecCreatePixelShader(RendererGL* renderer, PixelShaderHandle pixelShader, PixelShaderAPIData& shaderData)
+YU_INTERNAL void ExecCreatePixelShader(RendererGL* renderer, PixelShaderHandle pixelShader, const DataBlob& shaderData)
 {
 	const char* sourcePath = nullptr;
 #if defined (YU_DEBUG) || defined (YU_TOOL)
 	sourcePath = shaderData.sourcePath.str;
 #endif
-	GLCompileResult compileResult = CompileShader(sourcePath, shaderData.shaderSource, shaderData.shaderSize, GL_FRAGMENT_SHADER);
+	GLCompileResult compileResult = CompileShader(sourcePath, (GLchar*)shaderData.data, (GLint)shaderData.dataLen, GL_FRAGMENT_SHADER);
 	if(compileResult.compileSuccess)
 	{
 		PixelShaderGL& glShader = renderer->glPixelShaderList[pixelShader.id];
@@ -396,7 +394,27 @@ YU_INTERNAL void ExecCreatePipeline(RendererGL* renderer, PipelineHandle pipelin
 		Log("error: create pipeline failed: gl link program failed:\n %s\n", errorLog);
 		glDeleteProgram(program);
 	}
+}
 
+YU_INTERNAL void ExecReloadVertexShaderCmd(RendererGL* renderer, VertexShaderHandle vertexShader, const DataBlob& shaderData)
+{
+	VertexShaderGL& glVertexShader = renderer->glVertexShaderList[vertexShader.id];
+	glDeleteShader(glVertexShader.vsId);
+	ExecCreateVertexShader(renderer, vertexShader, shaderData);
+}
+
+YU_INTERNAL void ExecReloadPixelShaderCmd(RendererGL* renderer, PixelShaderHandle pixelShader, const DataBlob& shaderData)
+{
+	PixelShaderGL& glPixelShader = renderer->glPixelShaderList[pixelShader.id];
+	glDeleteShader(glPixelShader.psId);
+	ExecCreatePixelShader(renderer, pixelShader, shaderData);
+}
+
+YU_INTERNAL void ExecReloadPipelineCmd(RendererGL* renderer, PipelineHandle pipeline, const PipelineData& pipelineData)
+{
+	PipelineGL& glPipeline = renderer->glPipelineList[pipeline.id];
+	glDeleteProgram(glPipeline.programId);
+	ExecCreatePipeline(renderer, pipeline, pipelineData);
 }
 
 YU_INTERNAL void ExecRenderCmd(RendererGL* renderer, RenderQueue* queue, int renderListIdx)
@@ -407,14 +425,35 @@ YU_INTERNAL void ExecRenderCmd(RendererGL* renderer, RenderQueue* queue, int ren
 	for (int i = 0; i < list->cmdCount; i++)
 	{
 		RenderCmd& cmd = list->cmd[i];
-		MeshHandle& mesh = cmd.mesh;
-		CameraHandle& camera = cmd.cam;
-		PipelineHandle& pipeline = cmd.pipeline;
+		MeshHandle mesh = cmd.mesh;
+		CameraHandle camera = cmd.cam;
+		PipelineHandle pipeline = cmd.pipeline;
 		RenderResource& resources = cmd.resources;
+		RenderTextureHandle renderTexture = cmd.renderTexture;
+		if(renderTexture.id != renderer->currentRenderTexture.id)
+		{
+			RenderTextureGL& glRenderTexture = renderer->glRenderTextureList[renderTexture.id];
+			glBindFramebuffer(GL_FRAMEBUFFER, glRenderTexture.fboId);
+			if(glRenderTexture.dirty)
+			{
+				TextureHandle refTexture = renderer->renderTextureDescList[renderTexture.id].refTexture;
+				int mipLevel = renderer->renderTextureDescList[renderTexture.id].mipLevel;
+				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, renderer->glTextureList[refTexture.id].texId, mipLevel);
+				glRenderTexture.dirty = false;
+			}
+			glClearColor(1, 0, 0, 1);
+			glClear(GL_COLOR_BUFFER_BIT);
+			renderer->currentRenderTexture = renderTexture;
+		}
+		for(int tex = 0; tex < resources.numPsTexture; tex++)
+		{
+			glActiveTexture(GL_TEXTURE0 + (unsigned int)tex);
+			glBindTexture(GL_TEXTURE_2D, renderer->glTextureList[resources.psTextures[tex].textures.id].texId);
+		}
 		
 		PipelineGL& glPipeline = renderer->glPipelineList[pipeline.id];
 		CameraDataGL& glCamera = renderer->glCameraList[camera.id];
-		MeshRenderData& meshRenderData = *(renderer->meshList.Get(mesh.id));
+		MeshRenderData& meshRenderData = (renderer->meshList[mesh.id]);
 		MeshDataGL& glMeshData = renderer->glMeshList[mesh.id];
 		
 		glBindBufferBase(GL_UNIFORM_BUFFER, glPipeline.cameraUBOIndex, glCamera.uniformBufferId);
@@ -427,6 +466,7 @@ YU_INTERNAL void ExecRenderCmd(RendererGL* renderer, RenderQueue* queue, int ren
 	}
 	
 	list->cmdCount = 0;
+	list->scratchBuffer.Rewind(0);
 	list->renderInProgress.store(false, std::memory_order_release);
 }
 
@@ -459,6 +499,10 @@ YU_INTERNAL bool ExecThreadCmd(RendererGL* renderer)
 				{
 					ExecCreateTextureCmd(renderer, cmd.createTextureCmd.texture, cmd.createTextureCmd.desc, cmd.createTextureCmd.initData);
 				}break;
+				case (RenderThreadCmd::CREATE_RENDER_TEXTURE):
+				{
+					ExecCreateRenderTexture(renderer, cmd.createRenderTextureCmd.renderTexture, cmd.createRenderTextureCmd.desc);
+				}break;
 				case (RenderThreadCmd::UPDATE_MESH):
 				{
 					ExecUpdateMeshCmd(renderer, cmd.updateMeshCmd.mesh, cmd.updateMeshCmd.startVertex, cmd.updateMeshCmd.startIndex, cmd.updateMeshCmd.meshData);
@@ -475,6 +519,20 @@ YU_INTERNAL bool ExecThreadCmd(RendererGL* renderer)
 				{
 					ExecCreatePipeline(renderer, cmd.createPipelineCmd.pipeline, cmd.createPipelineCmd.data);
 				}break;
+				#if defined (YU_DEBUG) || defined (YU_TOOL)
+				case(RenderThreadCmd::RELOAD_VERTEX_SHADER):
+				{
+					ExecReloadVertexShaderCmd(renderer, cmd.createVSCmd.vertexShader, cmd.createVSCmd.data);
+				}break;
+				case(RenderThreadCmd::RELOAD_PIXEL_SHADER):
+				{
+					ExecReloadPixelShaderCmd(renderer, cmd.createPSCmd.pixelShader, cmd.createPSCmd.data);
+				}break;
+				case(RenderThreadCmd::RELOAD_PIPELINE):
+				{
+					ExecReloadPipelineCmd(renderer, cmd.createPipelineCmd.pipeline, cmd.createPipelineCmd.data);
+				}break;
+				#endif
 				case(RenderThreadCmd::RENDER) :
 				{
 					ExecRenderCmd(renderer, queue, cmd.renderCmd.renderListIndex);
@@ -482,6 +540,15 @@ YU_INTERNAL bool ExecThreadCmd(RendererGL* renderer)
 				case (RenderThreadCmd::SWAP) :
 				{
 					frameEnd = true;
+				}break;
+				case(RenderThreadCmd::CREATE_FENCE):
+				{
+					
+				}break;
+				case(RenderThreadCmd::INSERT_FENCE):
+				{
+					Fence& fence = renderer->fenceList[cmd.insertFenceCmd.fence.id];
+					fence.cpuExecuted = true;
 				}break;
 			}
 		}
@@ -514,6 +581,8 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 
 	gRenderer = new RendererGL();
 	gRenderer->rendererDesc = rendererDesc;
+	gRenderer->frameBuffer.id = gRenderer->renderTextureIdList.Alloc();
+	gRenderer->currentRenderTexture = gRenderer->frameBuffer;
 	gRenderThreadRunning = 1;
 	NotifyCondVar(param->initGLCV);
 	param->initGLCS.Unlock();

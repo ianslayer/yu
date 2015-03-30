@@ -1,5 +1,11 @@
+#ifndef YU_WORKER
+#define YU_WORKER
+
 namespace yu
 {
+
+struct WorkItemHandle{ i32 id; };
+
 struct InputData
 {
 
@@ -10,10 +16,10 @@ struct OutputData
 };
 
 struct WorkItem;
-WorkItem*	NewSysWorkItem();
-void		FreeSysWorkItem(WorkItem*);
 
-WorkItem*	NewFrameWorkItem();
+WorkItemHandle	NewWorkItem();
+void			FreeWorkItem(WorkItemHandle item);
+WorkItem*		GetWorkItem(WorkItemHandle handle);
 
 InputData*	GetInputData(WorkItem* item);
 void		SetInputData(WorkItem* item, InputData* input);
@@ -40,3 +46,5 @@ void InitWorkerSystem();
 void FreeWorkerSystem();
 void SubmitTerminateWork();
 }
+
+#endif

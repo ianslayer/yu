@@ -111,10 +111,10 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 	[self finishLaunching];
 	[pool drain];
 	
-	//NSRunLoop* loop = [NSRunLoop currentRunLoop];
-	//while([loop runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]])
+	NSRunLoop* loop = [NSRunLoop currentRunLoop];
+	while([loop runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]])
 
-    while ([self isRunning])
+    //while ([self isRunning])
     {
         pool = [[NSAutoreleasePool alloc] init];
         NSEvent* event = [self nextEventMatchingMask:NSAnyEventMask untilDate:nil inMode:NSDefaultRunLoopMode dequeue:YES];
@@ -271,10 +271,40 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 
 -(void)mouseMoved:(NSEvent *)theEvent
 {
-	NSPoint eventLocation = [theEvent locationInWindow];
 	yu::InputEvent ev = {};
 	ev.type = yu::InputEvent::MOUSE;
 
+	NSPoint eventLocation = [theEvent locationInWindow];
+	NSRect winrect = [self bounds];
+	
+	ev.mouseEvent.type = yu::InputEvent::MouseEvent::MOVE;
+	ev.mouseEvent.x = float(eventLocation.x);
+	ev.mouseEvent.y = float(winrect.size.height - eventLocation.y);
+	
+	winManager->EnqueueEvent(ev);
+}
+
+-(void)mouseDragged:(NSEvent *)theEvent
+{
+	yu::InputEvent ev = {};
+	ev.type = yu::InputEvent::MOUSE;
+
+	NSPoint eventLocation = [theEvent locationInWindow];
+	NSRect winrect = [self bounds];
+	
+	ev.mouseEvent.type = yu::InputEvent::MouseEvent::MOVE;
+	ev.mouseEvent.x = float(eventLocation.x);
+	ev.mouseEvent.y = float(winrect.size.height - eventLocation.y);
+	
+	winManager->EnqueueEvent(ev);
+}
+
+-(void)rightMouseDragged:(NSEvent *)theEvent
+{
+	yu::InputEvent ev = {};
+	ev.type = yu::InputEvent::MOUSE;
+
+	NSPoint eventLocation = [theEvent locationInWindow];
 	NSRect winrect = [self bounds];
 	
 	ev.mouseEvent.type = yu::InputEvent::MouseEvent::MOVE;

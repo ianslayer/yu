@@ -1,11 +1,14 @@
 #include "worker.h"
+#include "free_list.h"
+#include "../math/yu_math.h"
 #include "../renderer/renderer.h"
 
 namespace yu
 {
 
 #define MAX_WORKER_THREAD 32
-#define MAX_WORK_QUEUE_LEN 4096
+#define MAX_WORK_QUEUE_LEN 1024
+#define MAX_WORK_ITEM 4096
 
 struct WorkLink
 {
@@ -55,7 +58,6 @@ struct WorkItem
 #endif
 } YU_POST_ALIGN(CACHE_LINE);
 
-
 YU_PRE_ALIGN(CACHE_LINE)
 struct WorkerThread
 {
@@ -66,48 +68,47 @@ struct WorkerThread
 	struct RenderQueue*		renderQueue;
 } YU_POST_ALIGN(CACHE_LINE);
 
-
-void FreeSysWorkItem(WorkItem* item)
+void TerminateWorkFunc(WorkItem* item) {}
+struct WorkerSystem
 {
-	if (item->finalizer)
+	WorkerSystem() :workQueueSem(0, MAX_WORK_QUEUE_LEN)
 	{
-		item->finalizer(item);
-	}
-	/*
-	if (item->inputData)
-	{
-		FreeInputData(item);
+		CPUInfo cpuInfo = SystemInfo::GetCPUInfo();
+		numWorkerThread = yu::max((i32)cpuInfo.numLogicalProcessors - (i32)2, (i32)0);
+	
+		SetWorkFunc(&terminateWorkItem, TerminateWorkFunc, nullptr);
 	}
 
-	if (item->outputData)
-	{
-		FreeOutputData(item);
-	}
-	*/
-	item->~WorkItem();
+	WorkerThread			workerThread[MAX_WORKER_THREAD]; //0 is main thread
+	unsigned int			numWorkerThread = 0;		
+
+	MpmcFifo<WorkItem*, MAX_WORK_QUEUE_LEN>	workQueue;
+	Semaphore				workQueueSem;
+
+	WorkItem				terminateWorkItem;
+
+	IndexFreeList<MAX_WORK_ITEM> workItemIdList;
+	WorkItem				workItemList[MAX_WORK_ITEM];
+};
+
+YU_GLOBAL WorkerSystem* gWorkerSystem;
+
+WorkItemHandle NewWorkItem()
+{
+	WorkItemHandle item;
+	item.id = gWorkerSystem->workItemIdList.Alloc();
+	return item;
 }
 
-WorkItem* NewSysWorkItem()
+void FreeWorkItem(WorkItemHandle item)
 {
-	return new(gSysArena->AllocAligned(sizeof(WorkItem), CACHE_LINE)) WorkItem(gSysArena);
+	gWorkerSystem->workItemIdList.DeferredFree(item.id);
 }
 
-/*
-InputData* AllocInputData(WorkItem* item, size_t size)
+WorkItem* GetWorkItem(WorkItemHandle itemHandle)
 {
-	InputData* data = (InputData*) gDefaultAllocator->Alloc(size);
-	data->source = gDefaultAllocator;
-	item->inputData = data;
-	return data;
+	return &gWorkerSystem->workItemList[itemHandle.id];
 }
-
-void FreeInputData(WorkItem* item)
-{
-	Allocator* allocator = item->inputData->source;
-	allocator->Free(item->inputData);
-	item->inputData = nullptr;
-}
-*/
 
 InputData* GetInputData(WorkItem* item)
 {
@@ -118,23 +119,6 @@ void SetInputData(WorkItem* item, InputData* input)
 {
 	item->inputData = input;
 }
-
-/*
-OutputData* AllocOutputData(WorkItem* item, size_t size)
-{
-	OutputData* data = (OutputData*)gDefaultAllocator->Alloc(size);
-	data->source = gDefaultAllocator;
-	item->outputData = data;
-	return data;
-}
-
-void FreeOutputData(WorkItem* item)
-{
-	Allocator* allocator = item->outputData->source;
-	allocator->Free(item->outputData);
-	item->outputData = nullptr;
-}
-*/
 
 OutputData* GetOutputData(WorkItem* item)
 {
@@ -164,31 +148,9 @@ void SetWorkFunc(WorkItem* item, WorkFunc* func, Finalizer* finalizer)
 	item->finalizer = finalizer;
 }
 
-void TerminateWorkFunc(WorkItem* item) {}
-
 bool YuRunning();
 ThreadReturn ThreadCall WorkerThreadFunc(ThreadContext context);
-struct WorkerSystem
-{
-	WorkerSystem() :workQueueSem(0, MAX_WORK_QUEUE_LEN)
-	{
-		CPUInfo cpuInfo = SystemInfo::GetCPUInfo();
-		numWorkerThread = cpuInfo.numLogicalProcessors - 2;
-	
-		SetWorkFunc(&terminateWorkItem, TerminateWorkFunc, nullptr);
-	}
 
-	WorkerThread			workerThread[MAX_WORKER_THREAD]; //0 is main thread
-	unsigned int			numWorkerThread = 0;		
-
-	MpmcFifo<WorkItem*, MAX_WORK_QUEUE_LEN>	workQueue;
-	Semaphore				workQueueSem;
-
-	WorkItem				terminateWorkItem;
-
-};
-
-YU_GLOBAL WorkerSystem* gWorkerSystem;
 YU_THREAD_LOCAL WorkerThread* worker;
 
 WorkerThread* GetWorkerThread()
@@ -307,6 +269,7 @@ void MainThreadWorker()
 			Complete(item, worker->retiredItemPermitList);
 		}
 	}
+	gWorkerSystem->workItemIdList.Free();
 }
 
 void ResetWorkItem(WorkItem* item)
@@ -335,6 +298,7 @@ void InitWorkerSystem()
 {
 
 	gWorkerSystem = NewAligned<WorkerSystem>(gSysArena, CACHE_LINE);
+	size_t workerSysSize = sizeof(*gWorkerSystem);
 
 	//main thread
 	gWorkerSystem->workerThread[0].id = 0;

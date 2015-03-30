@@ -8,9 +8,9 @@ in VS_OUTPUT
 
 layout (location = 0) out vec4 color;
 
-uniform sampler2D colorTexture ;
+uniform sampler2D prevIterTexture ;
 
 void main(void)
 {
-	color = texture(colorTexture, In.texcoord);
+	color = texture(prevIterTexture, In.texcoord);
 }

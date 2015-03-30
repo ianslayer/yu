@@ -101,6 +101,10 @@
 #	if defined _DEBUG
 #		define YU_DEBUG
 #	endif
+#elif defined(YU_CC_CLANG)
+#	if defined DEBUG
+#		define YU_DEBUG
+#	endif
 #endif
 
 //borrow from handmade hero :-)

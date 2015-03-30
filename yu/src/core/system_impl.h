@@ -120,8 +120,8 @@ void cpuid(u32 info[4], u32 cmdEax, u32 cmdEcx = 0)
 			 "mov %%ebx, %1;"
 			 "mov %%ecx, %2;"
 			 "mov %%edx, %3;"
-	: "=r"(eax), "=r"(ebx), "=r"(ecx), "=r"(edx)
-	: "r"(cmdEax), "r"(cmdEcx)
+	: "=m"(eax), "=m"(ebx), "=m"(ecx), "=m"(edx)
+	: "m"(cmdEax), "m"(cmdEcx)
 	: "%eax", "%ebx", "ecx", "%edx"
 	);
 	info[0] = eax; info[1] = ebx; info[2] = ecx; info[3] = edx;

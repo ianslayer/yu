@@ -10,7 +10,7 @@
 namespace yu
 {
 VertexShaderAPIData LoadVSFromFile(const char* path);
-PixelShaderAPIData LoadPSFromFile(const char* path);
+PixelShaderAPIData	LoadPSFromFile(const char* path);
 }
 
 #endif

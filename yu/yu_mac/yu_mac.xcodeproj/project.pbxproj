@@ -19,11 +19,10 @@
 		B213245119C01610009D0681 /* crc32.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B213244919C0160F009D0681 /* crc32.cpp */; };
 		B213245219C01610009D0681 /* timer_impl.h in Sources */ = {isa = PBXBuildFile; fileRef = B213244D19C0160F009D0681 /* timer_impl.h */; };
 		B215236919C48899003A0E97 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B215236819C48899003A0E97 /* IOKit.framework */; };
-		B2169DED1A69608F000D2D8E /* common.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B2169DEA1A69608F000D2D8E /* common.cpp */; };
-		B2169DEE1A69608F000D2D8E /* work_map.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B2169DEB1A69608F000D2D8E /* work_map.cpp */; };
 		B2169DF91A721A3D000D2D8E /* flat_ps.glsl in Resources */ = {isa = PBXBuildFile; fileRef = B2169DF71A721A3D000D2D8E /* flat_ps.glsl */; };
 		B2169DFA1A721A3D000D2D8E /* flat_vs.glsl in Resources */ = {isa = PBXBuildFile; fileRef = B2169DF81A721A3D000D2D8E /* flat_vs.glsl */; };
 		B23FB6FE1A3AB2B8002F286F /* renderer_gl.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B23FB6FD1A3AB2B8002F286F /* renderer_gl.cpp */; };
+		B2417FF21A906B0B001FA14F /* stargazer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B2417FF01A906B0B001FA14F /* stargazer.cpp */; };
 		B25E0AF71A2713CD00F7AB1F /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = B25E0AF61A2713CD00F7AB1F /* main.mm */; };
 		B25E5AFA1A1F281D009029A3 /* thread_posix_impl.h in Sources */ = {isa = PBXBuildFile; fileRef = B25E5AF81A1F281D009029A3 /* thread_posix_impl.h */; };
 		B2C9BBB019E6D66D0071B3D6 /* gl_mac.mm in Sources */ = {isa = PBXBuildFile; fileRef = B2C9BBAF19E6D66D0071B3D6 /* gl_mac.mm */; };
@@ -82,9 +81,6 @@
 		B215A0DD19E51ACA005F907C /* gl_utility.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = gl_utility.h; path = ../src/renderer/gl_utility.h; sourceTree = "<group>"; };
 		B215A0DF19E51BA3005F907C /* renderer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = renderer.h; path = ../src/renderer/renderer.h; sourceTree = "<group>"; };
 		B215A0E919E67C9B005F907C /* yu_app.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = yu_app.h; path = ../src/yu_app.h; sourceTree = "<group>"; };
-		B2169DEA1A69608F000D2D8E /* common.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = common.cpp; sourceTree = "<group>"; };
-		B2169DEB1A69608F000D2D8E /* work_map.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = work_map.cpp; sourceTree = "<group>"; };
-		B2169DEC1A69608F000D2D8E /* work_map.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = work_map.h; sourceTree = "<group>"; };
 		B2169DEF1A6DF839000D2D8E /* allocator_impl.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = allocator_impl.h; sourceTree = "<group>"; };
 		B2169DF01A6DF839000D2D8E /* file.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = file.h; sourceTree = "<group>"; };
 		B2169DF11A6DF839000D2D8E /* free_list.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = free_list.h; sourceTree = "<group>"; };
@@ -100,6 +96,8 @@
 		B23FB6F41A3AB14D002F286F /* color.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = color.h; path = ../src/renderer/color.h; sourceTree = "<group>"; };
 		B23FB6F51A3AB14D002F286F /* renderer_impl.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = renderer_impl.h; path = ../src/renderer/renderer_impl.h; sourceTree = "<group>"; };
 		B23FB6FD1A3AB2B8002F286F /* renderer_gl.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = renderer_gl.cpp; path = ../src/renderer/renderer_gl.cpp; sourceTree = "<group>"; };
+		B2417FF01A906B0B001FA14F /* stargazer.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = stargazer.cpp; sourceTree = "<group>"; };
+		B2417FF11A906B0B001FA14F /* stargazer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = stargazer.h; sourceTree = "<group>"; };
 		B25E0AF61A2713CD00F7AB1F /* main.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
 		B25E5AF81A1F281D009029A3 /* thread_posix_impl.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = thread_posix_impl.h; sourceTree = "<group>"; };
 		B25E5AFC1A222A9C009029A3 /* log.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = log.h; sourceTree = "<group>"; };
@@ -109,8 +107,6 @@
 		B2DDA46C19D177D200324654 /* yu.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = yu.cpp; path = ../src/yu.cpp; sourceTree = "<group>"; };
 		B2DDA46D19D177D200324654 /* yu.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = yu.h; path = ../src/yu.h; sourceTree = "<group>"; };
 		B2E18D911A3C3FCD00014E16 /* OpenGL.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = OpenGL.framework; path = System/Library/Frameworks/OpenGL.framework; sourceTree = SDKROOT; };
-		B2E18D931A43F27C00014E16 /* shader_gl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = shader_gl.h; path = ../src/renderer/shader_gl.h; sourceTree = "<group>"; };
-		B2E18D941A43F29000014E16 /* shader.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = shader.h; path = ../src/renderer/shader.h; sourceTree = "<group>"; };
 		B2E18D961A43F5F500014E16 /* sound.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = sound.h; path = ../src/sound/sound.h; sourceTree = "<group>"; };
 		B2E18D971A43F62400014E16 /* sound_mac.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = sound_mac.cpp; path = ../src/sound/sound_mac.cpp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -295,14 +291,12 @@
 		B215A0DC19E51A70005F907C /* renderer */ = {
 			isa = PBXGroup;
 			children = (
-				B2E18D941A43F29000014E16 /* shader.h */,
 				B23FB6F41A3AB14D002F286F /* color.h */,
 				B23FB6F51A3AB14D002F286F /* renderer_impl.h */,
 				B215A0DD19E51ACA005F907C /* gl_utility.h */,
 				B215A0DF19E51BA3005F907C /* renderer.h */,
 				B2C9BBAF19E6D66D0071B3D6 /* gl_mac.mm */,
 				B23FB6FD1A3AB2B8002F286F /* renderer_gl.cpp */,
-				B2E18D931A43F27C00014E16 /* shader_gl.h */,
 			);
 			name = renderer;
 			sourceTree = "<group>";
@@ -310,9 +304,8 @@
 		B2169DE91A69608F000D2D8E /* stargazer */ = {
 			isa = PBXGroup;
 			children = (
-				B2169DEA1A69608F000D2D8E /* common.cpp */,
-				B2169DEB1A69608F000D2D8E /* work_map.cpp */,
-				B2169DEC1A69608F000D2D8E /* work_map.h */,
+				B2417FF01A906B0B001FA14F /* stargazer.cpp */,
+				B2417FF11A906B0B001FA14F /* stargazer.h */,
 			);
 			name = stargazer;
 			path = ../src/stargazer;
@@ -440,12 +433,11 @@
 				B2C9BBB019E6D66D0071B3D6 /* gl_mac.mm in Sources */,
 				B23FB6FE1A3AB2B8002F286F /* renderer_gl.cpp in Sources */,
 				B2DDA46A19D171A200324654 /* core_mac.mm in Sources */,
-				B2169DED1A69608F000D2D8E /* common.cpp in Sources */,
 				B213245119C01610009D0681 /* crc32.cpp in Sources */,
 				B2DDA46E19D177D200324654 /* yu.cpp in Sources */,
 				B25E0AF71A2713CD00F7AB1F /* main.mm in Sources */,
+				B2417FF21A906B0B001FA14F /* stargazer.cpp in Sources */,
 				B25E5AFA1A1F281D009029A3 /* thread_posix_impl.h in Sources */,
-				B2169DEE1A69608F000D2D8E /* work_map.cpp in Sources */,
 				B213245219C01610009D0681 /* timer_impl.h in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

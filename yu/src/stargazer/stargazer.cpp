@@ -5,9 +5,9 @@
 #include "../core/log.h"
 #include "../core/system.h"
 #include "../core/timer.h"
+#include "../core/file.h"
 #include "../container/dequeue.h"
 #include "../renderer/renderer.h"
-#include "../renderer/shader.h"
 
 #include "stargazer.h"
 #include <new>
@@ -20,15 +20,16 @@ struct StarGazer
 	//pre-defined work
 	WorkItem* startWork;
 	WorkItem* inputWork;
+	WorkItem* shaderReloadWork;
 	WorkItem* cameraControllerWork;
-	WorkItem* data;
+	WorkItem* renderWork;
 	WorkItem* endWork;
 
 	CameraHandle	camera;
 };
 
-StarGazer starGazer;
-StarGazer* gStarGazer = &starGazer;
+StarGazer starGazerApp;
+StarGazer* gStarGazer = &starGazerApp;
 struct FrameWorkItemResult
 {
 	WorkItem* frameStartItem;
@@ -46,7 +47,7 @@ void Clear(StarGazer* starGazer)
 	ResetWorkItem(starGazer->startWork);
 	ResetWorkItem(starGazer->inputWork);
 	ResetWorkItem(starGazer->cameraControllerWork);
-	ResetWorkItem(starGazer->data);
+	ResetWorkItem(starGazer->renderWork);
 	ResetWorkItem(starGazer->endWork);
 }
 
@@ -55,9 +56,9 @@ void SubmitWork(StarGazer* starGazer)
 	SubmitWorkItem(starGazer->startWork, nullptr, 0);
 	SubmitWorkItem(starGazer->inputWork, &starGazer->startWork, 1);
 	SubmitWorkItem(starGazer->cameraControllerWork, &starGazer->inputWork, 1);
-	SubmitWorkItem(starGazer->data, &starGazer->cameraControllerWork, 1);
+	SubmitWorkItem(starGazer->renderWork, &starGazer->cameraControllerWork, 1);
 
-	WorkItem* endDep[1] = { starGazer->data };
+	WorkItem* endDep[1] = { starGazer->renderWork };
 
 	SubmitWorkItem(starGazer->endWork, endDep, 1);
 
@@ -84,18 +85,14 @@ void InitStarGazer(Window& win)
 		//StartVRRendering(gStarGazer->renderQueue);
 	}
 
-	gStarGazer->data = TestRenderItem(renderer, gStarGazer->camera);
+	gStarGazer->renderWork = TestRenderItem(renderer, gStarGazer->camera);
 	gStarGazer->cameraControllerWork = CameraControlItem(gStarGazer->inputWork, renderQueue, gStarGazer->camera);
 
 }
 
 void FreeStarGazer()
 {
-	FreeSysWorkItem(gStarGazer->startWork);
-	FreeSysWorkItem(gStarGazer->endWork);
-	FreeSysWorkItem(gStarGazer->inputWork);
-	FreeSysWorkItem(gStarGazer->cameraControllerWork);
-	FreeSysWorkItem(gStarGazer->data);
+
 }
 
 struct FrameLockData : public InputData
@@ -141,8 +138,8 @@ FrameWorkItemResult FrameWorkItem()
 	FrameLockData* frameLockData = New<FrameLockData>(gSysArena);
 	frameLockData->frameLock = frameLock;
 
-	item.frameStartItem = NewSysWorkItem();
-	item.frameEndItem = NewSysWorkItem();
+	item.frameStartItem = GetWorkItem(NewWorkItem());
+	item.frameEndItem = GetWorkItem(NewWorkItem());
 	
 	SetWorkFunc(item.frameStartItem, FrameStartWorkFunc, nullptr);
 	SetWorkFunc(item.frameEndItem, FrameEndWorkFunc, nullptr);
@@ -268,15 +265,10 @@ void ProcessInput(InputResult& output)
 
 			if (event.mouseEvent.type == InputEvent::MouseEvent::MOVE)
 			{
-				
 				if (event.window.mode == Window::MOUSE_FREE)
 				{
 					output.mouseState.dx += (event.mouseEvent.x - output.mouseState.x);
-					output.mouseState.x = event.mouseEvent.x;
-
 					output.mouseState.dy += (event.mouseEvent.y - output.mouseState.y);
-					output.mouseState.y = event.mouseEvent.y;
-
 				}
 				else if (event.window.mode == Window::MOUSE_CAPTURE)
 				{
@@ -286,6 +278,7 @@ void ProcessInput(InputResult& output)
 					output.mouseState.dy += event.mouseEvent.y;
 					output.mouseState.y = 0;
 				}
+
 				//Log("event time: %f ", ConvertToMs(eventTime - sysInitTime) / 1000.f);
 				//Log("mouse location: %f, %f\n", event.mouseEvent.x, event.mouseEvent.y);
 				//Log("mouse dx dy: %f, %f\n", output.mouseState.dx, output.mouseState.dy);
@@ -295,6 +288,9 @@ void ProcessInput(InputResult& output)
 				//Log("event time: %f ", ConvertToMs(eventTime - sysInitTime) / 1000.f);
 				//Log("scroll: %f\n", event.mouseEvent.scroll);
 			}
+			
+			output.mouseState.x = event.mouseEvent.x;
+			output.mouseState.y = event.mouseEvent.y;
 
 		}break;
 		case InputEvent::JOY:
@@ -329,7 +325,7 @@ void InputWorkFunc(WorkItem* item)
 
 WorkItem* InputWorkItem()
 {
-	WorkItem* item = NewSysWorkItem();
+	WorkItem* item = GetWorkItem(NewWorkItem());
 	SetWorkFunc(item, InputWorkFunc, nullptr);
 	InputResult* result = New<InputResult>(gSysArena);
 	memset(result, 0, sizeof(*result));
@@ -437,7 +433,7 @@ WorkItem* CameraControlItem(WorkItem* inputWorkItem, RenderQueue* queue, CameraH
 {
 	InputResult* result = (InputResult*)GetOutputData(inputWorkItem);
 
-	WorkItem* item = NewSysWorkItem();
+	WorkItem* item =  GetWorkItem(NewWorkItem());
 
 	CameraControllerInput* input = New<CameraControllerInput>(gSysArena);
 	input->inputResult = result;
@@ -460,67 +456,235 @@ struct TestRenderData : public InputData
 
 	CameraControllerOutput* updatedCam;
 
-	MeshData triangleData = {};
-
-	Vector3 trianglePos[3] ;
-	Color triangleColor[3] ;
-	u32 triangleIndices[3] ;
-
 	MeshHandle	triangle;
 	MeshHandle square;
 	MeshHandle screenQuad;
 
-	TextureMipData texData;
-	Color		texels[16];
-	RenderResource::TextureSlot textureSlot;
+	RenderResource::TextureSlot flatTextureSlot;
+	RenderResource::TextureSlot	blitTextureSlot;
 
-	PipelineHandle		pipeline;
-	VertexShaderHandle	vs;
-	PixelShaderHandle	ps;
+	PipelineHandle		flatRenderPipeline;
+	PipelineHandle		blitPipeline;
+	
+	VertexShaderHandle	blitVs;
+	VertexShaderHandle	flatVs;
+	PixelShaderHandle	flatPs;
 
 	//vr rendering
 	TextureHandle										eyeTexture[2];
 	RenderTextureHandle									eyeRenderTexture[2];
 
-	FenceHandle			createResourceFence;
+	TextureHandle										fractalTexture[2];
+	RenderTextureHandle									fractalRenderTexture[2];
+
+	TextureHandle										fractalVisTexture;
+	RenderTextureHandle									fractalVisRenderTexture;
+
+	FenceHandle											createResourceFence;
+	
+	bool initialized = false;
 };
+
+struct ReloadData : public InputData
+{
+	VertexShaderHandle	blitVs;
+	VertexShaderHandle	flatVs;
+	PixelShaderHandle	flatPs;
+	
+};
+
+void Reload(ReloadData* reloadData)
+{
+	
+}
 
 void Render(TestRenderData* renderData)
 {
-	/*
-	MeshData updateData = {};
-	updateData.channelMask = MeshData::POSITION | MeshData::COLOR;
-	Vector3 trianglePos[3] = { Vector3(0, 0.5, 0.5), Vector3(0.5, -0.5, 0.5), Vector3(-0.5, -0.5, 0.5) };
-	Color color[3] = {};
-	u32 indices[3] = { 0, 1, 2 };
+	if(!renderData->initialized)
+	{
+	
+		RenderQueue* queue = GetThreadLocalRenderQueue();;
+		renderData->createResourceFence = CreateFence(queue);
 
-	updateData.posList = trianglePos;
-	updateData.colorList = color;
-	updateData.indices = indices;
-	updateData.numVertices = 3;
-	updateData.numIndices = 3;
+		
+		renderData->triangle = CreateMesh(queue, 3, 3, MeshData::POSITION | MeshData::COLOR);
 
-	UpdateMesh(render->queue, render->mesh, 0, 0, &updateData);
-	*/
+		Vector3 trianglePos[3];
+		trianglePos[0] = _Vector3(0, 5, 5);
+		trianglePos[1] = _Vector3(5, -5, 5);
+		trianglePos[2] = _Vector3(-5, -5, 5);// { _Vector3(0, 5, 5), _Vector3(5, -5, 5), _Vector3(-5, -5, 5) };
+		
+		Color triangleColor[3] = {};
+		
+		unsigned int triangleIndices[3] = {0, 2, 1};
 
-	//CameraData camData = GetCameraData(render->queue, render->camera);
-	//camData.SetXFov(3.14f / 2.f, 1280, 720);
-	//camData.position = _Vector3(50, 0, 0.f);
-	//UpdateCamera(render->queue, render->camera, camData);
+		MeshData triangleData;
+		triangleData.channelMask = MeshData::POSITION | MeshData::COLOR;
+		triangleData.posList = trianglePos;
+		triangleData.colorList = triangleColor;
+		triangleData.indices = triangleIndices;
+		triangleData.numVertices = 3;
+		triangleData.numIndices = 3;
 
+		UpdateMesh(queue, renderData->triangle, 0, 0, &triangleData);
+		
+
+		Vector3 squarePos[4] = { _Vector3(-10.f, -10.f, -5.f), _Vector3(-10.f, 10.f, -5.f), _Vector3(10.f, -10.f, -5.f), _Vector3(10.f, 10.f, -5.f) };
+		Color squareColor[4] = {};
+		u32 squareIndices[6] = { 0, 1, 2, 2, 1, 3};
+		Vector2 texcoord[4] = {_Vector2(0.f, 1.f), _Vector2(0.f, 0.f), _Vector2(1.f, 1.f), _Vector2(1.f, 0.f) };
+		
+		renderData->square = CreateMesh(queue, 4, 6, MeshData::POSITION | MeshData::COLOR | MeshData::TEXCOORD);
+		
+		MeshData squareData = {};
+		squareData.channelMask = MeshData::POSITION | MeshData::COLOR | MeshData::TEXCOORD;
+
+		squareData.posList = squarePos;
+		squareData.texcoordList = texcoord;
+		squareData.colorList = squareColor;
+		squareData.indices = squareIndices;
+		squareData.numVertices = 4;
+		squareData.numIndices = 6;
+		UpdateMesh(queue, renderData->square, 0, 0, &squareData);
+		
+		Vector3 screenQuadPos[4] = { _Vector3(-1.0f, -1.0f, 0.5f), _Vector3(-1.f, 1.f, 0.5f), _Vector3(1.f, -1.f, 0.5f), _Vector3(1.f, 1.f, 0.5f) };
+
+		renderData->screenQuad = CreateMesh(queue, 4, 6, MeshData::POSITION | MeshData::COLOR | MeshData::TEXCOORD);
+		MeshData screenQuadData = {};
+		screenQuadData.channelMask = MeshData::POSITION | MeshData::COLOR | MeshData::TEXCOORD;
+
+		screenQuadData.posList = screenQuadPos;
+		screenQuadData.texcoordList = texcoord;
+		screenQuadData.colorList = squareColor;
+		screenQuadData.indices = squareIndices;
+		screenQuadData.numVertices = 4;
+		screenQuadData.numIndices = 6;
+		UpdateMesh(queue, renderData->screenQuad, 0, 0, &screenQuadData);
+	
+		DataBlob blitVsData = {};
+		DataBlob flatVsData = {};
+		DataBlob flatPsData = {};
+		
+	#if defined YU_DX11
+		flatVsData = ReadDataBlob("data/shaders/flat_vs.hlsl");
+		flatPsData = ReadDataBlob("data/shaders/flat_ps.hlsl");
+	#elif defined YU_GL
+		blitVsData = ReadDataBlob("data/shaders/blit_vs.glsl");
+		flatVsData = ReadDataBlob("data/shaders/flat_vs.glsl");
+		flatPsData = ReadDataBlob("data/shaders/flat_ps.glsl");
+	#endif
+	
+		renderData->flatVs = CreateVertexShader(queue, flatVsData);
+		renderData->blitVs = CreateVertexShader(queue, blitVsData);
+		renderData->flatPs = CreatePixelShader(queue, flatPsData);
+		PipelineData flatPipelineData;
+		flatPipelineData.vs = renderData->flatVs;
+		flatPipelineData.ps = renderData->flatPs;
+		PipelineData blitPipelineData;
+		blitPipelineData.vs = renderData->blitVs;
+		blitPipelineData.ps = renderData->flatPs;
+		
+		renderData->flatRenderPipeline = CreatePipeline(queue, flatPipelineData);
+		renderData->blitPipeline = CreatePipeline(queue, blitPipelineData);
+
+		Color texels[16];
+		for (int i = 0; i < 16; i++)
+		{
+			texels[i] = _Color(0, 0, 0xFF, 0);
+		}
+
+		TextureMipData texData;
+		{
+			TextureDesc texDesc = {};
+			texDesc.format = TEX_FORMAT_R8G8B8A8_UNORM;
+			texDesc.width = 4;
+			texDesc.height = 4;
+			texDesc.mipLevels = 1;
+
+			texData.texels = texels;
+			texData.texDataSize = TextureSize(texDesc.format, texDesc.width, texDesc.height, 1, 1);
+
+			renderData->flatTextureSlot.textures = CreateTexture(queue, texDesc, &texData);
+
+			SamplerStateDesc samplerDesc = { SamplerStateDesc::FILTER_POINT, SamplerStateDesc::ADDRESS_CLAMP, SamplerStateDesc::ADDRESS_CLAMP };
+			renderData->flatTextureSlot.sampler = CreateSampler(queue, samplerDesc);
+		}
+
+		{
+			TextureDesc texDesc = {};
+			texDesc.format = TEX_FORMAT_R8G8B8A8_UNORM;
+			const RendererDesc& rendererDesc = GetRendererDesc(GetRenderer());
+			texDesc.width = rendererDesc.width;
+			texDesc.height = rendererDesc.height;
+			texDesc.mipLevels = 1;
+			renderData->fractalVisTexture = CreateTexture(queue, texDesc);
+			
+			RenderTextureDesc rtDesc = {};
+			rtDesc.refTexture = renderData->fractalVisTexture;
+			rtDesc.mipLevel = 0;
+			renderData->fractalVisRenderTexture = CreateRenderTexture(queue, rtDesc);
+		}
+		
+		
+		{
+			TextureDesc texDesc = {};
+			texDesc.format = TEX_FORMAT_R16G16_FLOAT;
+			const RendererDesc& rendererDesc = GetRendererDesc(GetRenderer());
+			texDesc.width = rendererDesc.width;
+			texDesc.height = rendererDesc.height;
+			texDesc.mipLevels = 1;
+
+			for(int tex = 0; tex < 2; tex++)
+			{
+				renderData->fractalTexture[tex] = CreateTexture(queue, texDesc);
+				RenderTextureDesc rtDesc = {};
+				rtDesc.mipLevel = 0;
+				rtDesc.refTexture = renderData->fractalTexture[tex];
+			
+				renderData->fractalRenderTexture[tex] = CreateRenderTexture(queue, rtDesc);
+			}
+		}
+
+		InsertFence(queue, renderData->createResourceFence);
+
+		/*
+		Matrix4x4 dxViewProjMatrix = camData.PerspectiveMatrixDx() * camData.ViewMatrix();
+		Matrix4x4 glViewProjMatrix = camData.PerspectiveMatrixGl() * camData.ViewMatrix();
+		Matrix4x4 viewMatrix = camData.ViewMatrix();
+		Vector4 viewPos[4];
+		Vector4 dxProjPos[4];
+		Vector4 glProjPos[4];
+		for (int i = 0; i < 4; i++)
+		{
+			viewPos[i] = viewMatrix * _Vector4(squarePos[i], 1);
+			dxProjPos[i] = dxViewProjMatrix * _Vector4(squarePos[i], 1);
+			dxProjPos[i] /= dxProjPos[i].w;
+
+			glProjPos[i] = glViewProjMatrix * _Vector4(squarePos[i], 1);
+			glProjPos[i] /= glProjPos[i].w;
+		}
+		*/
+		WaitFence(queue, renderData->createResourceFence);
+		
+		FreeDataBlob(blitVsData);
+		FreeDataBlob(flatVsData);
+		FreeDataBlob(flatPsData);
+		
+		renderData->initialized = true;
+	}
 	Renderer* renderer = GetRenderer();
 	RenderQueue* queue = GetThreadLocalRenderQueue();
 
-	RenderResource resource = {};
-	resource.numPsTexture = 1;
-	resource.psTextures = &renderData->textureSlot;
+	RenderResource flatRenderResource = {};
+	flatRenderResource.numPsTexture = 1;
+	flatRenderResource.psTextures = &renderData->flatTextureSlot;
 
-	//WaitFence(renderer->queue, renderer->createResourceFence);
-
-	//Reset(renderer->queue, renderer->createResourceFence);
+	RenderResource	blitRenderResource = {};
+	blitRenderResource.numPsTexture = 1;
+	renderData->blitTextureSlot.textures = renderData->fractalVisTexture;
+	blitRenderResource.psTextures = &renderData->blitTextureSlot;
 
 	RenderTextureHandle frameBuffer = GetFrameBufferRenderTexture(renderer);
-
 	
 	if (GetRendererDesc(renderer).supportOvrRendering)
 	{
@@ -544,15 +708,14 @@ void Render(TestRenderData* renderData)
 		
 	}
 	
-	Render(queue, frameBuffer, renderData->camera, renderData->triangle, renderData->pipeline, resource);
+	Render(queue, renderData->fractalVisRenderTexture, renderData->camera, renderData->triangle, renderData->flatRenderPipeline, flatRenderResource);
 	
-	//InsertFence(renderer->queue, renderer->createResourceFence);
-
-	//WaitFence(renderer->queue, renderer->createResourceFence);
 	//for (int i = 0; i < 1000; i++)
-	Render(queue, frameBuffer, renderData->camera, renderData->square, renderData->pipeline, resource);
+	Render(queue, renderData->fractalVisRenderTexture, renderData->camera, renderData->square, renderData->flatRenderPipeline, flatRenderResource);
 
-	Render(queue, frameBuffer, renderData->camera, renderData->screenQuad, renderData->pipeline, resource);
+	Render(queue, frameBuffer, renderData->camera, renderData->screenQuad, renderData->blitPipeline, blitRenderResource);
+
+	Render(queue, frameBuffer, renderData->camera, renderData->screenQuad, renderData->flatRenderPipeline, flatRenderResource);
 
 	Flush(queue);
 	Swap(queue, true);
@@ -571,128 +734,13 @@ void FreeTestRender(WorkItem* item)
 
 WorkItem* TestRenderItem(Renderer* renderer, CameraHandle camera)
 {
-	WorkItem* item = NewSysWorkItem();
+	WorkItem* item =  GetWorkItem(NewWorkItem());
 	SetWorkFunc(item, TestRender, FreeTestRender);
 
 	TestRenderData* data = New<TestRenderData>(gSysArena);
-
-	RenderQueue* queue = GetThreadLocalRenderQueue();;
-	data->camera = camera;
-
 	SetInputData(item, data);
-
-	data->createResourceFence = CreateFence(queue);
-
 	
-	data->triangle = CreateMesh(queue, 3, 3, MeshData::POSITION | MeshData::COLOR);
-
-	data->trianglePos[0] = _Vector3(0, 5, 5);
-	data->trianglePos[1] = _Vector3(5, -5, 5);
-	data->trianglePos[2] = _Vector3(-5, -5, 5);// { _Vector3(0, 5, 5), _Vector3(5, -5, 5), _Vector3(-5, -5, 5) };
-	
-	//data->triangleColor ;
-	data->triangleIndices[0] = 0;
-	data->triangleIndices[1] = 2;
-	data->triangleIndices[2] = 1;
-
-	data->triangleData.channelMask = MeshData::POSITION | MeshData::COLOR;
-	data->triangleData.posList = data->trianglePos;
-	data->triangleData.colorList = data->triangleColor;
-	data->triangleData.indices = data->triangleIndices;
-	data->triangleData.numVertices = 3;
-	data->triangleData.numIndices = 3;
-
-	UpdateMesh(queue, data->triangle, 0, 0, &data->triangleData);
-	
-
-	YU_LOCAL_PERSIST Vector3 squarePos[4] = { _Vector3(-10.f, -10.f, -5.f), _Vector3(-10.f, 10.f, -5.f), _Vector3(10.f, -10.f, -5.f), _Vector3(10.f, 10.f, -5.f) };
-	YU_LOCAL_PERSIST Color squareColor[4] = {};
-	YU_LOCAL_PERSIST u32 squareIndices[6] = { 0, 1, 2, 2, 1, 3};
-	data->square = CreateMesh(queue, 4, 6, MeshData::POSITION | MeshData::COLOR);
-	
-	YU_LOCAL_PERSIST  MeshData squareData = {};
-	squareData.channelMask = MeshData::POSITION | MeshData::COLOR;
-
-	squareData.posList = squarePos;
-	squareData.colorList = squareColor;
-	squareData.indices = squareIndices;
-	squareData.numVertices = 4;
-	squareData.numIndices = 6;
-	UpdateMesh(queue, data->square, 0, 0, &squareData);
-	
-	YU_LOCAL_PERSIST Vector3 screenQuadPos[4] = { _Vector3(-0.5f, -0.5f, 0.5f), _Vector3(-0.5f, 0.5f, 0.5f), _Vector3(0.5f, -0.5f, 0.5f), _Vector3(0.5f, 0.5f, 0.5f) };
-	data->screenQuad = CreateMesh(queue, 4, 6, MeshData::POSITION | MeshData::COLOR);
-	YU_LOCAL_PERSIST  MeshData screenQuadData = {};
-	screenQuadData.channelMask = MeshData::POSITION | MeshData::COLOR;
-
-	screenQuadData.posList = screenQuadPos;
-	screenQuadData.colorList = squareColor;
-	screenQuadData.indices = squareIndices;
-	screenQuadData.numVertices = 4;
-	screenQuadData.numIndices = 6;
-	UpdateMesh(queue, data->screenQuad, 0, 0, &screenQuadData);
-	
-#if defined YU_DX11
-	VertexShaderAPIData vsData = LoadVSFromFile("data/shaders/flat_vs.hlsl");
-	PixelShaderAPIData psData = LoadPSFromFile("data/shaders/flat_ps.hlsl");
-#elif defined YU_GL
-	VertexShaderAPIData vsData = LoadVSFromFile("data/shaders/flat_vs.glsl");
-	PixelShaderAPIData psData = LoadPSFromFile("data/shaders/flat_ps.glsl");
-#endif
-	data->vs = CreateVertexShader(queue, vsData);
-	data->ps = CreatePixelShader(queue, psData);
-	PipelineData pipelineData;
-	pipelineData.vs = data->vs;
-	pipelineData.ps = data->ps;
-
-	data->pipeline = CreatePipeline(queue, pipelineData);
-
-	{
-		TextureDesc texDesc = {};
-		texDesc.format = TEX_FORMAT_R8G8B8A8_UNORM;
-		texDesc.width = 4;
-		texDesc.height = 4;
-		texDesc.mipLevels = 1;
-		for (int i = 0; i < 16; i++)
-		{
-			data->texels[i] = _Color(0, 0, 0xFF, 0);
-		}
-		data->texData.texels = &data->texels;
-		data->texData.texDataSize = TextureSize(texDesc.format, texDesc.width, texDesc.height, 1, 1);
-
-		data->textureSlot.textures = CreateTexture(queue, texDesc, &data->texData);
-
-		SamplerStateDesc samplerDesc = { SamplerStateDesc::FILTER_POINT, SamplerStateDesc::ADDRESS_CLAMP, SamplerStateDesc::ADDRESS_CLAMP };
-		data->textureSlot.sampler = CreateSampler(queue, samplerDesc);
-	}
-
-	{
-		TextureDesc texDesc = {};
-		texDesc.format = TEX_FORMAT_R8G8B8A8_UNORM;
-		
-
-	}
-	
-
-	InsertFence(queue, data->createResourceFence);
-
-	/*
-	Matrix4x4 dxViewProjMatrix = camData.PerspectiveMatrixDx() * camData.ViewMatrix();
-	Matrix4x4 glViewProjMatrix = camData.PerspectiveMatrixGl() * camData.ViewMatrix();
-	Matrix4x4 viewMatrix = camData.ViewMatrix();
-	Vector4 viewPos[4];
-	Vector4 dxProjPos[4];
-	Vector4 glProjPos[4];
-	for (int i = 0; i < 4; i++)
-	{
-		viewPos[i] = viewMatrix * _Vector4(squarePos[i], 1);
-		dxProjPos[i] = dxViewProjMatrix * _Vector4(squarePos[i], 1);
-		dxProjPos[i] /= dxProjPos[i].w;
-
-		glProjPos[i] = glViewProjMatrix * _Vector4(squarePos[i], 1);
-		glProjPos[i] /= glProjPos[i].w;
-	}
-	*/
+	data->camera = camera;
 	
 	return item;
 }
