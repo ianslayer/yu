@@ -507,7 +507,7 @@ void Render(TestRenderData* renderData)
 		renderData->createResourceFence = CreateFence(queue);
 
 		
-		renderData->triangle = CreateMesh(queue, 3, 3, MeshData::POSITION | MeshData::COLOR);
+		renderData->triangle = CreateMesh(queue, 3, 3, MeshData::POSITION | MeshData::COLOR| MeshData::TEXCOORD);
 
 		Vector3 trianglePos[3];
 		trianglePos[0] = _Vector3(0, 5, 5);
@@ -516,13 +516,16 @@ void Render(TestRenderData* renderData)
 		
 		Color triangleColor[3] = {};
 		
+		Vector2 triTexcoord[3] = { _Vector2(0.f, 1.f), _Vector2(0.f, 0.f), _Vector2(1.f, 1.f) };
+
 		unsigned int triangleIndices[3] = {0, 2, 1};
 
 		MeshData triangleData;
-		triangleData.channelMask = MeshData::POSITION | MeshData::COLOR;
+		triangleData.channelMask = MeshData::POSITION | MeshData::COLOR | MeshData::TEXCOORD;
 		triangleData.posList = trianglePos;
 		triangleData.colorList = triangleColor;
 		triangleData.indices = triangleIndices;
+		triangleData.texcoordList = triTexcoord;
 		triangleData.numVertices = 3;
 		triangleData.numIndices = 3;
 
@@ -566,8 +569,13 @@ void Render(TestRenderData* renderData)
 		DataBlob flatPsData = {};
 		
 	#if defined YU_DX11
-		flatVsData = ReadDataBlob("data/shaders/flat_vs.hlsl");
-		flatPsData = ReadDataBlob("data/shaders/flat_ps.hlsl");
+		CreateShaderCache("data/shaders/blit_vs.hlsl", "main", "vs_5_0");
+		CreateShaderCache("data/shaders/flat_vs.hlsl", "main", "vs_5_0");
+		CreateShaderCache("data/shaders/flat_ps.hlsl", "main", "ps_5_0");
+
+		blitVsData = ReadDataBlob("data/shaders/blit_vs.hlsl.cache");
+		flatVsData = ReadDataBlob("data/shaders/flat_vs.hlsl.cache");
+		flatPsData = ReadDataBlob("data/shaders/flat_ps.hlsl.cache");
 	#elif defined YU_GL
 		blitVsData = ReadDataBlob("data/shaders/blit_vs.glsl");
 		flatVsData = ReadDataBlob("data/shaders/flat_vs.glsl");
@@ -617,6 +625,7 @@ void Render(TestRenderData* renderData)
 			texDesc.width = rendererDesc.width;
 			texDesc.height = rendererDesc.height;
 			texDesc.mipLevels = 1;
+			texDesc.renderTexture = true;
 			renderData->fractalVisTexture = CreateTexture(queue, texDesc);
 			
 			RenderTextureDesc rtDesc = {};
@@ -633,6 +642,7 @@ void Render(TestRenderData* renderData)
 			texDesc.width = rendererDesc.width;
 			texDesc.height = rendererDesc.height;
 			texDesc.mipLevels = 1;
+			texDesc.renderTexture = true;
 
 			for(int tex = 0; tex < 2; tex++)
 			{
@@ -682,6 +692,7 @@ void Render(TestRenderData* renderData)
 	RenderResource	blitRenderResource = {};
 	blitRenderResource.numPsTexture = 1;
 	renderData->blitTextureSlot.textures = renderData->fractalVisTexture;
+	renderData->blitTextureSlot.sampler = renderData->flatTextureSlot.sampler;
 	blitRenderResource.psTextures = &renderData->blitTextureSlot;
 
 	RenderTextureHandle frameBuffer = GetFrameBufferRenderTexture(renderer);
@@ -708,12 +719,12 @@ void Render(TestRenderData* renderData)
 		
 	}
 	
-	Render(queue, renderData->fractalVisRenderTexture, renderData->camera, renderData->triangle, renderData->flatRenderPipeline, flatRenderResource);
+	Render(queue, frameBuffer, renderData->camera, renderData->triangle, renderData->flatRenderPipeline, flatRenderResource);
 	
 	//for (int i = 0; i < 1000; i++)
-	Render(queue, renderData->fractalVisRenderTexture, renderData->camera, renderData->square, renderData->flatRenderPipeline, flatRenderResource);
+	Render(queue, frameBuffer, renderData->camera, renderData->square, renderData->flatRenderPipeline, flatRenderResource);
 
-	Render(queue, frameBuffer, renderData->camera, renderData->screenQuad, renderData->blitPipeline, blitRenderResource);
+	//Render(queue, frameBuffer, renderData->camera, renderData->screenQuad, renderData->blitPipeline, blitRenderResource);
 
 	Render(queue, frameBuffer, renderData->camera, renderData->screenQuad, renderData->flatRenderPipeline, flatRenderResource);
 

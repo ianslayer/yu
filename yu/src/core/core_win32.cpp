@@ -1065,6 +1065,15 @@ size_t ReadFile(const char* path, void* buffer, size_t bufferLen)
 	return readSize;
 }
 
+size_t SaveFileOverWrite(const char* path, void* buffer, size_t bufferLen)
+{
+	HANDLE fileHandle = CreateFileA(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+	DWORD writeSize;
+	BOOL writeSuccess = ::WriteFile(fileHandle, buffer, bufferLen, &writeSize, nullptr);
+	CloseHandle(fileHandle);
+
+	return writeSize;
+}
 
 YU_GLOBAL CycleCount initCycle;
 YU_GLOBAL u64        cpuFrequency;

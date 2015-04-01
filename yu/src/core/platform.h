@@ -107,6 +107,12 @@
 #	endif
 #endif
 
+#if defined YU_DEBUG
+#	define DEBUG_ONLY(a) (a)
+#else 
+#	define DEBUG_ONLY(a)
+#endif
+
 //borrow from handmade hero :-)
 #define YU_GLOBAL static
 #define YU_GLOBAL_EXPORT //worse than static...

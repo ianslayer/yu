@@ -189,6 +189,8 @@ void			UpdateMesh(RenderQueue* queue, MeshHandle handle,
 struct DataBlob;
 VertexShaderHandle	CreateVertexShader(RenderQueue* queue, const DataBlob& shaderData);
 PixelShaderHandle	CreatePixelShader(RenderQueue* queue, const DataBlob& shaderData);
+void CreateShaderCache(const char* shaderPath, const char* entryPoint, const char* profile);
+
 
 PipelineHandle		CreatePipeline(RenderQueue* queue, const PipelineData& pipelineData);
 
@@ -213,6 +215,8 @@ bool				IsCPUComplete(RenderQueue* queue, FenceHandle fence);
 void				WaitFence(RenderQueue* queue, FenceHandle fence);
 void				Reset(RenderQueue* queue, FenceHandle fence);
 
+struct RenderCmdList*	CreateRenderCmdList(class Allocator* allocator, int numCmd);
+
 void				Render(RenderQueue* queue, RenderTextureHandle renderTexture, CameraHandle cam, MeshHandle mesh, PipelineHandle pipeline, const RenderResource& resource);
 
 void				Render(RenderQueue* queue, RenderTextureHandle eyeTexture[2], CameraHandle eye[2], MeshHandle mesh, PipelineHandle pipeline, const RenderResource& resource);
@@ -225,6 +229,7 @@ void				StopRenderThread(RenderQueue* queue);
 
 }
 
+//#define YU_FORCE_GL
 #if defined YU_OS_MAC || defined YU_FORCE_GL
 #	define YU_GL
 #	define YU_GRAPHICS_API YU_GL

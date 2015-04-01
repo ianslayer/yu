@@ -1,6 +1,7 @@
 struct PS_INPUT
 {
-	float4 Position : SV_POSITION;
+	float4 position : SV_POSITION;
+	float2 texcoord : TEXCOORD1;
 };
 
 struct PS_OUTPUT {
@@ -13,6 +14,6 @@ SamplerState pointSampler : register(s0);
 PS_OUTPUT main(PS_INPUT IN)
 {
 	PS_OUTPUT Out;
-	Out.color = colorTexture.Sample(pointSampler, float2(0.2, 0.1));
+	Out.color = colorTexture.Sample(pointSampler, IN.texcoord);
 	return Out;
 }

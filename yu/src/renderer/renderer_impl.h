@@ -287,9 +287,9 @@ struct RenderCmd
 };
 
 #define MAX_RENDER_CMD 256
-struct RenderList
+struct RenderCmdList
 {
-	RenderList() : cmdCount(0), renderInProgress(false), scratchBuffer(1024*1024, gSysArena) {}
+	RenderCmdList() : cmdCount(0), renderInProgress(false), scratchBuffer(1024*1024, gSysArena) {}
 	RenderCmd			cmd[MAX_RENDER_CMD];
 	int					cmdCount;
 	std::atomic<bool>	renderInProgress;
@@ -302,7 +302,7 @@ struct RenderQueue
 	Renderer* renderer;
 	SpscFifo<RenderThreadCmd, 256> cmdList;
 
-	RenderList			renderList[MAX_RENDER_LIST];
+	RenderCmdList			renderList[MAX_RENDER_LIST];
 };
 
 
@@ -923,7 +923,7 @@ void UpdateCamera(RenderQueue* queue, CameraHandle camera, const CameraData& cam
 
 void Render(RenderQueue* queue, RenderTextureHandle renderTexture, CameraHandle cam, MeshHandle mesh, PipelineHandle pipeline, const RenderResource& resources)
 {
-	RenderList* list;
+	RenderCmdList* list;
 	int listIndex;
 
 	size_t resourceSize = 0;

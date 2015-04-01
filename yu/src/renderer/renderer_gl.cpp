@@ -288,9 +288,7 @@ YU_INTERNAL GLCompileResult CompileShader(const char* sourcePath, GLchar* shader
 	GLCompileResult result = {};
 	if(shaderSource == nullptr || shaderSize == 0)
 	{
-#if defined (YU_DEBUG) || defined (YU_TOOL)
-		Log("shader source is empty: %s\n", sourcePath);
-#endif
+		DEBUG_ONLY(Log("shader source is empty: %s\n", sourcePath));
 		return result;
 	}
 	
@@ -303,9 +301,7 @@ YU_INTERNAL GLCompileResult CompileShader(const char* sourcePath, GLchar* shader
 	glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
 	if (compiled != GL_FALSE)
 	{
-#if defined (YU_DEBUG) || defined (YU_TOOL)
-		Log("compile shader: %s success\n", sourcePath);
-#endif
+		DEBUG_ONLY(Log("compile shader: %s success\n", sourcePath));
 		result.shader = shader;
 		result.compileSuccess = true;
 	}
@@ -313,10 +309,9 @@ YU_INTERNAL GLCompileResult CompileShader(const char* sourcePath, GLchar* shader
 	{
 		char errorLog[4096];
 		GLint logWrittenLength = 0;
-     glGetShaderInfoLog(shader, 4096, &logWrittenLength, errorLog);
-#if defined (YU_DEBUG) || defined (YU_TOOL)
-		Log("compile shader: %s failed\n", sourcePath);
-#endif
+		glGetShaderInfoLog(shader, 4096, &logWrittenLength, errorLog);
+
+		DEBUG_ONLY(Log("compile shader: %s failed\n", sourcePath));
 		Log("shader compile error: \n %s \n", errorLog);
 		glDeleteShader(shader);
 	}
@@ -327,9 +322,9 @@ YU_INTERNAL GLCompileResult CompileShader(const char* sourcePath, GLchar* shader
 YU_INTERNAL void ExecCreateVertexShader(RendererGL* renderer, VertexShaderHandle vertexShader, const DataBlob& shaderData)
 {
 	const char* sourcePath = nullptr;
-#if defined (YU_DEBUG) || defined (YU_TOOL)
-	sourcePath = shaderData.sourcePath.str;
-#endif
+
+	DEBUG_ONLY(sourcePath = shaderData.sourcePath.str);
+
 	GLCompileResult compileResult = CompileShader(sourcePath, (GLchar*)shaderData.data, (GLint)shaderData.dataLen, GL_VERTEX_SHADER);
 	if(compileResult.compileSuccess)
 	{
@@ -345,9 +340,8 @@ YU_INTERNAL void ExecCreateVertexShader(RendererGL* renderer, VertexShaderHandle
 YU_INTERNAL void ExecCreatePixelShader(RendererGL* renderer, PixelShaderHandle pixelShader, const DataBlob& shaderData)
 {
 	const char* sourcePath = nullptr;
-#if defined (YU_DEBUG) || defined (YU_TOOL)
-	sourcePath = shaderData.sourcePath.str;
-#endif
+	DEBUG_ONLY(sourcePath = shaderData.sourcePath.str);
+
 	GLCompileResult compileResult = CompileShader(sourcePath, (GLchar*)shaderData.data, (GLint)shaderData.dataLen, GL_FRAGMENT_SHADER);
 	if(compileResult.compileSuccess)
 	{
@@ -419,7 +413,7 @@ YU_INTERNAL void ExecReloadPipelineCmd(RendererGL* renderer, PipelineHandle pipe
 
 YU_INTERNAL void ExecRenderCmd(RendererGL* renderer, RenderQueue* queue, int renderListIdx)
 {
-	RenderList* list = &(queue->renderList[renderListIdx]);
+	RenderCmdList* list = &(queue->renderList[renderListIdx]);
 	assert(list->renderInProgress.load(std::memory_order_acquire));
 
 	for (int i = 0; i < list->cmdCount; i++)
@@ -581,8 +575,13 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 
 	gRenderer = new RendererGL();
 	gRenderer->rendererDesc = rendererDesc;
-	gRenderer->frameBuffer.id = gRenderer->renderTextureIdList.Alloc();
-	gRenderer->currentRenderTexture = gRenderer->frameBuffer;
+	{
+		gRenderer->frameBuffer.id = gRenderer->renderTextureIdList.Alloc();
+		gRenderer->renderTextureDescList[0].refTexture.id = 0;
+		gRenderer->renderTextureDescList[0].mipLevel = 0;
+		gRenderer->currentRenderTexture = gRenderer->frameBuffer;
+	}
+
 	gRenderThreadRunning = 1;
 	NotifyCondVar(param->initGLCV);
 	param->initGLCS.Unlock();

@@ -9,8 +9,8 @@
 #include "../core/thread.h"
 #include "../core/timer.h"
 #include "../core/string.h"
+#include "../core/file.h"
 #include "resource_ptr_dx.h"
-#include "shader_dx11.h"
 #include "renderer_impl.h"
 
 #include <new>
@@ -54,11 +54,13 @@ struct CameraDataDx11
 
 struct VertexShaderDx11
 {
+	DEBUG_ONLY(StringRef source);
 	DxResourcePtr<ID3D11VertexShader> shader;
 };
 
 struct PixelShaderDx11
 {
+	DEBUG_ONLY (StringRef source);
 	DxResourcePtr<ID3D11PixelShader> shader;
 };
 
@@ -80,6 +82,9 @@ struct SamplerDx11
 
 struct PipelineDx11
 {
+	DEBUG_ONLY(StringRef	vsSource);
+	DEBUG_ONLY(StringRef	psSource);
+
 	DxResourcePtr<ID3D11VertexShader> vs;
 	DxResourcePtr<ID3D11PixelShader> ps;
 };
@@ -150,6 +155,7 @@ YU_INTERNAL DXGI_FORMAT DXGIFormat(TextureFormat fmt)
 	{
 		case TEX_FORMAT_R8G8B8A8_UNORM: return DXGI_FORMAT_R8G8B8A8_UNORM;
 		case TEX_FORMAT_R8G8B8A8_UNORM_SRGB: return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+		case TEX_FORMAT_R16G16_FLOAT: return DXGI_FORMAT_R16G16_FLOAT;
 	}
 	Log("error, DXGIFormat: unknown format\n");
 	return DXGI_FORMAT_UNKNOWN;
@@ -161,8 +167,9 @@ YU_INTERNAL TextureFormat TextureFormatFromDxgi(DXGI_FORMAT fmt)
 	{
 	case DXGI_FORMAT_R8G8B8A8_UNORM: return TEX_FORMAT_R8G8B8A8_UNORM;
 	case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB: return TEX_FORMAT_R8G8B8A8_UNORM_SRGB;
+	case DXGI_FORMAT_R16G16_FLOAT: return TEX_FORMAT_R16G16_FLOAT;
 	}
-
+	Log("error, TextureFormatFromDxgi: unknown format\n");
 	return TEX_FORMAT_UNKNOWN;
 }
 
@@ -461,8 +468,8 @@ YU_INTERNAL ID3D11InputLayout* CreateInputLayout(u32 vertChannelMask)
 	D3D11_INPUT_ELEMENT_DESC preDefineDesc[] =
 	{
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA },
-		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA },
-		{ "COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA }
+		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, sizeof(Vector3), D3D11_INPUT_PER_VERTEX_DATA },
+		{ "COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, sizeof(Vector3) + sizeof(Vector2), D3D11_INPUT_PER_VERTEX_DATA }
 	};
 
 	D3D11_INPUT_ELEMENT_DESC translateDesc[3];
@@ -700,65 +707,51 @@ YU_INTERNAL void ExecUpdateCameraCmd(RendererDx11* renderer, CameraHandle camera
 }
 
 //TODO: remove shader blob delete from this, memory should be managed by caller
-YU_INTERNAL void ExecCreateVertexShaderCmd(RendererDx11* renderer, VertexShaderHandle vs, VertexShaderAPIData& data)
+YU_INTERNAL void ExecCreateVertexShaderCmd(RendererDx11* renderer, VertexShaderHandle vs, DataBlob& data)
 {
-	if (data.blob)
+	if (data.data)
 	{
 		ID3D11VertexShader* vertexShader;
-		HRESULT hr = gDx11Device->d3d11Device->CreateVertexShader(data.blob->GetBufferPointer(), data.blob->GetBufferSize(), nullptr, &vertexShader);
+		HRESULT hr = gDx11Device->d3d11Device->CreateVertexShader(data.data, data.dataLen, nullptr, &vertexShader);
 
 		if (SUCCEEDED(hr))
 		{
 			renderer->dx11VertexShaderList[vs.id].shader = vertexShader;
-#if defined YU_DEBUG
-			Log("create vertex shader: %s succeeded\n", data.sourcePath.str);
-#endif
+			DEBUG_ONLY(renderer->dx11VertexShaderList[vs.id].source = data.sourcePath);
+			DEBUG_ONLY(Log("create vertex shader: %s succeeded\n", data.sourcePath.str));
 		}
 		else
 		{
-#if defined YU_DEBUG
-			Log("error, create vertex shader: %s failed\n", data.sourcePath.str);
-#endif
+			DEBUG_ONLY(Log("error, create vertex shader: %s failed\n", data.sourcePath.str));
 		}
-		data.blob->Release();
-		data.blob = nullptr;
 	}
 	else
 	{
-#if defined YU_DEBUG
-		Log("error, empty blob, create vertex shader: %s failed\n", data.sourcePath.str);
-#endif
+		DEBUG_ONLY(Log("error, empty blob, create vertex shader: %s failed\n", data.sourcePath.str));
 	}
 }
 
-YU_INTERNAL void ExecCreatePixelShaderCmd(RendererDx11* renderer, PixelShaderHandle ps, PixelShaderAPIData& data)
+YU_INTERNAL void ExecCreatePixelShaderCmd(RendererDx11* renderer, PixelShaderHandle ps, DataBlob& data)
 {
-	if (data.blob)
+	if (data.data)
 	{
 		ID3D11PixelShader* pixelShader;
-		HRESULT hr = gDx11Device->d3d11Device->CreatePixelShader(data.blob->GetBufferPointer(), data.blob->GetBufferSize(), nullptr, &pixelShader);
+		HRESULT hr = gDx11Device->d3d11Device->CreatePixelShader(data.data, data.dataLen, nullptr, &pixelShader);
 
 		if (SUCCEEDED(hr))
 		{
 			renderer->dx11PixelShaderList[ps.id].shader = pixelShader;
-#if defined YU_DEBUG
-			Log("create pixel shader: %s succeeded\n", data.sourcePath.str);
-#endif
+			DEBUG_ONLY(renderer->dx11PixelShaderList[ps.id].source = data.sourcePath);
+			DEBUG_ONLY(Log("create pixel shader: %s succeeded\n", data.sourcePath.str));
 		}
 		else
 		{
-#if defined YU_DEBUG
-			Log("error, create pixel shader: %s failed\n", data.sourcePath.str);
-#endif
+			DEBUG_ONLY(Log("error, create pixel shader: %s failed\n", data.sourcePath.str));
 		}
-		data.blob->Release();
-		data.blob = nullptr;
 	}
 	else
 	{
-#if defined YU_DEBUG
-		Log("error, empty blob, create pixel shader: %s failed\n", data.sourcePath.str);
-#endif
+		DEBUG_ONLY(Log("error, empty blob, create pixel shader: %s failed\n", data.sourcePath.str));
 	}
 }
 
@@ -769,6 +762,7 @@ YU_INTERNAL void ExecCreatePipelineCmd(RendererDx11* renderer, PipelineHandle pi
 	bool success = true;
 	if (renderer->dx11VertexShaderList[data.vs.id].shader)
 	{
+		DEBUG_ONLY(dx11Pipeline.vsSource = renderer->dx11VertexShaderList[data.vs.id].source);
 		dx11Pipeline.vs = renderer->dx11VertexShaderList[data.vs.id].shader;
 	}
 	else
@@ -779,6 +773,7 @@ YU_INTERNAL void ExecCreatePipelineCmd(RendererDx11* renderer, PipelineHandle pi
 
 	if (renderer->dx11PixelShaderList[data.ps.id].shader)
 	{
+		DEBUG_ONLY(dx11Pipeline.psSource = renderer->dx11PixelShaderList[data.ps.id].source);
 		dx11Pipeline.ps = renderer->dx11PixelShaderList[data.ps.id].shader;
 	}
 	else
@@ -920,15 +915,9 @@ YU_INTERNAL void ExecInsertFenceCmd(RendererDx11* renderer, FenceHandle fenceHan
 	fence->cpuExecuted = true;
 }
 
-struct VertexP3C4
-{
-	Vector3 pos;
-	u8		color[4];
-};
-
 YU_INTERNAL void ExecRenderCmd(RendererDx11* renderer, RenderQueue* queue, int renderListIdx)
 {
-	RenderList* list = &(queue->renderList[renderListIdx]);
+	RenderCmdList* list = &(queue->renderList[renderListIdx]);
 	assert(list->renderInProgress.load(std::memory_order_acquire));
 	
 	for (int i = 0; i < list->cmdCount; i++)
@@ -946,6 +935,7 @@ YU_INTERNAL void ExecRenderCmd(RendererDx11* renderer, RenderQueue* queue, int r
 
 		RenderTextureDx11* dx11RenderTexture = &renderer->dx11RenderTextureList[renderTexture.id];
 		MeshDataDx11* dx11Mesh = &renderer->dx11MeshList[mesh.id];
+		MeshRenderData* meshData = &renderer->meshList[mesh.id];
 		CameraDataDx11* dx11Camera = &renderer->dx11CameraList[camera.id];
 		PipelineDx11* dx11Pipeline = &renderer->dx11PipelineList[pipeline.id];
 
@@ -978,7 +968,7 @@ YU_INTERNAL void ExecRenderCmd(RendererDx11* renderer, RenderQueue* queue, int r
 		}
 		renderer->prevNumPSSRV = resources.numPsTexture;
 
-		UINT stride = sizeof(VertexP3C4);
+		UINT stride = VertexSize(meshData->channelMask);
 		UINT offset = 0;
 		ID3D11Buffer* vertexBuffer = dx11Mesh->vertexBuffer;
 		gDx11Device->d3d11DeviceContext->IASetInputLayout(dx11Mesh->inputLayout);

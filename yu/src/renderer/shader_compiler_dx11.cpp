@@ -1,9 +1,9 @@
 #include "renderer.h"
 #if defined YU_DX11
-
+#include "../core/allocator.h"
 #include "../core/log.h"
 #include "../core/file.h"
-#include "shader_dx11.h"
+#include <d3dcommon.h>
 
 typedef HRESULT WINAPI D3DCompileFunc( LPCVOID pSrcData,
 SIZE_T SrcDataSize,
@@ -117,34 +117,18 @@ ID3DBlob* CompileShaderFromFileDx11(const char* path, const char* entryPoint, co
 	return shaderBlob;
 }
 
-VertexShaderAPIData CompileVSFromFile(const char* path)
+void CreateShaderCache(const char* shaderPath, const char* entryPoint, const char* profile)
 {
-	VertexShaderAPIData data;
-#if defined YU_DEBUG
-	data.sourcePath = InternStr(path);
-#endif
-	data.blob =  CompileShaderFromFileDx11(path, "main", "vs_5_0");
-	return data;
-}
+	char cachePath[1024];
+	StringBuilder pathBuilder(cachePath, sizeof(cachePath));
+	pathBuilder.Cat(shaderPath);
+	pathBuilder.Cat(".cache");
 
-PixelShaderAPIData CompilePSFromFile(const char* path)
-{
-	PixelShaderAPIData data;
-#if defined YU_DEBUG
-	data.sourcePath = InternStr(path);
-#endif
-	data.blob = CompileShaderFromFileDx11(path, "main", "ps_5_0");
-	return data;
-}
-
-VertexShaderAPIData LoadVSFromFile(const char* path)
-{
-	return CompileVSFromFile(path);
-}
-
-PixelShaderAPIData LoadPSFromFile(const char* path)
-{
-	return CompilePSFromFile(path);
+	ID3DBlob* blob = CompileShaderFromFileDx11(shaderPath, entryPoint, profile);
+	if (blob)
+	{
+		SaveFileOverWrite(cachePath, blob->GetBufferPointer(), blob->GetBufferSize());
+	}
 }
 
 }

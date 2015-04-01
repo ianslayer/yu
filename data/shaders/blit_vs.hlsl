@@ -19,10 +19,9 @@ struct VS_OUTPUT
 VS_OUTPUT main(VertexInput IN) 
 {
 	VS_OUTPUT Out;
-	float4x4 viewProjMatrix = mul(viewMatrix, projectionMatrix);
-	Out.position = mul(float4(IN.position, 1), viewProjMatrix);
+	Out.position = float4(IN.position, 1);
 	Out.texcoord = IN.texcoord;
 	return Out;
 }
 
-																																																																																		
+		
