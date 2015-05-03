@@ -154,6 +154,7 @@
     <ClInclude Include="..\src\core\bit.h" />
     <ClInclude Include="..\src\core\crc32.h" />
     <ClInclude Include="..\src\core\file.h" />
+    <ClInclude Include="..\src\core\file_impl.h" />
     <ClInclude Include="..\src\core\free_list.h" />
     <ClInclude Include="..\src\core\log.h" />
     <ClInclude Include="..\src\core\log_impl.h" />
@@ -180,7 +181,6 @@
     <ClInclude Include="..\src\renderer\renderer.h" />
     <ClInclude Include="..\src\renderer\renderer_impl.h" />
     <ClInclude Include="..\src\renderer\resource_ptr_dx.h" />
-    <ClInclude Include="..\src\renderer\shader.h" />
     <ClInclude Include="..\src\renderer\wglext.h" />
     <ClInclude Include="..\src\sound\sound.h" />
     <ClInclude Include="..\src\stargazer\stargazer.h" />

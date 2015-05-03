@@ -64,7 +64,7 @@ void SubmitWork(StarGazer* starGazer)
 
 }
 
-void InitStarGazer(Window& win)
+void InitStarGazer()
 {
 	FrameWorkItemResult frameWork = FrameWorkItem();
 	gStarGazer->startWork = frameWork.frameStartItem;

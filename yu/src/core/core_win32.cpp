@@ -8,6 +8,7 @@
 #include "log_impl.h"
 #include "allocator_impl.h"
 #include "string_impl.h"
+#include "file_impl.h"
 
 #include "../renderer/renderer.h"
 #include <Mmsystem.h>
@@ -1069,10 +1070,56 @@ size_t SaveFileOverWrite(const char* path, void* buffer, size_t bufferLen)
 {
 	HANDLE fileHandle = CreateFileA(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
 	DWORD writeSize;
-	BOOL writeSuccess = ::WriteFile(fileHandle, buffer, bufferLen, &writeSize, nullptr);
+	BOOL writeSuccess = ::WriteFile(fileHandle, buffer, (DWORD)bufferLen, &writeSize, nullptr);
 	CloseHandle(fileHandle);
 
 	return writeSize;
+}
+
+const char* WorkingDir()
+{
+	YU_LOCAL_PERSIST char path[1024];
+	memset(path, 0, sizeof(path));
+	DWORD dirNameLength  = GetCurrentDirectoryA(sizeof(path), path);
+
+	if(dirNameLength == 0)
+	{
+		Log("error, WorkingDir: failed\n");
+	}
+	
+	return path;
+}
+
+const char* ExePath()
+{
+	YU_LOCAL_PERSIST char path[1024];
+	memset(path, 0, sizeof(path));
+	DWORD pathLength = GetModuleFileNameA(0, path, sizeof(path));
+
+	if(pathLength == 0)
+	{
+		Log("error, ExePath: failed\n");
+	}
+	
+	return path;
+}
+
+size_t GetDirFromPath(const char* path, char* outDirPath, size_t bufLength)
+{
+	size_t pathLength = strlen(path);
+	size_t resultPathLength = 0;
+	if(pathLength  > 0)
+	{
+		int dirSeperator = (int)pathLength - 1;
+		for(; dirSeperator >= 0 &&  path[dirSeperator] != '\\' && path[dirSeperator] != '/' && path[dirSeperator] != ':'; dirSeperator--)
+		{
+		}
+
+		strncpy(outDirPath, path, min(bufLength - 1, size_t(dirSeperator + 1) ));
+		resultPathLength = min(bufLength - 1, size_t(dirSeperator + 1) );
+	}
+
+	return resultPathLength;
 }
 
 YU_GLOBAL CycleCount initCycle;

@@ -229,7 +229,7 @@ void				StopRenderThread(RenderQueue* queue);
 
 }
 
-//#define YU_FORCE_GL
+#define YU_FORCE_GL
 #if defined YU_OS_MAC || defined YU_FORCE_GL
 #	define YU_GL
 #	define YU_GRAPHICS_API YU_GL

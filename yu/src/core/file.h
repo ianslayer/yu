@@ -4,6 +4,9 @@
 namespace yu
 {
 const char* WorkingDir();
+const char* ExePath();	
+size_t GetDirFromPath(const char* path, char* outDirPath, size_t bufLength);
+	
 size_t FileSize(const char* path);
 size_t ReadFile(const char* path, void* buffer, size_t bufferLen);
 size_t SaveFileOverWrite(const char* path, void* buffer, size_t bufferLen);
@@ -15,27 +18,9 @@ struct			DataBlob
 	size_t		dataLen;
 };
 
-inline DataBlob ReadDataBlob(const char* path)
-{
-	DataBlob dataBlob = {};
+DataBlob ReadDataBlob(const char* path);
+void FreeDataBlob(DataBlob blob);
 
-	dataBlob.sourcePath = InternStr(path);
-	size_t fileLen = FileSize(path);
-	if(fileLen == 0)
-	{
-		Log("warning, ReadDataBlob: file: %s is empty\n ");
-		return dataBlob;
-	}
-	dataBlob.data = gDefaultAllocator->Alloc(fileLen);
-	dataBlob.dataLen = ReadFile(path, dataBlob.data, fileLen);
-	
-	return dataBlob;
-}
-
-inline void FreeDataBlob(DataBlob blob)
-{
-	gDefaultAllocator->Free(blob.data);
-}
 
 
 }

@@ -5,8 +5,13 @@
 #include "sound/sound.h"
 #include "stargazer/stargazer.h"
 
+#include "module/module.h"
+#include "core/log.h"
+#include "core/file.h"
+
 #include "yu.h"
 #include <atomic>
+#include <windows.h>
 namespace yu
 {
 
@@ -19,9 +24,30 @@ YU_GLOBAL std::atomic<int> gYuRunning;
 YU_GLOBAL std::atomic<int> gYuInitialized;
 YU_GLOBAL RenderQueue*	gRenderQueue; //for shutdown render thread
 
+void LoadModule()
+{
+	HMODULE module = LoadLibraryA("yu/build/test_module.dll");
+	const char* workingDir = WorkingDir();
+	const char* exePath = ExePath();
+
+	char exeDir[1024];
+	size_t exeDirLength = GetDirFromPath(exePath, exeDir, sizeof(exeDir));
+	
+	module_update* updateFunc = (module_update*) GetProcAddress(module, "ModuleUpdate");
+	updateFunc();
+	if(!updateFunc)
+	{
+		Log("error, failed to load module\n");
+	}
+}
+
 void InitYu()
 {
+	
 	InitSysLog();
+
+	LoadModule();
+	
 	gYuRunning = 1;
 	InitSysTime();
 	InitSysAllocator();
@@ -53,7 +79,7 @@ void InitYu()
 
 	InitWorkerSystem();
 
-	InitStarGazer(gWindowManager->mainWindow);
+	InitStarGazer();
 
 	Renderer* renderer = GetRenderer();
 	gRenderQueue = GetThreadLocalRenderQueue();;

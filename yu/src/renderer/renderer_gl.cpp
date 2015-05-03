@@ -439,7 +439,7 @@ YU_INTERNAL void ExecRenderCmd(RendererGL* renderer, RenderQueue* queue, int ren
 			glClear(GL_COLOR_BUFFER_BIT);
 			renderer->currentRenderTexture = renderTexture;
 		}
-		for(int tex = 0; tex < resources.numPsTexture; tex++)
+		for(unsigned int tex = 0; tex < resources.numPsTexture; tex++)
 		{
 			glActiveTexture(GL_TEXTURE0 + (unsigned int)tex);
 			glBindTexture(GL_TEXTURE_2D, renderer->glTextureList[resources.psTextures[tex].textures.id].texId);

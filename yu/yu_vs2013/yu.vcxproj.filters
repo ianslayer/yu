@@ -146,9 +146,6 @@
     <ClInclude Include="..\src\core\file.h">
       <Filter>Source Files\core</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\renderer\shader.h">
-      <Filter>Source Files\renderer</Filter>
-    </ClInclude>
     <ClInclude Include="..\src\renderer\resource_ptr_dx.h">
       <Filter>Source Files\renderer</Filter>
     </ClInclude>
@@ -184,6 +181,9 @@
     </ClInclude>
     <ClInclude Include="..\src\math\quaternion.h">
       <Filter>Source Files\math</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\core\file_impl.h">
+      <Filter>Source Files\core</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
