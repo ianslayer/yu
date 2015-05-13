@@ -10,8 +10,6 @@
 		B21323FE19BAD289009D0681 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B21323FD19BAD289009D0681 /* Cocoa.framework */; };
 		B213240819BAD289009D0681 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = B213240619BAD289009D0681 /* InfoPlist.strings */; };
 		B213240E19BAD289009D0681 /* Credits.rtf in Resources */ = {isa = PBXBuildFile; fileRef = B213240C19BAD289009D0681 /* Credits.rtf */; };
-		B213241419BAD289009D0681 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = B213241219BAD289009D0681 /* MainMenu.xib */; };
-		B213241619BAD289009D0681 /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B213241519BAD289009D0681 /* Images.xcassets */; };
 		B213241D19BAD289009D0681 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B213241C19BAD289009D0681 /* XCTest.framework */; };
 		B213241E19BAD289009D0681 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B21323FD19BAD289009D0681 /* Cocoa.framework */; };
 		B213242619BAD289009D0681 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = B213242419BAD289009D0681 /* InfoPlist.strings */; };
@@ -44,6 +42,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		B20B13681AF618460038BC8B /* file_impl.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = file_impl.h; sourceTree = "<group>"; };
 		B21323FA19BAD289009D0681 /* yu_mac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = yu_mac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B21323FD19BAD289009D0681 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = System/Library/Frameworks/Cocoa.framework; sourceTree = SDKROOT; };
 		B213240019BAD289009D0681 /* AppKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppKit.framework; path = System/Library/Frameworks/AppKit.framework; sourceTree = SDKROOT; };
@@ -52,8 +51,6 @@
 		B213240519BAD289009D0681 /* yu_mac-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "yu_mac-Info.plist"; sourceTree = "<group>"; };
 		B213240719BAD289009D0681 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		B213240D19BAD289009D0681 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.rtf; name = en; path = en.lproj/Credits.rtf; sourceTree = "<group>"; };
-		B213241319BAD289009D0681 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Base.lproj/MainMenu.xib; sourceTree = "<group>"; };
-		B213241519BAD289009D0681 /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Images.xcassets; sourceTree = "<group>"; };
 		B213241B19BAD289009D0681 /* yu_macTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = yu_macTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B213241C19BAD289009D0681 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = Library/Frameworks/XCTest.framework; sourceTree = DEVELOPER_DIR; };
 		B213242319BAD289009D0681 /* yu_macTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "yu_macTests-Info.plist"; sourceTree = "<group>"; };
@@ -182,8 +179,6 @@
 			isa = PBXGroup;
 			children = (
 				B25E0AF61A2713CD00F7AB1F /* main.mm */,
-				B213241219BAD289009D0681 /* MainMenu.xib */,
-				B213241519BAD289009D0681 /* Images.xcassets */,
 				B213240419BAD289009D0681 /* Supporting Files */,
 			);
 			path = yu_mac;
@@ -248,6 +243,7 @@
 		B213243619BAD42B009D0681 /* core */ = {
 			isa = PBXGroup;
 			children = (
+				B20B13681AF618460038BC8B /* file_impl.h */,
 				B2169DEF1A6DF839000D2D8E /* allocator_impl.h */,
 				B2169DF01A6DF839000D2D8E /* file.h */,
 				B2169DF51A70D9C6000D2D8E /* file_posix_impl.h */,
@@ -406,11 +402,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				B213240819BAD289009D0681 /* InfoPlist.strings in Resources */,
-				B213241619BAD289009D0681 /* Images.xcassets in Resources */,
 				B213240E19BAD289009D0681 /* Credits.rtf in Resources */,
 				B2169DFA1A721A3D000D2D8E /* flat_vs.glsl in Resources */,
 				B2169DF91A721A3D000D2D8E /* flat_ps.glsl in Resources */,
-				B213241419BAD289009D0681 /* MainMenu.xib in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -475,14 +469,6 @@
 				B213240D19BAD289009D0681 /* en */,
 			);
 			name = Credits.rtf;
-			sourceTree = "<group>";
-		};
-		B213241219BAD289009D0681 /* MainMenu.xib */ = {
-			isa = PBXVariantGroup;
-			children = (
-				B213241319BAD289009D0681 /* Base */,
-			);
-			name = MainMenu.xib;
 			sourceTree = "<group>";
 		};
 		B213242419BAD289009D0681 /* InfoPlist.strings */ = {

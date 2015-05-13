@@ -24,13 +24,13 @@ public:
 	virtual void	Free(void* ptr);
 
 };
-extern DefaultAllocator* gDefaultAllocator;
+//extern DefaultAllocator* gDefaultAllocator;
 
 struct ArenaImpl;
 class ArenaAllocator : public Allocator
 {
 public:
-	ArenaAllocator(size_t blockSize = 64 * 1024, Allocator* baseAllocator = gDefaultAllocator);
+	ArenaAllocator(size_t blockSize, Allocator* baseAllocator);
 	virtual ~ArenaAllocator();
 	virtual void*	Alloc(size_t size);
 	//virtual void*	AllocNonAligned(size_t size);//this is crazy
@@ -42,12 +42,15 @@ public:
 private:
 	ArenaImpl* arenaImpl;
 };
-extern ArenaAllocator* gSysArena;
+
+ArenaAllocator* CreateArena(size_t blockSize, Allocator* baseAllocator);
+
+//extern ArenaAllocator* gSysArena;
 
 class StackAllocator : public Allocator
 {
 public:
-	StackAllocator(size_t bufferSize, Allocator* baseAllocator = gDefaultAllocator);
+	StackAllocator(size_t bufferSize, Allocator* baseAllocator);
 	virtual ~StackAllocator();
 	virtual void*	Alloc(size_t size);
 	virtual void*	Realloc(void* oldPtr, size_t newSize);
@@ -73,10 +76,36 @@ T* New(Allocator* a)
 }
 
 template<class T>
+T* DeepNew(Allocator* a)
+{
+	void* mem = a->Alloc(sizeof(T));
+	return new(mem)T(a);	
+}
+
+template<class T>
+T* DeepNewArray(Allocator* a, size_t num)
+{
+	void* mem = a->Alloc(sizeof(T) * num);
+	for(size_t i = 0; i < num; i++)
+	{
+		new (( (T*)mem)+i) T(a);
+	}
+
+	return (T*) mem;
+}
+
+template<class T>
 T* NewAligned(Allocator* a, size_t align)
 {
 	void* mem = a->AllocAligned(sizeof(T), align);
 	return new(mem) T();
+}
+
+template<class T>
+T* DeepNewAligned(Allocator* a, size_t align)
+{
+	void* mem = a->AllocAligned(sizeof(T), align);
+	return new(mem) T(a);	
 }
 
 template<class T>
@@ -93,7 +122,13 @@ void DeleteAligned(Allocator* a, T* p)
 	a->FreeAligned(p);
 }
 
-void InitSysAllocator();
+struct SysAllocator
+{
+	Allocator* sysAllocator;
+	Allocator* sysArena;
+};
+
+SysAllocator InitSysAllocator();
 void FreeSysAllocator();
 
 }

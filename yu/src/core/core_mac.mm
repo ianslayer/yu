@@ -1,11 +1,13 @@
 #include <ApplicationSErvices/ApplicationServices.h>
 #import <Cocoa/Cocoa.h>
 #include <mach/mach_time.h>
-#import "yu_app.h"
+#import "../yu_app.h"
+#include "../yu.h"
 
 #include "../container/array.h"
 #include "../container/dequeue.h"
 
+#include "free_list.h"
 #include "log_impl.h"
 #include "timer_impl.h"
 #include "string_impl.h"
@@ -14,9 +16,12 @@
 #include "thread_posix_impl.h"
 #include "worker_impl.h"
 #include "file_posix_impl.h"
+#include "file_impl.h"
 
 namespace yu
 {
+
+void EnqueueEvent(WindowManager* mgr, InputEvent& ev);
 
 void InitSysTime()
 {
@@ -51,7 +56,7 @@ f64 ConvertToMs(const Time& time)
 }
 
 
-void ExecWindowCommand(WindowThreadCmd& cmd)
+void ExecWindowCommand(WindowManager* winMgr, WindowThreadCmd& cmd)
 {
 	switch (cmd.type)
 	{
@@ -76,7 +81,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 			[NSApp activateIgnoringOtherApps:YES];
 			
 			YuView* view = [[YuView alloc] initWithFrame:winrect];
-			[view setWindowManager:gWindowManager];
+			[view setWinManager: winMgr];
 			[win setContentView:view];
 			[win setAcceptsMouseMovedEvents:YES];
 			[win setDelegate:view];
@@ -84,11 +89,15 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 			
 			window.win = win;
 
-			(gWindowManager->mgrImpl)->windowList.PushBack(window);
+			(winMgr->mgrImpl)->windowList.PushBack(window);
 			param->win = window;
 			param->winCreationCS.Unlock();
 
 			NotifyCondVar(param->winCreationCV);
+		}
+		case (WindowThreadCmd::CLOSE_WINDOW):
+		{
+
 		}
 		break;
 
@@ -99,10 +108,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 }
 
 @implementation YuApp
--(void) setWindowManager:(yu::WindowManager*) mgr
-{
-	winManager = mgr;
-}
+@synthesize winManager;
 - (void) run
 {
 	 NSAutoreleasePool* pool = [[NSAutoreleasePool alloc] init];
@@ -122,12 +128,15 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
         {
             [self sendEvent:event];
         }
-		
-		yu::WindowManagerImpl* mgrImpl = winManager->mgrImpl;
-		yu::WindowThreadCmd cmd;
-		while (mgrImpl->winThreadCmdQueue.Dequeue(cmd))
-		{
-			ExecWindowCommand(cmd);
+
+		if(yu::YuRunning())
+		{		
+			yu::WindowManagerImpl* mgrImpl = winManager->mgrImpl;
+			yu::WindowThreadCmd cmd;
+			while (mgrImpl->winThreadCmdQueue.Dequeue(cmd))
+			{
+		  		ExecWindowCommand(winManager, cmd);
+			}
 		}
 		
         [pool drain];
@@ -137,14 +146,12 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 @end
 
 @implementation YuView
+@synthesize winManager;
+@synthesize openGLContext;
+@synthesize pixelFormat;
 -(void) setWindowManager:(yu::WindowManager*) winMgr
 {
 	winManager = winMgr;
-}
-
--(NSOpenGLContext*) openGLContext
-{
-	return openGLContext;
 }
 
 - (void) lockFocus
@@ -205,7 +212,9 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 
 -(BOOL)windowShouldClose:(id)sender
 {
-	//yu::FreeYu();
+	yu::SetYuExit();
+	while(!yu::YuStopped())
+		;
 	exit(0);
     return 1;
 }
@@ -222,7 +231,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 	ev.mouseEvent.x = float(eventLocation.x);
 	ev.mouseEvent.y = float(winrect.size.height - eventLocation.y);
 	
-	winManager->EnqueueEvent(ev);
+	EnqueueEvent(winManager, ev);
 }
  
 - (void)mouseUp:(NSEvent *)theEvent
@@ -237,7 +246,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 	ev.mouseEvent.x = float(eventLocation.x);
 	ev.mouseEvent.y = float(winrect.size.height - eventLocation.y);
 	
-	winManager->EnqueueEvent(ev);
+	EnqueueEvent(winManager, ev);
 }
 
 - (void)rightMouseDown:(NSEvent *)theEvent
@@ -251,7 +260,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 	ev.mouseEvent.x = float(eventLocation.x);
 	ev.mouseEvent.y = float(winrect.size.height - eventLocation.y);
 	
-	winManager->EnqueueEvent(ev);
+	EnqueueEvent(winManager, ev);
 }
 
 - (void)rightMouseUp:(NSEvent *)theEvent
@@ -266,7 +275,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 	ev.mouseEvent.x = float(eventLocation.x);
 	ev.mouseEvent.y = float(winrect.size.height - eventLocation.y);
 	
-	winManager->EnqueueEvent(ev);
+	EnqueueEvent(winManager, ev);
 }
 
 -(void)mouseMoved:(NSEvent *)theEvent
@@ -281,7 +290,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 	ev.mouseEvent.x = float(eventLocation.x);
 	ev.mouseEvent.y = float(winrect.size.height - eventLocation.y);
 	
-	winManager->EnqueueEvent(ev);
+	EnqueueEvent(winManager, ev);
 }
 
 -(void)mouseDragged:(NSEvent *)theEvent
@@ -296,7 +305,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 	ev.mouseEvent.x = float(eventLocation.x);
 	ev.mouseEvent.y = float(winrect.size.height - eventLocation.y);
 	
-	winManager->EnqueueEvent(ev);
+	EnqueueEvent(winManager, ev);
 }
 
 -(void)rightMouseDragged:(NSEvent *)theEvent
@@ -311,7 +320,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 	ev.mouseEvent.x = float(eventLocation.x);
 	ev.mouseEvent.y = float(winrect.size.height - eventLocation.y);
 	
-	winManager->EnqueueEvent(ev);
+	EnqueueEvent(winManager, ev);
 }
 
 -(void)keyDown:(NSEvent *)theEvent
@@ -324,7 +333,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 	{
 		char asciiKey = yu::ToUpperCase((char) key);
 		ev.keyboardEvent.key = asciiKey;
-		winManager->EnqueueEvent(ev);
+		EnqueueEvent(winManager, ev);
 	}
 }
 
@@ -338,7 +347,7 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 	{
 		char asciiKey = yu::ToUpperCase((char) key);
 		ev.keyboardEvent.key = asciiKey;
-		winManager->EnqueueEvent(ev);
+		EnqueueEvent(winManager, ev);
 	}
 }
 
@@ -347,11 +356,10 @@ void ExecWindowCommand(WindowThreadCmd& cmd)
 extern YuApp* gYuApp;
 namespace yu
 {
-bool PlatformInitSystem()
+
+void InitPlatformWindowMgr(WindowManager* winMgr)
 {
-	gWindowManager->mgrImpl = new WindowManagerImpl();
-	[gYuApp setWindowManager: gWindowManager];
-	return true;
+	[gYuApp setWinManager: winMgr];
 }
 
 #define MAX_DISPLAY 16
@@ -499,7 +507,8 @@ Window	WindowManager::CreateWin(const Rect& rect)
 
 	param.winCreationCS.Unlock();
 
-	return param.win;}
+	return param.win;
+}
 
 void WindowManager::CloseWin(yu::Window &win)
 {
@@ -513,5 +522,49 @@ void WindowManager::CloseWin(yu::Window &win)
 		}
 	}
 }
+
+const char* ExePath()
+{
+	CFURLRef exeUrlRef;
+	exeUrlRef = CFBundleCopyExecutableURL(CFBundleGetMainBundle());
+
+	YU_LOCAL_PERSIST char path[1024];
+
+	if(!CFURLGetFileSystemRepresentation(exeUrlRef, TRUE, (UInt8*) path, 1024))
+	{
+		Log("ExePath: error, can't resolve file system path\n");
+		path[0] = 0;
+	}
+
+	CFRelease(exeUrlRef);
+	return path;
+}
+
+const char* DataPath()
+{
+	CFURLRef resourcesUrlRef;
+	resourcesUrlRef = CFBundleCopyResourcesDirectoryURL(CFBundleGetMainBundle());
+
+	YU_LOCAL_PERSIST char path[1024];
+
+	if(!CFURLGetFileSystemRepresentation(resourcesUrlRef, TRUE, (UInt8*) path, 1024))
+    {
+		Log("DataPath: error, can't resolve file system path\n");
+		path[0] = 0;
+    }
+	else
+	{
+		if(path[strlen(path) - 1]!= '/')
+		{
+			StringBuilder pathBuilder(path, 1024, strlen(path));
+			pathBuilder.Cat("/");
+		}
+    }
+
+	CFRelease(resourcesUrlRef);
+
+	return path;
+}
+
 
 }

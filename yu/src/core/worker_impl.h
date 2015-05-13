@@ -1,3 +1,4 @@
+
 #include "worker.h"
 #include "free_list.h"
 #include "../math/yu_math.h"
@@ -6,7 +7,6 @@
 namespace yu
 {
 
-#define MAX_WORKER_THREAD 32
 #define MAX_WORK_QUEUE_LEN 1024
 #define MAX_WORK_ITEM 4096
 
@@ -21,7 +21,7 @@ struct WorkLink
 YU_PRE_ALIGN(CACHE_LINE)
 struct WorkItem
 {
-	WorkItem(Allocator* allocator = gDefaultAllocator) : dependList(4, allocator), permitList(16, allocator), 
+	WorkItem(Allocator* allocator) : dependList(4, allocator), permitList(16, allocator), 
 		func(nullptr), finalizer(nullptr), outputData(nullptr), inputData(nullptr)
 	{
 		permits = 0;
@@ -61,9 +61,10 @@ struct WorkItem
 YU_PRE_ALIGN(CACHE_LINE)
 struct WorkerThread
 {
+	WorkerThread(Allocator* allocator): retiredItemPermitList(allocator) {}
 	int						id = -1;
 	Thread					thread;
-	ArenaAllocator			workerFrameArena;
+	//ArenaAllocator			workerFrameArena;
 	Array<WorkItem*>		retiredItemPermitList; //TODO: move this into retired function, this should use a stack allocator (alloca)
 	struct RenderQueue*		renderQueue;
 } YU_POST_ALIGN(CACHE_LINE);
@@ -71,15 +72,18 @@ struct WorkerThread
 void TerminateWorkFunc(WorkItem* item) {}
 struct WorkerSystem
 {
-	WorkerSystem() :workQueueSem(0, MAX_WORK_QUEUE_LEN)
+	WorkerSystem(Allocator* allocator) :workQueueSem(0, MAX_WORK_QUEUE_LEN), terminateWorkItem(allocator)
 	{
 		CPUInfo cpuInfo = SystemInfo::GetCPUInfo();
 		numWorkerThread = yu::max((i32)cpuInfo.numLogicalProcessors - (i32)2, (i32)0);
-	
+
+		workerThread = DeepNewArray<WorkerThread>(allocator, numWorkerThread + 1);
 		SetWorkFunc(&terminateWorkItem, TerminateWorkFunc, nullptr);
+
+		workItemList = DeepNewArray<WorkItem>(allocator, MAX_WORK_ITEM);
 	}
 
-	WorkerThread			workerThread[MAX_WORKER_THREAD]; //0 is main thread
+	WorkerThread*			workerThread; //0 is main thread
 	unsigned int			numWorkerThread = 0;		
 
 	MpmcFifo<WorkItem*, MAX_WORK_QUEUE_LEN>	workQueue;
@@ -88,7 +92,7 @@ struct WorkerSystem
 	WorkItem				terminateWorkItem;
 
 	IndexFreeList<MAX_WORK_ITEM> workItemIdList;
-	WorkItem				workItemList[MAX_WORK_ITEM];
+	WorkItem*				workItemList;
 };
 
 YU_GLOBAL WorkerSystem* gWorkerSystem;
@@ -110,7 +114,7 @@ WorkItem* GetWorkItem(WorkItemHandle itemHandle)
 	return &gWorkerSystem->workItemList[itemHandle.id];
 }
 
-InputData* GetInputData(WorkItem* item)
+const InputData* GetInputData(WorkItem* item)
 {
 	return item->inputData;
 }
@@ -294,10 +298,10 @@ void SubmitTerminateWork()
 	}
 }
 
-void InitWorkerSystem()
+void InitWorkerSystem(Allocator* allocator)
 {
 
-	gWorkerSystem = NewAligned<WorkerSystem>(gSysArena, CACHE_LINE);
+	gWorkerSystem = DeepNewAligned<WorkerSystem>(allocator, CACHE_LINE);
 	size_t workerSysSize = sizeof(*gWorkerSystem);
 
 	//main thread
@@ -314,9 +318,9 @@ void InitWorkerSystem()
 	GetMainThreadWorker(); //init main thread worker tls
 }
 
-void FreeWorkerSystem()
+void FreeWorkerSystem(Allocator* allocator)
 {
-	DeleteAligned(gSysArena, gWorkerSystem);
+	DeleteAligned(allocator, gWorkerSystem);
 }
 
 }

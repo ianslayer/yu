@@ -22,6 +22,7 @@ struct InitGLParams
 	RendererDesc	desc;
 	CondVar			initGLCV;
 	Mutex			initGLCS;
+	Allocator*		allocator;
 };
 
 struct VertexShaderGL
@@ -65,6 +66,10 @@ struct RenderTextureGL
 
 struct RendererGL : public Renderer
 {
+	RendererGL(Allocator* allocator) : Renderer(allocator)
+	{
+	}
+		
 	VertexShaderGL		glVertexShaderList[MAX_SHADER];
 	PixelShaderGL		glPixelShaderList[MAX_SHADER];
 	PipelineGL			glPipelineList[MAX_PIPELINE];
@@ -108,8 +113,7 @@ YU_INTERNAL void ExecUpdateCameraCmd(RendererGL* renderer, CameraHandle camera, 
 	}
 }
 
-YU_INTERNAL void ExecCreateMeshCmd(RendererGL* renderer, MeshHandle mesh, u32 numVertices, u32 numIndices,
-u32 channelMask, MeshData* meshData)
+YU_INTERNAL void ExecCreateMeshCmd(RendererGL* renderer, MeshHandle mesh, u32 numVertices, u32 numIndices, u32 channelMask, MeshData* meshData, Allocator* allocator)
 {
 	MeshDataGL& glMesh = renderer->glMeshList[mesh.id];
 	assert(glMesh.vboId == 0);
@@ -160,9 +164,9 @@ u32 channelMask, MeshData* meshData)
 	void* indexBuffer = nullptr;
 	if(meshData)
 	{
-		vertexBuffer = gDefaultAllocator->Alloc(vertexBufferSize);
+		vertexBuffer = allocator->Alloc(vertexBufferSize);
 		InterleaveVertexBuffer(vertexBuffer, meshData, channelMask, 0, numVertices);
-		gDefaultAllocator->Free(vertexBuffer);
+		allocator->Free(vertexBuffer);
 		indexBuffer = meshData->indices;
 	}
 	
@@ -205,6 +209,10 @@ YU_INTERNAL GLenum GLSizedTexFormat(TextureFormat fmt)
 		case TEX_FORMAT_R8G8B8A8_UNORM: return GL_RGBA8;
 		case TEX_FORMAT_R8G8B8A8_UNORM_SRGB: return GL_SRGB8_ALPHA8;
 		case TEX_FORMAT_R16G16_FLOAT: return GL_RG16F;
+		case TEX_FORMAT_UNKNOWN:
+		case NUM_TEX_FORMATS:
+			;
+		
 	}
 	Log("error, GLSizedTexFormat: unknown texture format\n");
 	return 0;
@@ -464,8 +472,14 @@ YU_INTERNAL void ExecRenderCmd(RendererGL* renderer, RenderQueue* queue, int ren
 	list->renderInProgress.store(false, std::memory_order_release);
 }
 
-YU_GLOBAL int gRenderThreadRunning;
-YU_INTERNAL bool ExecThreadCmd(RendererGL* renderer)
+YU_GLOBAL std::atomic<int> gRenderThreadRunningState; //0: stop, 1: running, 2: exiting
+
+bool RenderThreadRunning()
+{
+	return gRenderThreadRunningState != 0;
+}
+	
+YU_INTERNAL bool ExecThreadCmd(RendererGL* renderer, Allocator* allocator)
 {
 	bool frameEnd = false;
 	for (int i = 0; i < renderer->numQueue; i++)
@@ -478,7 +492,7 @@ YU_INTERNAL bool ExecThreadCmd(RendererGL* renderer)
 			{
 				case (RenderThreadCmd::STOP_RENDER_THREAD) :
 				{
-					gRenderThreadRunning = 0;
+					gRenderThreadRunningState = 2;
 				}break;
 				case (RenderThreadCmd::UPDATE_CAMERA):
 				{
@@ -487,7 +501,7 @@ YU_INTERNAL bool ExecThreadCmd(RendererGL* renderer)
 				case (RenderThreadCmd::CREATE_MESH):
 				{
 					ExecCreateMeshCmd(renderer, cmd.createMeshCmd.mesh, cmd.createMeshCmd.numVertices,
-					cmd.createMeshCmd.numIndices, cmd.createMeshCmd.vertChannelMask, cmd.createMeshCmd.meshData);
+									  cmd.createMeshCmd.numIndices, cmd.createMeshCmd.vertChannelMask, cmd.createMeshCmd.meshData, allocator);
 				}break;
 				case (RenderThreadCmd::CREATE_TEXTURE) :
 				{
@@ -544,6 +558,13 @@ YU_INTERNAL bool ExecThreadCmd(RendererGL* renderer)
 					Fence& fence = renderer->fenceList[cmd.insertFenceCmd.fence.id];
 					fence.cpuExecuted = true;
 				}break;
+
+				case(RenderThreadCmd::RESIZE_BUFFER):
+				case(RenderThreadCmd::START_VR_MODE):
+				case(RenderThreadCmd::STOP_VR_MODE):
+				{
+					Log("RenderThread ExecThreadCmd: warning, cmd is not implemented\n");
+				}
 			}
 		}
 	}
@@ -566,6 +587,7 @@ void ResizeBackBuffer(unsigned int width, unsigned int height, TextureFormat fmt
 ThreadReturn ThreadCall RenderThread(ThreadContext context)
 {
 	InitGLParams* param = (InitGLParams*) context;
+	Allocator* allocator = param->allocator;
 	RendererDesc rendererDesc;
 	param->initGLCS.Lock();
 	Window win = param->win;
@@ -573,7 +595,7 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 	rendererDesc.supportOvrRendering = false;
 	InitGLContext(param->win, rendererDesc);
 
-	gRenderer = new RendererGL();
+	gRenderer = DeepNew<RendererGL>(allocator);
 	gRenderer->rendererDesc = rendererDesc;
 	{
 		gRenderer->frameBuffer.id = gRenderer->renderTextureIdList.Alloc();
@@ -582,7 +604,7 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 		gRenderer->currentRenderTexture = gRenderer->frameBuffer;
 	}
 
-	gRenderThreadRunning = 1;
+	gRenderThreadRunningState = 1;
 	NotifyCondVar(param->initGLCV);
 	param->initGLCS.Unlock();
 
@@ -594,7 +616,7 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 	glBindVertexArray(globalVao);
 	*/
 	
-	while (gRenderThreadRunning)
+	while (gRenderThreadRunningState== 1 )
 	{
 		WaitForKick(lock);
 		glClearColor(1, 0, 0, 1);
@@ -603,7 +625,7 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 		glDisable(GL_DEPTH_TEST);
 		glDisable(GL_CULL_FACE);
 		
-		while (!ExecThreadCmd(gRenderer) && gRenderThreadRunning)
+		while (!ExecThreadCmd(gRenderer, param->allocator) && gRenderThreadRunningState == 1)
 			;
 
 		BaseDoubleBufferData::SwapDirty();
@@ -613,18 +635,22 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 	}
 	
 
-	delete gRenderer;
+	Delete(allocator, gRenderer);
+
+	gRenderThreadRunningState = 0;
+	Log("RenderThread exit\n");
 
 	return 0;
 }
 
 Thread	renderThread;
-void InitRenderThread(const Window& win, const RendererDesc& desc)
+void InitRenderThread(const Window& win, const RendererDesc& desc, Allocator* allocator)
 {
 	InitGLParams param;
 	param.initGLCS.Lock();
 	param.win = win;
 	param.desc = desc;
+	param.allocator = allocator;
 	renderThread = CreateThread(RenderThread, &param);
 	CPUInfo cpuInfo = SystemInfo::GetCPUInfo();
 	SetThreadAffinity(renderThread.handle, 1 << (cpuInfo.numLogicalProcessors - 1));

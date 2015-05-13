@@ -138,8 +138,8 @@ struct Semaphore
 void			WaitForSem(Semaphore& sem);
 void			SignalSem(Semaphore& sem);
 
-void			InitThreadRuntime();
-void			FreeThreadRuntime();
+void			InitThreadRuntime(Allocator* allocator);
+void			FreeThreadRuntime(Allocator* allocator);
 Thread			CreateThread(ThreadFunc func, ThreadContext context, ThreadPriority priority = NormalPriority, u64 affinityMask = 0);
 ThreadHandle	GetCurrentThreadHandle();
 u64				GetThreadAffinity(ThreadHandle thread);

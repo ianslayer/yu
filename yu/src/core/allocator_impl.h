@@ -14,8 +14,6 @@ namespace yu
 const YU_GLOBAL size_t MIN_ALLOC_ALIGN = sizeof(void*);
 
 DefaultAllocator  _gDefaultAllocator;
-DefaultAllocator* gDefaultAllocator = nullptr;
-ArenaAllocator* gSysArena = nullptr;
 	
 void* Allocator::AllocAligned(size_t size, size_t align)
 {
@@ -73,15 +71,17 @@ void DefaultAllocator::Free(void* ptr)
 }
 
 
-void InitSysAllocator()
+SysAllocator InitSysAllocator()
 {
-	gDefaultAllocator = &_gDefaultAllocator;
-	gSysArena = new ArenaAllocator(4 * 1024 * 1024, gDefaultAllocator);
+	SysAllocator sysAllocator;
+	sysAllocator.sysAllocator = &_gDefaultAllocator;
+	sysAllocator.sysArena = new ArenaAllocator(4 * 1024 * 1024, sysAllocator.sysAllocator);
+	return sysAllocator;
 }
 
 void FreeSysAllocator()
 {
-	delete gSysArena;
+
 }
 	
 struct ArenaImpl
@@ -123,6 +123,12 @@ ArenaAllocator::~ArenaAllocator()
 	baseAllocator->Free(arenaImpl);
 }
 
+ArenaAllocator* CreateArena(size_t blockSize, Allocator* baseAllocator)
+{
+	ArenaAllocator* arena = new(baseAllocator->Alloc(sizeof(ArenaAllocator))) ArenaAllocator(blockSize, baseAllocator);
+	return arena;
+}
+	
 void* ArenaAllocator::Alloc(size_t size)
 {
 	size_t allocSize = RoundUp(size + MIN_ALLOC_ALIGN - 1, MIN_ALLOC_ALIGN);

@@ -47,26 +47,70 @@ struct WindowThreadCmd
 
 using InputQueue = SpscFifo < InputEvent, 256 > ;
 
+struct EventQueue
+{
+	SpscFifo<InputEvent, 256> fifo;
+};
+
 struct WindowManagerImpl
 {
+	WindowManagerImpl(Allocator* allocator) : windowList(allocator)
+	{
+		for(int i = 0; i < 16; i++)
+		{
+			eventQueueList[i] = nullptr;
+		}
+	}
+		
 	SpscFifo<WindowThreadCmd, 16>		winThreadCmdQueue; //yumain to window thread
-	InputQueue							inputQueue;			//window to yumain thread
+	std::atomic<EventQueue*>			eventQueueList[16];
+	IndexFreeList<16>					eventQueueFreeIdList;
 	Array<Window>						windowList;
 	Thread								windowThread;
 };
 
-YU_GLOBAL_EXPORT WindowManager* gWindowManager;
-
-bool PlatformInitSystem();
-
-bool InitWindowManager()
+void EnqueueEvent(WindowManager* mgr, InputEvent& ev)
 {
-	gWindowManager = New<WindowManager>(gSysArena);
-
-	if(!PlatformInitSystem())
+	ev.timeStamp = SampleTime().time;
+	for(int i = 0; i < 16; i++)
 	{
-		return false;
+		EventQueue* queue = mgr->mgrImpl->eventQueueList[i].load(std::memory_order_acquire);
+		if(queue)
+			queue->fifo.Enqueue(ev);
 	}
+}
+
+EventQueue* CreateEventQueue(WindowManager* winMgr, Allocator* allocator)
+{
+	int newQueueId = winMgr->mgrImpl->eventQueueFreeIdList.Alloc();
+	if(newQueueId < 0)
+		return nullptr;
+
+	if(winMgr->mgrImpl->eventQueueList[newQueueId] == nullptr)
+	{
+		EventQueue* queue = New<EventQueue>(allocator);
+		winMgr->mgrImpl->eventQueueList[newQueueId].store(queue, std::memory_order_release);
+	}
+
+	return winMgr->mgrImpl->eventQueueList[newQueueId];
+}
+
+bool DequeueEvent(EventQueue* queue, InputEvent& ev)
+{
+	if(queue)
+		return queue->fifo.Dequeue(ev);
+
+	return false;
+}
+
+void InitPlatformWindowMgr(WindowManager* mgr);
+
+WindowManager* InitWindowManager(Allocator* allocator)
+{
+	WindowManager* windowManager = New<WindowManager>(allocator);
+	windowManager->mgrImpl = DeepNew<WindowManagerImpl>(allocator);
+	
+	InitPlatformWindowMgr(windowManager);
 	
 	Display mainDisplay = SystemInfo::GetMainDisplay();
 	
@@ -94,14 +138,13 @@ bool InitWindowManager()
 	Log("Vender: %s\n", cpuInfo.vender);
 	
 
-	return true;
+	return windowManager;
 }
 
-void FreeWindowManager()
+void FreeWindowManager(WindowManager* mgr, Allocator* allocator)
 {
-	Delete(gSysArena, gWindowManager->mgrImpl);
-	Delete(gSysArena, gWindowManager);
-	gWindowManager = 0;
+	Delete(allocator, mgr->mgrImpl);
+	Delete(allocator, mgr);
 }
 
 #if defined (YU_CPU_X86) || defined (YU_CPU_X86_64)
@@ -232,16 +275,5 @@ CPUInfo SystemInfo::GetCPUInfo()
 }
 
 #endif
-
-bool WindowManager::DequeueInputEvent(InputEvent& ev)
-{
-	return mgrImpl->inputQueue.Dequeue(ev);
-}
-
-void WindowManager::EnqueueEvent(InputEvent& ev)
-{
-	ev.timeStamp = SampleTime().time;
-	mgrImpl->inputQueue.Enqueue(ev);
-}
 
 }

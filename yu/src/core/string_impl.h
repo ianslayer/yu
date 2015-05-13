@@ -240,10 +240,10 @@ StrTable* gStrTable;
 ArenaAllocator* gStrArenaAllocator;
 ArenaAllocator* gStrNodeAllocator;
 
-void InitSysStrTable()
+void InitSysStrTable(Allocator* allocator)
 {
-	gStrArenaAllocator = new ArenaAllocator();
-	gStrNodeAllocator = new ArenaAllocator();
+	gStrArenaAllocator = CreateArena(64 * 1024, allocator);
+	gStrNodeAllocator = CreateArena(64 * 1024, allocator);
 	gStrTable = NewStrTable(true, false, gStrArenaAllocator, gStrNodeAllocator);
 }
 

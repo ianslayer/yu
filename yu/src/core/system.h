@@ -160,22 +160,22 @@ struct CPUInfo
 	char	vender[16];
 #if defined (YU_CPU_X86_64) || defined (YU_CPU_X86)
 
-	bool	x2apic = false;
-	bool	sse = false;
-	bool	sse2 = false;
-	bool	sse3 = false;
-	bool	ssse3 = false;
-	bool	sse4_1 = false;
-	bool	sse4_2 = false;
-	bool	avx = false;
-	bool	avx2 = false;
+	bool	x2apic;
+	bool	sse;
+	bool	sse2;
+	bool	sse3;
+	bool	ssse3;
+	bool	sse4_1;
+	bool	sse4_2;
+	bool	avx;
+	bool	avx2;
 	
-	bool	tsc = false;
-	bool	invariantTsc = false;
+	bool	tsc;
+	bool	invariantTsc;
 
 #endif
-	u32		numLogicalProcessors = 0;
-	u32		numLogicalProcessorsPerCore = 0;
+	u32		numLogicalProcessors;
+	u32		numLogicalProcessorsPerCore;
 };
 	
 struct SystemInfo
@@ -197,18 +197,18 @@ struct WindowManager
 
 	Window				CreateWin(const Rect& rect);
 	void				CloseWin(Window& win);
-	
-	bool				DequeueInputEvent(InputEvent& ev);
-	void				EnqueueEvent(InputEvent& ev);
 
 	Window				mainWindow;
 	struct WindowManagerImpl*	mgrImpl;
 };
 
-bool	InitWindowManager();
-void	FreeWindowManager();
+struct EventQueue;
+EventQueue* CreateEventQueue(WindowManager* winMgr, class Allocator* allocator);
+bool DequeueEvent(EventQueue* queue, InputEvent& ev);
 
-extern WindowManager* gWindowManager;
+WindowManager*	InitWindowManager(class Allocator* allocator);
+void	FreeWindowManager(WindowManager* mgr, class Allocator* allocator);
+
 
 }
 

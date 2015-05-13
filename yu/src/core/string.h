@@ -48,7 +48,7 @@ class ArenaAllocator;
 StrTable*		NewStrTable(bool threadSafe, bool stripString, ArenaAllocator* strBufferAllocator, ArenaAllocator* nodeAllocator);
 StringRef		InternStr(const char*, StrTable* table);
 
-void			InitSysStrTable();
+void			InitSysStrTable(class Allocator* allocator);
 void			FreeSysStrTable();
 StringRef		InternStr(const char*);
 StringRef		CompiledStr(StringId id, const char* str);

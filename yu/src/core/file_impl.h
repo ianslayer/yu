@@ -2,7 +2,7 @@
 namespace yu
 {
 
-DataBlob ReadDataBlob(const char* path)
+DataBlob ReadDataBlob(const char* path, Allocator* allocator)
 {
 	DataBlob dataBlob = {};
 
@@ -13,14 +13,15 @@ DataBlob ReadDataBlob(const char* path)
 		Log("warning, ReadDataBlob: file: %s is empty\n ");
 		return dataBlob;
 	}
-	dataBlob.data = gDefaultAllocator->Alloc(fileLen);
+	dataBlob.data = allocator->Alloc(fileLen);
 	dataBlob.dataLen = ReadFile(path, dataBlob.data, fileLen);
 
 	return dataBlob;
 }
-void FreeDataBlob(DataBlob blob)
+	
+void FreeDataBlob(DataBlob blob, Allocator* allocator)
 {
-	gDefaultAllocator->Free(blob.data);
+	allocator->Free(blob.data);
 }
 
 }

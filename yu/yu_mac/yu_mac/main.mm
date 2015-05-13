@@ -12,8 +12,6 @@
 #include "../../src/yu_app.h"
 namespace yu
 {
-class System;
-extern System* gSystem;
 void* YuMainThread(void* context)
 {
 	YuMain();

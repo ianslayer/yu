@@ -224,9 +224,9 @@ void				Render(RenderQueue* queue, RenderTextureHandle eyeTexture[2], CameraHand
 void				Flush(RenderQueue* queue);
 void				Swap(RenderQueue* queue, bool vsync = true);
 
-void				InitRenderThread(const Window& win, const RendererDesc& desc);
+void				InitRenderThread(const Window& win, const RendererDesc& desc, Allocator* allocator);
 void				StopRenderThread(RenderQueue* queue);
-
+bool 				RenderThreadRunning();
 }
 
 #define YU_FORCE_GL

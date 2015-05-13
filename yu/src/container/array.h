@@ -15,10 +15,10 @@ YU_GLOBAL const int DEFAULT_CAPACITY = 16;
 YU_GLOBAL const int DEFAULT_GRANULARITY = 16; //we assume granularity is multiple of power of 2
 
 public:
-	Array (Allocator* _allocator = gDefaultAllocator);
-	Array (int capacity, Allocator* _allocator = gDefaultAllocator);
-	Array (int capacity, const T* pData, int size, Allocator* _allocator = gDefaultAllocator);
-	Array (const Array& rhs, Allocator* _allocator = gDefaultAllocator);
+	Array (Allocator* _allocator);
+	Array (int capacity, Allocator* _allocator);
+	Array (int capacity, const T* pData, int size, Allocator* _allocator );
+	Array (const Array& rhs, Allocator* _allocator);
 	~Array();
 
    void			    PushBack(const T& val);

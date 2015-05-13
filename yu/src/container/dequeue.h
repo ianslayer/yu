@@ -15,10 +15,10 @@ class LockedFifo
 public:
 	LockedFifo();
 	bool			Enqueue(const T& elem);
-	bool			Dequeue(T& data);
+	bool			Dequeue(T& data) const;
 
 private:
-	unsigned int	readPos;
+	mutable unsigned int	readPos;
 	T				elems[numElem];
 	unsigned int	writePos;
 	Mutex			mutex;
@@ -45,7 +45,7 @@ bool LockedFifo<T, numElem>::Enqueue(const T& elem)
 }
 
 template<class T, int numElem>
-bool LockedFifo<T, numElem>::Dequeue(T& data)
+bool LockedFifo<T, numElem>::Dequeue(T& data) const
 {
 	ScopedLock lock(mutex);
 	assert(IsPowerOfTwo(numElem));
@@ -63,9 +63,9 @@ class LocklessSpscFifo
 public:
 	LocklessSpscFifo();
 	bool			Enqueue(const T& elem);
-	bool			Dequeue(T& data);
+	bool			Dequeue(T& data) const;
 private:
-	std::atomic<unsigned int>	readPos;
+	mutable std::atomic<unsigned int>	readPos;
 	T							elems[numElem];
 	std::atomic<unsigned int>	writePos;
 };
@@ -94,7 +94,7 @@ bool LocklessSpscFifo<T, numElem>::Enqueue(const T& elem)
 }
 
 template<class T, int numElem>
-bool LocklessSpscFifo<T, numElem>::Dequeue(T& data)
+bool LocklessSpscFifo<T, numElem>::Dequeue(T& data) const
 {
 	assert(IsPowerOfTwo(numElem));
 

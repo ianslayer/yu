@@ -8,7 +8,7 @@ extern struct StarGazer* gStarGazer;
 void Clear(StarGazer* starGazer);
 void SubmitWork(StarGazer* starGazer);
 
-void InitStarGazer();
-void FreeStarGazer();
+void InitStarGazer(WindowManager* winMgr, Allocator* allocator);
+void FreeStarGazer(Allocator* allocator);
 
 }

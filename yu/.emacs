@@ -1,8 +1,24 @@
+
+(setq ian-pc nil)
+(setq ian-mac nil)
+
+(if (eq system-type 'darwin) (setq ian-mac (message "ian-mac")) )
+(if (eq system-type 'windows-nt) (setq ian-pc (message "ian-pc")) )
+(if (eq system-type 'cygwin) (setq ian-pc (message "ian-pc")) )
+
+(when ian-pc 
+  (setq default-directory "d:/yu/yu/src")
+)
+
+(when ian-mac
+  (setq mac-pass-command-to-system nil)
+  (setq default-directory "~/yu/yu/src")
+)
+
 (require 'cc-mode)
 (require 'ido)
 (require 'compile)
 (ido-mode t)
-(setq default-directory "d:/yu/yu")
 
 (split-window-horizontally)
 (set-foreground-color "burlywood3")
@@ -30,11 +46,20 @@
 (define-key global-map "\ef" 'find-file)
 (define-key global-map "\eF" 'find-file-other-window)
 
+;switch window
+(define-key global-map "\ew" 'other-window)
+
+;switch buffer
+(global-set-key (read-kbd-macro "\eb") 'ido-switch-buffer)
+(global-set-key (read-kbd-macro "\eB") 'ido-switch-buffer-other-window)
+
 ;new line indent
 (define-key c++-mode-map "\C-m" 'newline-and-indent)
 ; reindent
 (define-key c++-mode-map [C-tab] 'indent-region)
-
+; tab
+(define-key c++-mode-map (kbd "TAB") 'self-insert-command)
+(define-key objc-mode-map (kbd "TAB") 'self-insert-command)
 
 ; file extensions and their appropriate modes
 (setq auto-mode-alist
@@ -79,7 +104,7 @@
 
 (add-hook 'c-mode-hook 'ianslayer-c-style-hook)
 (add-hook 'c++-mode-hook 'ianslayer-c-style-hook)
-
+(add-hook 'objc-mode-hook 'ianslayer-c-style-hook)
 
 ;build environment
 (load-library "view")
@@ -88,7 +113,8 @@
 (require 'compile)
 (ido-mode t)
 
-(setq build-script "build.bat")
+(when ian-pc (setq build-script "build.bat") )
+(when ian-mac (setq build-script "./build.sh") )
 
 (defun find-project-directory-recursive ()
   "Recursively search for a makefile."
@@ -127,8 +153,6 @@
   (if (find-project-directory) (compile build-script))
   (other-window 1))
 (define-key global-map "\em" 'make-without-asking)
-
-(setq build-script "build.bat")
 
 (defun find-project-directory-recursive ()
   "Recursively search for a mackfile."

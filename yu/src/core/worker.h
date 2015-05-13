@@ -21,7 +21,8 @@ WorkItemHandle	NewWorkItem();
 void			FreeWorkItem(WorkItemHandle item);
 WorkItem*		GetWorkItem(WorkItemHandle handle);
 
-InputData*	GetInputData(WorkItem* item);
+const InputData*  GetInputData(WorkItem* item);
+
 void		SetInputData(WorkItem* item, InputData* input);
 
 OutputData*	GetOutputData(WorkItem* item);
@@ -42,8 +43,8 @@ struct WorkerThread* GetWorkerThread();
 int					GetWorkerThreadIdx();
 
 void MainThreadWorker();
-void InitWorkerSystem();
-void FreeWorkerSystem();
+void InitWorkerSystem(Allocator* allocator);
+void FreeWorkerSystem(Allocator* allocator);
 void SubmitTerminateWork();
 }
 

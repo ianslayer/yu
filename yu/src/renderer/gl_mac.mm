@@ -1,4 +1,4 @@
-#import "yu_app.h"
+#import "../../src/yu_app.h"
 #include "../core/system.h"
 #include "renderer.h"
 #include "gl_utility.h"

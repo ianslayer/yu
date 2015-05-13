@@ -1,5 +1,8 @@
 #include "core/system.h"
 #include "core/timer.h"
+#include "core/allocator.h"
+#include "core/thread.h"
+#include "core/worker.h"
 
 #include "renderer/renderer.h"
 #include "sound/sound.h"
@@ -9,9 +12,8 @@
 #include "core/log.h"
 #include "core/file.h"
 
-#include "yu.h"
 #include <atomic>
-#include <windows.h>
+//#include <windows.h>
 namespace yu
 {
 
@@ -20,16 +22,19 @@ void KickStart();
 void WaitFrameComplete();
 void FakeKickStart();
 
-YU_GLOBAL std::atomic<int> gYuRunning;
+YU_GLOBAL std::atomic<int> gYuRunningState; //0: stop, 1: running, 2: exit
 YU_GLOBAL std::atomic<int> gYuInitialized;
 YU_GLOBAL RenderQueue*	gRenderQueue; //for shutdown render thread
 
 void LoadModule()
 {
-	HMODULE module = LoadLibraryA("yu/build/test_module.dll");
-	const char* workingDir = WorkingDir();
+
+   	const char* workingDir = WorkingDir();
 	const char* exePath = ExePath();
 
+	/*
+	HMODULE module = LoadLibraryA("yu/build/test_module.dll");
+	
 	char exeDir[1024];
 	size_t exeDirLength = GetDirFromPath(exePath, exeDir, sizeof(exeDir));
 	
@@ -39,22 +44,42 @@ void LoadModule()
 	{
 		Log("error, failed to load module\n");
 	}
+	*/
 }
 
-void InitYu()
+bool Initialized()
 {
+  	return (gYuInitialized.load(std::memory_order_acquire) == 1);
+}
+
+bool YuRunning()
+{
+	return (gYuRunningState.load(std::memory_order_acquire) == 1 );
+}
+
+bool YuStopped()
+{
+	return gYuRunningState == 0;
+}
 	
+void SetYuExit()
+{
+	gYuRunningState = 2;
+}
+	
+int YuMain()
+{
 	InitSysLog();
 
 	LoadModule();
 	
-	gYuRunning = 1;
+	gYuRunningState = 1;
 	InitSysTime();
-	InitSysAllocator();
-	InitSysStrTable();
-	InitThreadRuntime();
+	SysAllocator sysAllocator = InitSysAllocator();
+	InitSysStrTable(sysAllocator.sysAllocator);
+	InitThreadRuntime(sysAllocator.sysAllocator);
 
-	InitWindowManager();
+	WindowManager* windowManager = InitWindowManager(sysAllocator.sysAllocator);
 
 	gYuInitialized = 1;
 
@@ -64,7 +89,7 @@ void InitYu()
 	rect.width = 1280;
 	rect.height = 720;
 
-	gWindowManager->mainWindow = gWindowManager->CreateWin(rect);
+	windowManager->mainWindow =windowManager->CreateWin(rect);
 	
 	RendererDesc rendererDesc = {};
 	rendererDesc.frameBufferFormat = TEX_FORMAT_R8G8B8A8_UNORM;
@@ -75,59 +100,15 @@ void InitYu()
 	rendererDesc.sampleCount = 1;
 	rendererDesc.initOvrRendering = true;
 	//InitSound();
-	InitRenderThread(gWindowManager->mainWindow, rendererDesc);
+	InitRenderThread(windowManager->mainWindow, rendererDesc, sysAllocator.sysAllocator);
 
-	InitWorkerSystem();
+	InitWorkerSystem(sysAllocator.sysAllocator);
 
-	InitStarGazer();
+	InitStarGazer(windowManager, sysAllocator.sysAllocator);
 
 	Renderer* renderer = GetRenderer();
 	gRenderQueue = GetThreadLocalRenderQueue();;
-}
-
-void FreeYu()
-{
-	SubmitTerminateWork();
-
-	//gWindowManager->CloseWin(gWindowManager->mainWindow);
-
-	FreeStarGazer();
-
-	StopRenderThread(gRenderQueue);
-
-	while (!AllThreadsExited())
-	{
-		FakeKickStart();//make sure all thread proceed to exit
-	}
-
-
-	FreeWindowManager();
-	FreeWorkerSystem();
-
-	FreeThreadRuntime();
-	FreeSysStrTable();
-	FreeSysAllocator();
-	FreeSysLog();
-}
-
-bool Initialized()
-{
-	return (gYuInitialized.load(std::memory_order_acquire) == 1);
-}
-
-bool YuRunning()
-{
-	return (gYuRunning.load(std::memory_order_acquire) == 1);
-}
-
-void SetYuExit()
-{
-	gYuRunning.fetch_sub(1);
-}
-
-int YuMain()
-{
-	yu::InitYu();
+	
 
 	unsigned int lap = 100;
 	unsigned int f = 0;
@@ -135,13 +116,13 @@ int YuMain()
 	double waitFrameTime = 0;
 
 
-	while( yu::YuRunning() )
+	while( gYuRunningState == 1 )
 	{
 		yu::PerfTimer frameTimer;
 		yu::PerfTimer timer;
-
+		
 		frameTimer.Start();
-
+		
 		timer.Start();
 
 		yu::KickStart();
@@ -177,7 +158,30 @@ int YuMain()
 		
 	}
 
-	yu::FreeYu();
+
+
+	//gWindowManager->CloseWin(gWindowManager->mainWindow);
+
+	FreeStarGazer(sysAllocator.sysAllocator);
+
+	StopRenderThread(gRenderQueue);
+
+	while (!AllThreadsExited() || RenderThreadRunning())
+	{
+		SubmitTerminateWork();
+		FakeKickStart();//make sure all thread proceed to exit
+	}
+
+
+	FreeWindowManager(windowManager, sysAllocator.sysAllocator);
+	FreeWorkerSystem(sysAllocator.sysAllocator);
+
+	FreeThreadRuntime(sysAllocator.sysAllocator);
+	FreeSysStrTable();
+	FreeSysAllocator();
+	FreeSysLog();
+
+	gYuRunningState = 0;
 
 	return 0;
 }

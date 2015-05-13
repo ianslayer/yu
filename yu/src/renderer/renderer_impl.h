@@ -129,7 +129,7 @@ struct RenderThreadCmd
 		STOP_VR_MODE,
 
 		CREATE_MESH,
-		CREATE_CAMERA,
+		//	CREATE_CAMERA,
 
 		UPDATE_MESH,
 		UPDATE_CAMERA,
@@ -153,7 +153,6 @@ struct RenderThreadCmd
 
 		CREATE_FENCE,
 		INSERT_FENCE,
-		QUERY_FENCE,
 	};
 
 	CommandType type;
@@ -289,7 +288,7 @@ struct RenderCmd
 #define MAX_RENDER_CMD 256
 struct RenderCmdList
 {
-	RenderCmdList() : cmdCount(0), renderInProgress(false), scratchBuffer(1024*1024, gSysArena) {}
+	RenderCmdList(Allocator* allocator) : cmdCount(0), renderInProgress(false), scratchBuffer(1024*1024, allocator) {}
 	RenderCmd			cmd[MAX_RENDER_CMD];
 	int					cmdCount;
 	std::atomic<bool>	renderInProgress;
@@ -299,10 +298,15 @@ struct RenderCmdList
 #define MAX_RENDER_LIST 2
 struct RenderQueue
 {
+	RenderQueue(Allocator* allocator)
+	{
+		renderList = DeepNewArray<RenderCmdList>(allocator, MAX_RENDER_LIST);
+	}
+	
 	Renderer* renderer;
 	SpscFifo<RenderThreadCmd, 256> cmdList;
 
-	RenderCmdList			renderList[MAX_RENDER_LIST];
+	RenderCmdList*			renderList;
 };
 
 
@@ -388,6 +392,11 @@ struct MeshRenderData
 
 struct Renderer
 {
+	Renderer(Allocator* allocator)
+	{
+		renderQueue = DeepNewArray<RenderQueue>(allocator, MAX_RENDER_QUEUE);
+	}
+	
 	IndexFreeList<MAX_CAMERA>							cameraIdList;
 	DoubleBufferCameraData								cameraDataList[MAX_CAMERA];
 
@@ -412,7 +421,7 @@ struct Renderer
 	IndexFreeList<MAX_FENCE>							fenceIdList;
 	Fence												fenceList[MAX_FENCE];
 	
-	RenderQueue											renderQueue[MAX_RENDER_QUEUE];
+	RenderQueue*										renderQueue;
 	std::atomic<int>									numQueue;
 
 	RenderTextureHandle									frameBuffer;

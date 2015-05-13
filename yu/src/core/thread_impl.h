@@ -98,16 +98,16 @@ struct ThreadTable
 YU_GLOBAL ThreadTable* gThreadTable;
 YU_GLOBAL Event* gFrameSync;
 
-void InitThreadRuntime()
+void InitThreadRuntime(Allocator* allocator)
 {
-	gThreadTable = NewAligned<ThreadTable>(gSysArena, CACHE_LINE);
-	gFrameSync = New<Event>(gSysArena);
+	gThreadTable = NewAligned<ThreadTable>(allocator, CACHE_LINE);
+	gFrameSync = New<Event>(allocator);
 }
 
-void FreeThreadRuntime()
+void FreeThreadRuntime(Allocator* allocator)
 {
-	Delete(gSysArena, gFrameSync);
-	DeleteAligned(gSysArena, gThreadTable);
+	Delete(allocator, gFrameSync);
+	DeleteAligned(allocator, gThreadTable);
 }
 
 void FakeKickStart() //for clear thread;
@@ -202,7 +202,6 @@ bool AllThreadsExited()
 			return false;
 		}
 	}
-	
 	return true;
 }
 

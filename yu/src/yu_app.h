@@ -10,22 +10,22 @@ class WindowManager;
 
 @interface YuApp : NSApplication
 {
-	yu::WindowManager* winManager;
 }
-
+@property (assign) yu::WindowManager* winManager;
 @property (assign) IBOutlet NSWindow* mainWin;
--(void) setWindowManager:(yu::WindowManager*) mgr;
 
 -(void) run;
 @end
 
+@interface YuWindow : NSWindow
+@end
+
 @interface YuView : NSView<NSWindowDelegate>
 {
-	yu::WindowManager* winManager;
-	NSOpenGLContext *openGLContext;
-	NSOpenGLPixelFormat *pixelFormat;
 }
--(void) setWindowManager:(yu::WindowManager*) mgr;
+@property (assign) yu::WindowManager* winManager;
+@property (assign) NSOpenGLPixelFormat* pixelFormat;
+@property (assign) NSOpenGLContext* openGLContext;
 -(void) initOpenGL;
 @end
 
