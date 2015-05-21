@@ -1,6 +1,5 @@
 #include "platform.h"
 #include "crc32.h"
-#include "type.h"
 
 namespace yu
 {

@@ -3,6 +3,7 @@
 #include "free_list.h"
 #include "../math/yu_math.h"
 #include "../renderer/renderer.h"
+#include "../yu.h"
 
 namespace yu
 {
@@ -10,6 +11,8 @@ namespace yu
 #define MAX_WORK_QUEUE_LEN 1024
 #define MAX_WORK_ITEM 4096
 
+RenderQueue* CreateRenderQueue(Renderer* renderer);
+	
 struct WorkLink
 {
 	WorkLink(Allocator* allocator) : dependList(4, allocator), permitList(16, allocator)
@@ -21,14 +24,13 @@ struct WorkLink
 YU_PRE_ALIGN(CACHE_LINE)
 struct WorkItem
 {
-	WorkItem(Allocator* allocator) : dependList(4, allocator), permitList(16, allocator), 
+	WorkItem(Allocator* allocator) :  permitList(16, allocator), 
 		func(nullptr), finalizer(nullptr), outputData(nullptr), inputData(nullptr)
 	{
 		permits = 0;
 		isDone = false;
-#if defined YU_DEBUG
-		dbgFrameCount = 0;
-#endif
+
+		DEBUG_ONLY(dbgFrameCount = 0);
 	}
 
 	~WorkItem()
@@ -36,8 +38,6 @@ struct WorkItem
 		//TODO: where should we release the data ?
 		//Allocator* allocator = dependList.GetAllocator();
 	}
-
-	Array<WorkItem*>		dependList;
 	Array<WorkItem*>		permitList;
 
 	//WorkLink*				link;
@@ -47,7 +47,7 @@ struct WorkItem
 	WorkFunc*				func;
 	Finalizer*				finalizer;
 
-	InputData*				inputData;
+	const InputData*		inputData;
 	OutputData*				outputData;
 
 	std::atomic<int>		permits;
@@ -114,45 +114,26 @@ WorkItem* GetWorkItem(WorkItemHandle itemHandle)
 	return &gWorkerSystem->workItemList[itemHandle.id];
 }
 
-const InputData* GetInputData(WorkItem* item)
+WorkData GetWorkData(WorkItem* item)
 {
-	return item->inputData;
+	WorkData data;
+	data.inputData = item->inputData;
+	data.outputData = item->outputData;
+	return data;
 }
 
-void SetInputData(WorkItem* item, InputData* input)
+void SetWorkData(WorkItem* item, WorkData data)
 {
-	item->inputData = input;
+	item->inputData = data.inputData;
+	item->outputData = data.outputData;
 }
-
-OutputData* GetOutputData(WorkItem* item)
-{
-	//TODO: check dependcy when access?
-	return item->outputData;
-}
-
-void SetOutputData(WorkItem* item, OutputData* output)
-{
-	item->outputData = output;
-}
-
-int	GetNumDepend(WorkItem* item)
-{
-	return item->dependList.Size();
-}
-
-OutputData* GetDependOutputData(WorkItem* item, int i)
-{
-	assert(i < item->dependList.Size());
-	return GetOutputData(item->dependList[i]);
-}
-
+	
 void SetWorkFunc(WorkItem* item, WorkFunc* func, Finalizer* finalizer)
 {
 	item->func = func;
 	item->finalizer = finalizer;
 }
 
-bool YuRunning();
 ThreadReturn ThreadCall WorkerThreadFunc(ThreadContext context);
 
 YU_THREAD_LOCAL WorkerThread* worker;
@@ -176,10 +157,7 @@ void SubmitWorkItem(WorkItem* item, WorkItem* dep[], int numDep)
 {
 //	WorkerThread* workerThread = GetWorkerThread();
 	item->permits = -numDep;
-	for (int i = 0; i < numDep; i++)
-	{
-		item->dependList.PushBack(dep[i]);
-	}
+
 	if (numDep == 0)
 	{
 		gWorkerSystem->workQueue.Enqueue(item);
@@ -238,7 +216,7 @@ ThreadReturn ThreadCall WorkerThreadFunc(ThreadContext context)
 
 	Log("Worker thread:%d started\n", worker->id);
 
-	while (YuRunning())
+	while (YuState() == YU_RUNNING)
 	{
 		WaitForSem(gWorkerSystem->workQueueSem); //TODO: eliminate gWorkerSystem here, should be passed in as parameter
 		WorkItem* item;
@@ -279,7 +257,6 @@ void MainThreadWorker()
 void ResetWorkItem(WorkItem* item)
 {
 	item->permitList.Clear();
-	item->dependList.Clear();
 	item->permits = 0;
 	item->isDone.store(false);
 }

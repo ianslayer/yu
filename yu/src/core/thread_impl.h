@@ -4,31 +4,6 @@ namespace yu
 {
 #define MAX_THREAD 32
 
-ScopedLock::ScopedLock(Mutex& _m) : m(_m)
-{
-	m.Lock();
-}
-
-ScopedLock::~ScopedLock()
-{
-	m.Unlock();
-}
-
-Locker::Locker(Mutex& _m) : locked(false), m(_m)
-{
-}
-
-Locker::~Locker()
-{
-	if (locked)
-		m.Unlock();
-}
-
-void Locker::Lock()
-{
-	m.Lock();
-	locked = true;
-}
 
 YU_PRE_ALIGN(CACHE_LINE)
 struct FrameLock
@@ -40,36 +15,6 @@ struct FrameLock
 
 } YU_POST_ALIGN(CACHE_LINE);
 
-
-void WaitForEvent(Event& ev)
-{
-
-	if (ev.signaled == true)
-	{
-		return;
-	}
-
-	ScopedLock lock(ev.cs);
-	if (ev.signaled == true)
-	{
-		return;
-	}
-	WaitForCondVar(ev.cv, ev.cs);
-
-}
-
-void SignalEvent(Event& ev)
-{
-	ScopedLock lock(ev.cs);
-	ev.signaled = true;
-	NotifyAllCondVar(ev.cv);
-}
-
-void ResetEvent(Event& ev)
-{
-	ScopedLock lock(ev.cs);
-	ev.signaled = false;
-}
 
 struct ThreadTable
 {

@@ -484,7 +484,7 @@ YU_INTERNAL bool ExecThreadCmd(RendererGL* renderer, Allocator* allocator)
 	bool frameEnd = false;
 	for (int i = 0; i < renderer->numQueue; i++)
 	{
-		RenderQueue* queue = &renderer->renderQueue[i];
+		RenderQueue* queue = renderer->renderQueue[i];
 		RenderThreadCmd cmd;
 		while (queue->cmdList.Dequeue(cmd))
 		{
@@ -658,20 +658,6 @@ void InitRenderThread(const Window& win, const RendererDesc& desc, Allocator* al
 	param.initGLCS.Unlock();
 }
 
-
-/*
-Renderer* CreateRenderer()
-{
-	gRenderer = new RendererGL();
-	return gRenderer;
-}
-
-void FreeRenderer(Renderer* renderer)
-{
-	RendererGL* rendererGL = (RendererGL*) renderer;
-	delete rendererGL;
-}
-*/
 
 }
 

@@ -95,7 +95,7 @@ void FreeStarGazer(Allocator* allocator)
 
 }
 
-struct FrameLockData : public InputData
+struct FrameLockData : public OutputData
 {
 	FrameLock*	frameLock;
 };
@@ -119,14 +119,16 @@ bool WorkerFrameComplete()
 //----glue code----
 void FrameStartWorkFunc(WorkItem* item)
 {
-	FrameLockData* lock = (FrameLockData*)GetInputData(item);
+	WorkData data = GetWorkData(item);
+	FrameLockData* lock = (FrameLockData*)data.outputData;
 	FrameStart(lock->frameLock);
 	//Log("frame: %ld started\n", frame);
 }
 
 void FrameEndWorkFunc(WorkItem* item)
-{	
-	FrameLockData* lock = (FrameLockData*)GetInputData(item);
+{
+	WorkData data = GetWorkData(item);
+	FrameLockData* lock = (FrameLockData*)data.outputData;
 	FrameEnd(lock->frameLock);
 	//Log("frame: %ld ended\n", frame);
 }
@@ -143,8 +145,13 @@ FrameWorkItemResult FrameWorkItem(Allocator* allocator)
 	
 	SetWorkFunc(item.frameStartItem, FrameStartWorkFunc, nullptr);
 	SetWorkFunc(item.frameEndItem, FrameEndWorkFunc, nullptr);
-	SetInputData(item.frameStartItem, frameLockData);
-	SetInputData(item.frameEndItem, frameLockData);
+
+	WorkData frameLockWorkData = {};
+
+	frameLockWorkData.outputData = frameLockData;
+	
+	SetWorkData(item.frameStartItem, frameLockWorkData);
+	SetWorkData(item.frameEndItem, frameLockWorkData);
 
 	return item;
 }
@@ -191,7 +198,7 @@ struct InputResult : public OutputData
 	int			numEvent;
 };
 
-void ProcessInput(const InputSource& source, InputResult& output)
+YU_INTERNAL void ProcessInput(const InputSource& source, InputResult& output)
 {
 //	int	threadIdx =	GetWorkerThreadIdx();
 //	Log("thread id:%d\n", threadIdx);
@@ -324,8 +331,9 @@ void ProcessInput(const InputSource& source, InputResult& output)
 //-----glue code------
 void InputWorkFunc(WorkItem* item)
 {
-	const InputSource* source = (const InputSource*) GetInputData(item);
-	InputResult* result = (InputResult*)GetOutputData(item);
+	WorkData inputWorkData = GetWorkData(item);
+	const InputSource* source = (const InputSource*) inputWorkData.inputData;
+	InputResult* result = (InputResult*) inputWorkData.outputData;
 	ProcessInput(*source, *result);
 }
 
@@ -337,8 +345,9 @@ WorkItem* InputWorkItem(WindowManager* winMgr,Allocator* allocator)
 	source->eventQueue = CreateEventQueue(winMgr, allocator);
 	InputResult* result = New<InputResult>(allocator);
 	memset(result, 0, sizeof(*result));
-	SetInputData(item, source);
-	SetOutputData(item, result);
+
+	WorkData inputWorkData = {source, result};
+	SetWorkData(item, inputWorkData);
 	return item;
 }
 
@@ -433,14 +442,16 @@ void CameraControl(const CameraControllerInput& input, CameraControllerOutput& o
 
 void CameraControlWorkItem(WorkItem* item)
 {
-	CameraControllerInput* input = (CameraControllerInput*)GetInputData(item);
-	CameraControllerOutput* output = (CameraControllerOutput*)GetOutputData(item);
+	WorkData cameraControlWorkData = GetWorkData(item);
+	const CameraControllerInput* input = (const CameraControllerInput*)cameraControlWorkData.inputData;
+	CameraControllerOutput* output = (CameraControllerOutput*)cameraControlWorkData.outputData;
 	CameraControl(*input, *output);
 }
 
 WorkItem* CameraControlItem(WorkItem* inputWorkItem, RenderQueue* queue, CameraHandle camHandle, Allocator* allocator)
 {
-	InputResult* result = (InputResult*)GetOutputData(inputWorkItem);
+	WorkData inputWorkData = GetWorkData(inputWorkItem);
+	InputResult* result = (InputResult*)inputWorkData.outputData;
 
 	WorkItem* item =  GetWorkItem(NewWorkItem());
 
@@ -452,13 +463,16 @@ WorkItem* CameraControlItem(WorkItem* inputWorkItem, RenderQueue* queue, CameraH
 	input->turnSpeed = 0.01f;
 	CameraControllerOutput* output = New<CameraControllerOutput>(allocator);
 	SetWorkFunc(item, CameraControlWorkItem, nullptr);
-	SetInputData(item, input);
-	SetOutputData(item, output);
+
+	WorkData CameraControlWorkData = {input, output};
+	
+	SetWorkData(item, CameraControlWorkData);
+	
 	return item;
 }
 
 
-struct TestRenderData : public InputData
+struct TestRenderData : public OutputData
 {
 	CameraHandle camera;
 	CameraHandle vrCamera[2];
@@ -755,13 +769,15 @@ void Render(TestRenderData* renderData)
 
 void TestRender(WorkItem* item)
 {
-	TestRenderData* data = (TestRenderData*)GetInputData(item);
+	WorkData renderData = GetWorkData(item);
+	TestRenderData* data = (TestRenderData*)renderData.outputData;
 	Render(data);
 }
 
 void FreeTestRender(WorkItem* item)
 {
-	TestRenderData* data = (TestRenderData*)GetInputData(item);
+	TestRenderData* data = (TestRenderData*)GetWorkData(item).outputData;
+	Delete(data->allocator, data);
 }
 
 WorkItem* TestRenderItem(Renderer* renderer, CameraHandle camera, Allocator* allocator)
@@ -771,7 +787,10 @@ WorkItem* TestRenderItem(Renderer* renderer, CameraHandle camera, Allocator* all
 
 	TestRenderData* data = New<TestRenderData>(allocator);
 	data->allocator = allocator;
-	SetInputData(item, data);
+
+	WorkData renderWorkData = {0, data};
+	
+	SetWorkData(item, renderWorkData);
 	
 	data->camera = camera;
 	

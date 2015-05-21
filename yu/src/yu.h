@@ -3,9 +3,14 @@
 
 namespace yu
 {
-bool Initialized();
-bool YuRunning();
-bool YuStopped();
+enum YU_STATE
+{
+	YU_STOPPED = 0,
+	YU_RUNNING = 1,
+	YU_EXITING = 2,
+};
+int YuState();
+	
 void SetYuExit();
 int YuMain();
 }

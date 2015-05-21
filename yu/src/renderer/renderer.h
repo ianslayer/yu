@@ -82,11 +82,64 @@ struct SamplerStateDesc
 	AddressMode addressV;
 };
 
-Matrix4x4 ViewMatrix(Vector3 pos, Vector3 lookAt, Vector3 right);
-Matrix4x4 PerspectiveMatrixDX(float halfTanX, float n, float f, float filmWidth, float filmHeight); //z range 0~1, right handed
-Matrix4x4 PerspectiveMatrixDX(float upTan, float downTan, float leftTan, float rightTan, float n, float f);
-Matrix4x4 PerspectiveMatrixGL(float halfTanX, float n, float f, float filmWidth, float filmHeight); //z range -1~1, right handed
-Matrix4x4 PerspectiveMatrixGL(float upTan, float downTan, float leftTan, float rightTan, float n, float f);
+inline Matrix4x4 ViewMatrix(Vector3 pos, Vector3 lookAt, Vector3 right)
+{
+	Vector3 down = cross(lookAt, right);
+	return Matrix4x4(right.x, right.y, right.z,0,
+					 down.x, down.y, down.z, 0,
+					 lookAt.x, lookAt.y, lookAt.z, 0,
+					 0, 0, 0, 1) * Translate(-pos);
+}
+
+inline Matrix4x4 PerspectiveMatrixDX(float upTan, float downTan, float leftTan, float rightTan, float n, float f)
+{
+	float r = n * rightTan;
+	float l = -n * leftTan;
+
+	float t = n * upTan;
+	float b = -n * downTan;
+
+	float width = r - l;
+	float height = t - b;
+	float depth = f - n;
+
+	return Scale(_Vector3(1, -1, 1)) * Matrix4x4(2.f * n / width, 0.f, -(l + r) / width, 0.f,
+		0.f, 2.f * n / height, -(t + b) / height, 0.f,
+		0.f, 0.f, -n / depth, (n * f) / depth,
+		0.f, 0.f, 1.f, 0.f);
+}
+
+inline Matrix4x4 PerspectiveMatrixDX(float halfTanX, float n, float f, float filmWidth, float filmHeight)
+{
+	float upTan = halfTanX * (filmHeight/  filmWidth);
+	return PerspectiveMatrixDX(upTan, upTan, halfTanX, halfTanX, n, f);
+}
+
+inline Matrix4x4 PerspectiveMatrixGL(float upTan, float downTan, float leftTan, float rightTan, float n, float f)
+{
+	float r = n * rightTan;
+	float l = -n * leftTan;
+
+	float t = n * upTan;
+	float b = -n * downTan;
+
+	float width = r - l;
+	float height = t - b;
+	float depth = f - n;
+
+	return Scale(_Vector3(1, -1, 1)) *
+		Matrix4x4(2.f * n / width, 0.f, -(l + r) / width, 0.f,
+		0.f, 2.f * n / height, -(t + b) / height, 0.f,
+		0.f, 0.f, -(n + f) / depth, (2.f * n * f) / depth,
+		0.f, 0.f, 1.f, 0.f);
+}
+
+inline Matrix4x4 PerspectiveMatrixGL(float halfTanX, float n, float f, float filmWidth, float filmHeight)
+{
+	float upTan = halfTanX * (filmHeight / filmWidth);
+	return PerspectiveMatrixGL(upTan, upTan, halfTanX, halfTanX, n, f);
+}
+
 
 struct CameraData
 {
@@ -109,7 +162,29 @@ struct CameraData
 	float	 f;
 };
 
-CameraData DefaultCamera();
+inline CameraData DefaultCamera()
+{
+	CameraData cam;
+	// view transform
+	cam.position = _Vector3(0, 0, 0);
+
+	//right hand coordinate
+	cam.lookAt = _Vector3(-1, 0, 0);//view space +z
+	cam.right = _Vector3(0, 1, 0); //view space +x
+	//Vector3 down;    //view space +y, can be derived from lookat ^ right
+
+	cam.leftTan = cam.rightTan = tan(3.14f / 4.f);
+	cam.upTan = cam.downTan = cam.leftTan * (720.f / 1280.f);
+
+	//projection
+	cam.n = 0.1f;
+	cam.f = 3000.f;
+
+	cam.filmWidth = 1280;
+	cam.filmHeight = 720;
+
+	return cam;
+}
 
 struct MeshData
 {
@@ -162,7 +237,7 @@ RenderTextureHandle	GetFrameBufferRenderTexture(Renderer* renderer);
 
 const RendererDesc& GetRendererDesc(Renderer* renderer);
 RenderQueue*	GetThreadLocalRenderQueue();
-RenderQueue*	CreateRenderQueue(Renderer* renderer);
+//RenderQueue*	CreateRenderQueue(Renderer* renderer);
 
 void			StartVRRendering(RenderQueue* queue);
 void			EndVRRendering(RenderQueue* queue);

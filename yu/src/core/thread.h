@@ -12,6 +12,8 @@
 	#include <semaphore.h>
 #endif
 
+#include "yu_lib.h"
+
 #if defined YU_CC_MSVC
 #	define YU_THREAD_LOCAL __declspec(thread)
 #elif defined (YU_CC_CLANG) || defined (YU_CC_GNU)
@@ -53,90 +55,6 @@ struct Thread
 	ThreadHandle handle;
 };
 
-struct Mutex
-{
-	Mutex();
-	~Mutex();
-
-	void Lock();
-	void Unlock();
-#if defined YU_OS_WIN32
-	CRITICAL_SECTION m;
-#else
-	pthread_mutex_t m;
-#endif
-};
-
-struct RWMutex
-{
-	RWMutex();
-	~RWMutex();
-
-	void ReaderLock();
-
-};
-
-struct ScopedLock
-{
-	explicit ScopedLock(Mutex& m);
-	~ScopedLock();
-
-	Mutex& m;
-};
-
-struct Locker
-{
-	explicit Locker(Mutex& m);
-	~Locker();
-
-	void Lock();
-
-	bool locked;
-	Mutex& m;
-};
-
-struct CondVar
-{
-	CondVar();
-	~CondVar();
-
-#if defined YU_OS_WIN32
-	CONDITION_VARIABLE cv;
-#else
-	pthread_cond_t cv;
-#endif
-};
-void			WaitForCondVar(CondVar& cv, Mutex& m);
-void			NotifyCondVar(CondVar& cv);
-void			NotifyAllCondVar(CondVar& cv);
-
-struct Event
-{
-	Event() : signaled(false)
-	{}
-	CondVar	cv;
-	Mutex	cs;
-	std::atomic<bool>	signaled;
-};
-void			WaitForEvent(Event& ev);
-void			SignalEvent(Event& ev);
-void			ResetEvent(Event& ev);
-
-struct Semaphore
-{
-	Semaphore(int initCount, int maxCount);
-	~Semaphore();
-
-#if defined YU_OS_WIN32
-	HANDLE sem;
-#elif defined YU_OS_MAC
-	sem_t* sem;
-#else
-#	error semaphore not implemented
-#endif
-};
-void			WaitForSem(Semaphore& sem);
-void			SignalSem(Semaphore& sem);
 
 void			InitThreadRuntime(Allocator* allocator);
 void			FreeThreadRuntime(Allocator* allocator);

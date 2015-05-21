@@ -4,31 +4,6 @@
 namespace yu
 {
 
-//interface to avoid include explosion
-void *memcpy(void *dest, const void *src, size_t n);
-void memset(void* dst, int val, size_t size);
-
-int strcmp ( const char * str1, const char * str2 );
-size_t strlen ( const char * str );
-char * strncpy(char * destination, const char * source, size_t num);
-
-char ToLowerCase(char c);
-char ToUpperCase(char c);
-
-class StringBuilder
-{
-public:
-	StringBuilder(char* buf, size_t bufSize);
-	StringBuilder(char* str, size_t bufSize, size_t strLen);
-	bool	Cat(const char* source, size_t len);
-	bool	Cat(const char* source);
-	bool	Cat(int i);
-	bool	Cat(unsigned int i);
-	bool	Cat(bool f);
-	char*	strBuf;
-	const size_t bufSize;
-	size_t	strLen;
-};
 
 #define SID(s) InternStr(s)
 #define CSID(s) //TODO: should be transformed to #define CSID(s, id) id

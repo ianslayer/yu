@@ -17,11 +17,11 @@
 #include "worker_impl.h"
 #include "file_posix_impl.h"
 #include "file_impl.h"
+#define YU_LIB_IMPL
+#include "yu_lib.h"
 
 namespace yu
 {
-
-void EnqueueEvent(WindowManager* mgr, InputEvent& ev);
 
 void InitSysTime()
 {
@@ -129,7 +129,7 @@ void ExecWindowCommand(WindowManager* winMgr, WindowThreadCmd& cmd)
             [self sendEvent:event];
         }
 
-		if(yu::YuRunning())
+		if(yu::YuState() == yu::YU_RUNNING)
 		{		
 			yu::WindowManagerImpl* mgrImpl = winManager->mgrImpl;
 			yu::WindowThreadCmd cmd;
@@ -213,7 +213,7 @@ void ExecWindowCommand(WindowManager* winMgr, WindowThreadCmd& cmd)
 -(BOOL)windowShouldClose:(id)sender
 {
 	yu::SetYuExit();
-	while(!yu::YuStopped())
+	while(! (yu::YuState() == yu::YU_STOPPED))
 		;
 	exit(0);
     return 1;
@@ -566,5 +566,22 @@ const char* DataPath()
 	return path;
 }
 
+size_t GetDirFromPath(const char* path, char* outDirPath, size_t bufLength)
+{
+	size_t pathLength = strlen(path);
+	size_t resultPathLength = 0;
+	if(pathLength  > 0)
+	{
+		int dirSeperator = (int)pathLength - 1;
+		for(; dirSeperator >= 0 &&  path[dirSeperator] != '\\' && path[dirSeperator] != '/' && path[dirSeperator] != ':'; dirSeperator--)
+		{
+		}
+
+		strncpy(outDirPath, path, min(bufLength - 1, size_t(dirSeperator + 1) ));
+		resultPathLength = min(bufLength - 1, size_t(dirSeperator + 1) );
+	}
+
+	return resultPathLength;
+}
 
 }

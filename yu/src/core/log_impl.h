@@ -63,5 +63,10 @@ void Log(char const *fmt, ...)
 	Log(gLogger, fmt, args);
 	va_end(args);
 }
+	
+void VLog(const char* fmt, va_list args)
+{
+	Log(gLogger, fmt, args);
+}
 
 }

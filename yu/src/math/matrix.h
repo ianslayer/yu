@@ -5,6 +5,7 @@
 #include "vector.h"
 #include "quaternion.h"
 #include "../core/string.h"
+#include "../core/yu_lib.h"
 
 namespace yu
 {

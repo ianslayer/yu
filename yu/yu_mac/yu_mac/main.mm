@@ -28,7 +28,7 @@ int main(int argc, const char * argv[])
 	gYuApp = (YuApp*)[YuApp sharedApplication];
 	pthread_create(&yuThread, nullptr, yu::YuMainThread, nullptr);
 	
-	while(!yu::Initialized()) ;
+	while(! (yu::YuState() != yu::YU_RUNNING)) ;
 	
 	[gYuApp run];
 

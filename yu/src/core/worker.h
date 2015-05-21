@@ -15,20 +15,20 @@ struct OutputData
 {
 };
 
+struct WorkData
+{
+	const InputData*	inputData;
+	OutputData*			outputData;
+};
+
 struct WorkItem;
 
 WorkItemHandle	NewWorkItem();
 void			FreeWorkItem(WorkItemHandle item);
 WorkItem*		GetWorkItem(WorkItemHandle handle);
 
-const InputData*  GetInputData(WorkItem* item);
-
-void		SetInputData(WorkItem* item, InputData* input);
-
-OutputData*	GetOutputData(WorkItem* item);
-void		SetOutputData(WorkItem* item, OutputData* output);
-int			GetNumDepend(WorkItem* item);
-OutputData* GetDependOutputData(WorkItem* item, int i);
+WorkData	GetWorkData(WorkItem* item);
+void		SetWorkData(WorkItem* item, WorkData data);
 
 typedef void WorkFunc(WorkItem* item);
 typedef void Finalizer(WorkItem* item);

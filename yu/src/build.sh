@@ -4,10 +4,11 @@ if [ ! -d "../build" ] ; then
 	mkdir ../build
 fi
 
-if [ -d "../build/yu_mac.app" ] ; then
-	rm -rf ../build/yu_mac.app
-fi
+#if [ -d "../build/yu_mac.app" ] ; then
+#	rm -rf ../build/yu_mac.app
+#fi
 
+moduleCompilerFlags="-x c++ -DDEBUG=1 -std=gnu++11  -g  -arch x86_64 -dynamiclib"
 cppCompilerFlags="-x c++ -DDEBUG=1 -std=gnu++11  -g  -arch x86_64 -c"
 objCCompilerFlags="-x objective-c++ -DDEBUG=1 -std=gnu++11 -fno-exceptions -g -arch x86_64 -c"
 
@@ -20,6 +21,7 @@ mkdir -p yu_mac.app/Contents/Resources
 cp -r ../../data yu_mac.app/Contents/Resources/
 
 
+clang++ $moduleCompilerFlags -o yu_mac.app/Contents/MacOS/test_module.dylib ../src/module/test_module.cpp
 clang++ $objCCompilerFlags ../yu_mac/yu_mac/main.mm ../src/renderer/gl_mac.mm ../src/core/core_mac.mm
 clang++ $cppCompilerFlags ../src/core/crc32.cpp ../src/renderer/renderer_gl.cpp ../src/yu.cpp ../src/stargazer/stargazer.cpp
 

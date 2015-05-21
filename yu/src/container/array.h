@@ -1,5 +1,6 @@
 #ifndef YU_ARRAY_H
 #define YU_ARRAY_H
+#include "../core/yu_lib.h"
 #include "../core/type.h"
 #include "../core/bit.h"
 #include "../core/allocator.h"
