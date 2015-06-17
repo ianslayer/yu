@@ -1,6 +1,7 @@
 #include "renderer.h"
 #if defined YU_GL
 
+#include "../core/timer.h"
 #include "../core/thread.h"
 #include "../core/system.h"
 #include "../core/allocator.h"
@@ -39,9 +40,10 @@ struct PipelineGL
 {
 	GLuint programId = 0;
 	GLuint cameraUBOIndex = 0;
+	GLuint transformUBOIndex = 0;
 };
 
-struct CameraDataGL
+struct ConstBufferGL
 {
 	GLuint uniformBufferId = 0;
 };
@@ -66,15 +68,15 @@ struct RenderTextureGL
 
 struct RendererGL : public Renderer
 {
-	RendererGL(Allocator* allocator) : Renderer(allocator)
+	RendererGL() 
 	{
 	}
 		
 	VertexShaderGL		glVertexShaderList[MAX_SHADER];
 	PixelShaderGL		glPixelShaderList[MAX_SHADER];
 	PipelineGL			glPipelineList[MAX_PIPELINE];
-	CameraDataGL		glCameraList[MAX_CAMERA];
 	MeshDataGL			glMeshList[MAX_MESH];
+	ConstBufferGL		glConstBufferList[MAX_CONST_BUFFER];
 	TextureGL			glTextureList[MAX_TEXTURE];
 	RenderTextureGL		glRenderTextureList[MAX_RENDER_TEXTURE];
 	
@@ -90,30 +92,7 @@ Renderer* GetRenderer()
 	return gRenderer;
 }
 
-YU_INTERNAL void ExecUpdateCameraCmd(RendererGL* renderer, CameraHandle camera, const CameraData& updateData)
-{
-	renderer->cameraDataList[camera.id].UpdateData(updateData);
-	CameraData* data = &renderer->cameraDataList[camera.id].GetMutable();
-	CameraConstant camConstant;
-	camConstant.viewMatrix =  Transpose(ViewMatrix(data->position, data->lookAt, data->right));
-	camConstant.projectionMatrix = Transpose(PerspectiveMatrixGL(data->leftTan, data->n, data->f, data->filmWidth, data->filmHeight) );
-	
-	CameraDataGL& glCam = renderer->glCameraList[camera.id];
-	
-	if(!glCam.uniformBufferId)
-	{
-		glGenBuffers(1, &glCam.uniformBufferId);
-		glBindBuffer(GL_UNIFORM_BUFFER, glCam.uniformBufferId);
-		glBufferData(GL_UNIFORM_BUFFER, sizeof(CameraConstant), &camConstant, GL_DYNAMIC_DRAW);
-	}
-	else
-	{
-		glBindBuffer(GL_UNIFORM_BUFFER, glCam.uniformBufferId);
-		glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(CameraConstant), &camConstant);
-	}
-}
-
-YU_INTERNAL void ExecCreateMeshCmd(RendererGL* renderer, MeshHandle mesh, u32 numVertices, u32 numIndices, u32 channelMask, MeshData* meshData, Allocator* allocator)
+YU_INTERNAL void ExecCreateMeshCmd(RendererGL* renderer, MeshHandle mesh, u32 numVertices, u32 numIndices, u32 channelMask, MeshData* meshData)
 {
 	MeshDataGL& glMesh = renderer->glMeshList[mesh.id];
 	assert(glMesh.vboId == 0);
@@ -164,9 +143,9 @@ YU_INTERNAL void ExecCreateMeshCmd(RendererGL* renderer, MeshHandle mesh, u32 nu
 	void* indexBuffer = nullptr;
 	if(meshData)
 	{
-		vertexBuffer = allocator->Alloc(vertexBufferSize);
+		vertexBuffer = new u8[vertexBufferSize];
 		InterleaveVertexBuffer(vertexBuffer, meshData, channelMask, 0, numVertices);
-		allocator->Free(vertexBuffer);
+		delete [] vertexBuffer;
 		indexBuffer = meshData->indices;
 	}
 	
@@ -200,6 +179,21 @@ YU_INTERNAL void ExecUpdateMeshCmd(RendererGL* renderer, MeshHandle mesh, u32 st
 		Log("error: ExecUpdateMeshCmd gl map index buffer failed\n");
 	}
 	glUnmapBuffer(GL_ELEMENT_ARRAY_BUFFER);
+}
+
+YU_INTERNAL void ExecCreateConstBufferCmd(RendererGL* renderer, ConstBufferHandle constBuffer, size_t bufferSize, void* initData)
+{
+	ConstBufferGL& glConstBuffer = renderer->glConstBufferList[constBuffer.id];
+	glGenBuffers(1, &glConstBuffer.uniformBufferId);
+	glBindBuffer(GL_UNIFORM_BUFFER, glConstBuffer.uniformBufferId);
+	glBufferData(GL_UNIFORM_BUFFER, bufferSize, initData, GL_DYNAMIC_DRAW);
+}
+
+YU_INTERNAL void ExecUpdateConstBufferCmd(RendererGL* renderer, ConstBufferHandle constBuffer, size_t startOffset, size_t updateSize, void* updateData)
+{
+	ConstBufferGL& glConstBuffer = renderer->glConstBufferList[constBuffer.id];
+	glBindBuffer(GL_UNIFORM_BUFFER, glConstBuffer.uniformBufferId);
+	glBufferSubData(GL_UNIFORM_BUFFER, startOffset, updateSize, updateData);
 }
 
 YU_INTERNAL GLenum GLSizedTexFormat(TextureFormat fmt)
@@ -340,9 +334,19 @@ YU_INTERNAL void ExecCreateVertexShader(RendererGL* renderer, VertexShaderHandle
 		if(glShader.vsId)
 		{
 			glDeleteShader(glShader.vsId);
+			glShader.vsId = 0;
 		}
 		glShader.vsId = compileResult.shader;
 	}
+}
+
+YU_INTERNAL void ExecFreeVertexShader(RendererGL* renderer, VertexShaderHandle vertexShader)
+{
+	assert(vertexShader.id >= 0 && vertexShader.id < MAX_SHADER);
+
+	VertexShaderGL& glShader = renderer->glVertexShaderList[vertexShader.id];
+	glDeleteShader(glShader.vsId);
+	glShader.vsId = 0;
 }
 
 YU_INTERNAL void ExecCreatePixelShader(RendererGL* renderer, PixelShaderHandle pixelShader, const DataBlob& shaderData)
@@ -360,6 +364,15 @@ YU_INTERNAL void ExecCreatePixelShader(RendererGL* renderer, PixelShaderHandle p
 		}
 		glShader.psId = compileResult.shader;
 	}
+}
+
+YU_INTERNAL void ExecFreePixelShader(RendererGL* renderer, PixelShaderHandle pixelShader)
+{
+	assert(pixelShader.id >=0 && pixelShader.id < MAX_SHADER);
+
+	PixelShaderGL& glShader = renderer->glPixelShaderList[pixelShader.id];
+	glDeleteShader(glShader.psId);
+	glShader.psId = 0;
 }
 
 YU_INTERNAL void ExecCreatePipeline(RendererGL* renderer, PipelineHandle pipeline, PipelineData pipelineData)
@@ -385,7 +398,13 @@ YU_INTERNAL void ExecCreatePipeline(RendererGL* renderer, PipelineHandle pipelin
 		glPipeline.cameraUBOIndex = glGetUniformBlockIndex(program, "CameraConstant");
 		if(glPipeline.cameraUBOIndex == GL_INVALID_INDEX)
 		{
-			Log("error: ExecCreatePipeline gl failed to get camera uniform block index\n");
+			FilterLog(LOG_INFO, "warning: ExecCreatePipeline gl failed to get camera uniform block index\n");
+		}
+
+		glPipeline.transformUBOIndex = glGetUniformBlockIndex(program, "TransformConstant");
+		if(glPipeline.transformUBOIndex == GL_INVALID_INDEX)
+		{
+			FilterLog(LOG_INFO, "warning: ExecCreatePipeline gl failed to get transform uniform block index\n");
 		}
 	}
 	else
@@ -398,25 +417,11 @@ YU_INTERNAL void ExecCreatePipeline(RendererGL* renderer, PipelineHandle pipelin
 	}
 }
 
-YU_INTERNAL void ExecReloadVertexShaderCmd(RendererGL* renderer, VertexShaderHandle vertexShader, const DataBlob& shaderData)
+YU_INTERNAL void ExecFreePipeline(RendererGL* renderer, PipelineHandle pipeline)
 {
-	VertexShaderGL& glVertexShader = renderer->glVertexShaderList[vertexShader.id];
-	glDeleteShader(glVertexShader.vsId);
-	ExecCreateVertexShader(renderer, vertexShader, shaderData);
-}
-
-YU_INTERNAL void ExecReloadPixelShaderCmd(RendererGL* renderer, PixelShaderHandle pixelShader, const DataBlob& shaderData)
-{
-	PixelShaderGL& glPixelShader = renderer->glPixelShaderList[pixelShader.id];
-	glDeleteShader(glPixelShader.psId);
-	ExecCreatePixelShader(renderer, pixelShader, shaderData);
-}
-
-YU_INTERNAL void ExecReloadPipelineCmd(RendererGL* renderer, PipelineHandle pipeline, const PipelineData& pipelineData)
-{
+	assert(pipeline.id >= 0 && pipeline.id < MAX_SHADER);
 	PipelineGL& glPipeline = renderer->glPipelineList[pipeline.id];
 	glDeleteProgram(glPipeline.programId);
-	ExecCreatePipeline(renderer, pipeline, pipelineData);
 }
 
 YU_INTERNAL void ExecRenderCmd(RendererGL* renderer, RenderQueue* queue, int renderListIdx)
@@ -428,7 +433,8 @@ YU_INTERNAL void ExecRenderCmd(RendererGL* renderer, RenderQueue* queue, int ren
 	{
 		RenderCmd& cmd = list->cmd[i];
 		MeshHandle mesh = cmd.mesh;
-		CameraHandle camera = cmd.cam;
+		ConstBufferHandle cameraConstBuffer = cmd.cameraConstBuffer;
+		ConstBufferHandle transformConstBuffer = cmd.transformConstBuffer;
 		PipelineHandle pipeline = cmd.pipeline;
 		RenderResource& resources = cmd.resources;
 		RenderTextureHandle renderTexture = cmd.renderTexture;
@@ -454,11 +460,21 @@ YU_INTERNAL void ExecRenderCmd(RendererGL* renderer, RenderQueue* queue, int ren
 		}
 		
 		PipelineGL& glPipeline = renderer->glPipelineList[pipeline.id];
-		CameraDataGL& glCamera = renderer->glCameraList[camera.id];
+		ConstBufferGL& glCameraConstBuffer = renderer->glConstBufferList[cameraConstBuffer.id];
 		MeshRenderData& meshRenderData = (renderer->meshList[mesh.id]);
 		MeshDataGL& glMeshData = renderer->glMeshList[mesh.id];
+		ConstBufferGL& glTransformConstBuffer = renderer->glConstBufferList[transformConstBuffer.id];
 		
-		glBindBufferBase(GL_UNIFORM_BUFFER, glPipeline.cameraUBOIndex, glCamera.uniformBufferId);
+		#define CAMERA_BIND_POINT 		0
+		#define TRANSFORM_BIND_POINT 	1
+
+
+		glUniformBlockBinding(glPipeline.programId, glPipeline.cameraUBOIndex, CAMERA_BIND_POINT);		
+		glUniformBlockBinding(glPipeline.programId, glPipeline.transformUBOIndex, TRANSFORM_BIND_POINT);
+	
+		glBindBufferBase(GL_UNIFORM_BUFFER, CAMERA_BIND_POINT, glCameraConstBuffer.uniformBufferId);		
+		glBindBufferBase(GL_UNIFORM_BUFFER, TRANSFORM_BIND_POINT, glTransformConstBuffer.uniformBufferId);	
+		
 		glUseProgram(glPipeline.programId);
 		
 		glBindVertexArray(glMeshData.vaoId);
@@ -471,20 +487,13 @@ YU_INTERNAL void ExecRenderCmd(RendererGL* renderer, RenderQueue* queue, int ren
 	list->scratchBuffer.Rewind(0);
 	list->renderInProgress.store(false, std::memory_order_release);
 }
-
-YU_GLOBAL std::atomic<int> gRenderThreadRunningState; //0: stop, 1: running, 2: exiting
-
-bool RenderThreadRunning()
-{
-	return gRenderThreadRunningState != 0;
-}
 	
-YU_INTERNAL bool ExecThreadCmd(RendererGL* renderer, Allocator* allocator)
+YU_INTERNAL void ExecThreadCmd(RendererGL* renderer)
 {
-	bool frameEnd = false;
+	size_t threadCmdSize = sizeof(RenderThreadCmd);
 	for (int i = 0; i < renderer->numQueue; i++)
 	{
-		RenderQueue* queue = renderer->renderQueue[i];
+		RenderQueue* queue = &renderer->renderQueue[i];
 		RenderThreadCmd cmd;
 		while (queue->cmdList.Dequeue(cmd))
 		{
@@ -494,14 +503,10 @@ YU_INTERNAL bool ExecThreadCmd(RendererGL* renderer, Allocator* allocator)
 				{
 					gRenderThreadRunningState = 2;
 				}break;
-				case (RenderThreadCmd::UPDATE_CAMERA):
-				{
-					ExecUpdateCameraCmd(renderer, cmd.updateCameraCmd.camera, cmd.updateCameraCmd.camData);
-				}break;
 				case (RenderThreadCmd::CREATE_MESH):
 				{
 					ExecCreateMeshCmd(renderer, cmd.createMeshCmd.mesh, cmd.createMeshCmd.numVertices,
-									  cmd.createMeshCmd.numIndices, cmd.createMeshCmd.vertChannelMask, cmd.createMeshCmd.meshData, allocator);
+									  cmd.createMeshCmd.numIndices, cmd.createMeshCmd.vertChannelMask, cmd.createMeshCmd.meshData);
 				}break;
 				case (RenderThreadCmd::CREATE_TEXTURE) :
 				{
@@ -515,40 +520,43 @@ YU_INTERNAL bool ExecThreadCmd(RendererGL* renderer, Allocator* allocator)
 				{
 					ExecUpdateMeshCmd(renderer, cmd.updateMeshCmd.mesh, cmd.updateMeshCmd.startVertex, cmd.updateMeshCmd.startIndex, cmd.updateMeshCmd.meshData);
 				}break;
+				case (RenderThreadCmd::CREATE_CONST_BUFFER):
+				{
+					ExecCreateConstBufferCmd(renderer, cmd.createConstBufferCmd.constBuffer, cmd.createConstBufferCmd.bufferSize, cmd.createConstBufferCmd.initData);
+				}break;
+				case (RenderThreadCmd::UPDATE_CONST_BUFFER):
+				{
+					ExecUpdateConstBufferCmd(renderer, cmd.updateConstBufferCmd.constBuffer, cmd.updateConstBufferCmd.startOffset, cmd.updateConstBufferCmd.updateSize, cmd.updateConstBufferCmd.updateData);
+				}break;
 				case(RenderThreadCmd::CREATE_VERTEX_SHADER) :
 				{
 					ExecCreateVertexShader(renderer, cmd.createVSCmd.vertexShader, cmd.createVSCmd.data);
 				}break;
+				case(RenderThreadCmd::FREE_VERTEX_SHADER):
+				{
+					ExecFreeVertexShader(renderer, cmd.freeVSCmd.vertexShader);					
+   				}break;
 				case(RenderThreadCmd::CREATE_PIXEL_SHADER):
 				{
 					ExecCreatePixelShader(renderer, cmd.createPSCmd.pixelShader, cmd.createPSCmd.data);
+				}break;
+				case(RenderThreadCmd::FREE_PIXEL_SHADER):
+				{
+					ExecFreePixelShader(renderer, cmd.freePSCmd.pixelShader);
 				}break;
 				case(RenderThreadCmd::CREATE_PIPELINE):
 				{
 					ExecCreatePipeline(renderer, cmd.createPipelineCmd.pipeline, cmd.createPipelineCmd.data);
 				}break;
-				#if defined (YU_DEBUG) || defined (YU_TOOL)
-				case(RenderThreadCmd::RELOAD_VERTEX_SHADER):
+				case(RenderThreadCmd::FREE_PIPELINE):
 				{
-					ExecReloadVertexShaderCmd(renderer, cmd.createVSCmd.vertexShader, cmd.createVSCmd.data);
+					ExecFreePipeline(renderer, cmd.freePipelineCmd.pipeline);
 				}break;
-				case(RenderThreadCmd::RELOAD_PIXEL_SHADER):
-				{
-					ExecReloadPixelShaderCmd(renderer, cmd.createPSCmd.pixelShader, cmd.createPSCmd.data);
-				}break;
-				case(RenderThreadCmd::RELOAD_PIPELINE):
-				{
-					ExecReloadPipelineCmd(renderer, cmd.createPipelineCmd.pipeline, cmd.createPipelineCmd.data);
-				}break;
-				#endif
 				case(RenderThreadCmd::RENDER) :
+				case(RenderThreadCmd::FLUSH_RENDER):
 				{
 					ExecRenderCmd(renderer, queue, cmd.renderCmd.renderListIndex);
 				}break;			
-				case (RenderThreadCmd::SWAP) :
-				{
-					frameEnd = true;
-				}break;
 				case(RenderThreadCmd::CREATE_FENCE):
 				{
 					
@@ -568,7 +576,6 @@ YU_INTERNAL bool ExecThreadCmd(RendererGL* renderer, Allocator* allocator)
 			}
 		}
 	}
-	return frameEnd;
 }
 
 
@@ -588,6 +595,8 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 {
 	InitGLParams* param = (InitGLParams*) context;
 	Allocator* allocator = param->allocator;
+	PushAllocator(allocator);
+	
 	RendererDesc rendererDesc;
 	param->initGLCS.Lock();
 	Window win = param->win;
@@ -595,7 +604,7 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 	rendererDesc.supportOvrRendering = false;
 	InitGLContext(param->win, rendererDesc);
 
-	gRenderer = DeepNew<RendererGL>(allocator);
+	gRenderer = new RendererGL;
 	gRenderer->rendererDesc = rendererDesc;
 	{
 		gRenderer->frameBuffer.id = gRenderer->renderTextureIdList.Alloc();
@@ -615,8 +624,9 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 	glGenVertexArrays(1, &globalVao);
 	glBindVertexArray(globalVao);
 	*/
-	
-	while (gRenderThreadRunningState== 1 )
+
+//	int frame = 0;
+	while (gRenderThreadRunningState== RENDER_THREAD_RUNNING )
 	{
 		WaitForKick(lock);
 		glClearColor(1, 0, 0, 1);
@@ -624,20 +634,34 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 		glClear(GL_COLOR_BUFFER_BIT);
 		glDisable(GL_DEPTH_TEST);
 		glDisable(GL_CULL_FACE);
-		
-		while (!ExecThreadCmd(gRenderer, param->allocator) && gRenderThreadRunningState == 1)
+
+		while(gRenderer->renderStage == Renderer::RENDERER_WAIT && gRenderThreadRunningState == RENDER_THREAD_RUNNING)
 			;
+		
+		while (gRenderer->renderStage == Renderer::RENDERER_RENDER_FRAME && gRenderThreadRunningState == RENDER_THREAD_RUNNING )
+			ExecThreadCmd(gRenderer);
 
-		BaseDoubleBufferData::SwapDirty();
+		ExecThreadCmd(gRenderer);
 
+		//	PerfTimer swapTime;
+		//	swapTime.Start();
 		SwapBuffer(win);
+		//	swapTime.Stop();
+
+		/*
+		frame++;
+		if(frame % 20 == 0)
+			Log("swap time: %f\n", swapTime.DurationInMs());
+		*/
+		gRenderer->renderStage = Renderer::RENDERER_WAIT;
+
 		FrameComplete(lock);
 	}
 	
 
-	Delete(allocator, gRenderer);
+	delete gRenderer;
 
-	gRenderThreadRunningState = 0;
+	gRenderThreadRunningState = RENDER_THREAD_STOPPED;
 	Log("RenderThread exit\n");
 
 	return 0;

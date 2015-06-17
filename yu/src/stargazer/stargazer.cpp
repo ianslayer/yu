@@ -26,67 +26,46 @@ struct StarGazer
 	WorkItem* endWork;
 
 	CameraHandle	camera;
+	FenceHandle		controlFence;
 };
 
 StarGazer starGazerApp;
 StarGazer* gStarGazer = &starGazerApp;
-struct FrameWorkItemResult
-{
-	WorkItem* frameStartItem;
-	WorkItem* frameEndItem;
-};
-FrameWorkItemResult FrameWorkItem(Allocator* allocator);
+
 WorkItem* InputWorkItem(WindowManager* winMgr, Allocator* allocator);
 WorkItem* TestRenderItem(Renderer* renderer, CameraHandle camera, Allocator* allocator);
-WorkItem* CameraControlItem(WorkItem* inputWorkItem, RenderQueue* queue, CameraHandle camHandle, Allocator* allocator);
+WorkItem* CameraControlItem(WorkItem* inputWorkItem, CameraHandle camHandle, FenceHandle controlFence, Allocator* allocator);
 
 void FreeWorkItem(WorkItem* item);
 
 void Clear(StarGazer* starGazer)
 {
-	ResetWorkItem(starGazer->startWork);
 	ResetWorkItem(starGazer->inputWork);
 	ResetWorkItem(starGazer->cameraControllerWork);
 	ResetWorkItem(starGazer->renderWork);
-	ResetWorkItem(starGazer->endWork);
 }
 
+void AddEndFrameDependency(WorkItem* item);
+	
 void SubmitWork(StarGazer* starGazer)
 {
-	SubmitWorkItem(starGazer->startWork, nullptr, 0);
 	SubmitWorkItem(starGazer->inputWork, &starGazer->startWork, 1);
 	SubmitWorkItem(starGazer->cameraControllerWork, &starGazer->inputWork, 1);
 	SubmitWorkItem(starGazer->renderWork, &starGazer->cameraControllerWork, 1);
 
-	WorkItem* endDep[1] = { starGazer->renderWork };
-
-	SubmitWorkItem(starGazer->endWork, endDep, 1);
-
+	AddEndFrameDependency(starGazer->renderWork);
 }
 
-void InitStarGazer(WindowManager* winMgr, Allocator* allocator)
+void InitStarGazer(WindowManager* winMgr, Allocator* allocator, WorkItem* startFrameLock, WorkItem* endFrameLock)
 {
-	FrameWorkItemResult frameWork = FrameWorkItem(allocator);
-	gStarGazer->startWork = frameWork.frameStartItem;
+	gStarGazer->startWork = startFrameLock;
+	gStarGazer->endWork = endFrameLock;
+
 	gStarGazer->inputWork = InputWorkItem(winMgr, allocator);
-	gStarGazer->endWork = frameWork.frameEndItem;
 
-	Renderer* renderer  = GetRenderer();
-	RenderQueue* renderQueue = GetThreadLocalRenderQueue();
-
-	gStarGazer->camera = CreateCamera(renderQueue);
-	CameraData camData = DefaultCamera();
-	camData.position = _Vector3(50, 0, 0.f);
-
-	UpdateCamera(renderQueue, gStarGazer->camera, camData);
-
-	if (GetRendererDesc(renderer).supportOvrRendering)
-	{
-		//StartVRRendering(gStarGazer->renderQueue);
-	}
-
-	gStarGazer->renderWork = TestRenderItem(renderer, gStarGazer->camera, allocator);
-	gStarGazer->cameraControllerWork = CameraControlItem(gStarGazer->inputWork, renderQueue, gStarGazer->camera, allocator);
+	gStarGazer->renderWork = TestRenderItem(GetRenderer(), gStarGazer->camera, allocator);
+	gStarGazer->controlFence = CreateFence(GetThreadLocalRenderQueue());
+	gStarGazer->cameraControllerWork = CameraControlItem(gStarGazer->inputWork, gStarGazer->camera, gStarGazer->controlFence, allocator);
 
 }
 
@@ -95,66 +74,6 @@ void FreeStarGazer(Allocator* allocator)
 
 }
 
-struct FrameLockData : public OutputData
-{
-	FrameLock*	frameLock;
-};
-
-void FrameStart(FrameLock* lock)
-{	
-	WaitForKick(lock);
-}
-
-void FrameEnd(FrameLock* lock)
-{	
-	FrameComplete(lock);
-}
-
-bool WorkerFrameComplete()
-{
-	return IsDone(gStarGazer->endWork);
-}
-
-
-//----glue code----
-void FrameStartWorkFunc(WorkItem* item)
-{
-	WorkData data = GetWorkData(item);
-	FrameLockData* lock = (FrameLockData*)data.outputData;
-	FrameStart(lock->frameLock);
-	//Log("frame: %ld started\n", frame);
-}
-
-void FrameEndWorkFunc(WorkItem* item)
-{
-	WorkData data = GetWorkData(item);
-	FrameLockData* lock = (FrameLockData*)data.outputData;
-	FrameEnd(lock->frameLock);
-	//Log("frame: %ld ended\n", frame);
-}
-
-FrameWorkItemResult FrameWorkItem(Allocator* allocator)
-{
-	FrameWorkItemResult item;
-	FrameLock* frameLock = AddFrameLock();
-	FrameLockData* frameLockData = New<FrameLockData>(allocator);
-	frameLockData->frameLock = frameLock;
-
-	item.frameStartItem = GetWorkItem(NewWorkItem());
-	item.frameEndItem = GetWorkItem(NewWorkItem());
-	
-	SetWorkFunc(item.frameStartItem, FrameStartWorkFunc, nullptr);
-	SetWorkFunc(item.frameEndItem, FrameEndWorkFunc, nullptr);
-
-	WorkData frameLockWorkData = {};
-
-	frameLockWorkData.outputData = frameLockData;
-	
-	SetWorkData(item.frameStartItem, frameLockWorkData);
-	SetWorkData(item.frameEndItem, frameLockWorkData);
-
-	return item;
-}
 
 #define MAX_INPUT 256
 #define MAX_KEYBOARD_STATE 256
@@ -184,12 +103,12 @@ struct JoyState
 	float rightY;
 };
 
-struct InputSource : public InputData
+struct InputSource
 {
 	EventQueue* eventQueue;
 };
 
-struct InputResult : public OutputData
+struct InputResult : public CompleteData
 {
 	InputEvent	frameEvent[MAX_INPUT];
 	KeyState	keyboardState[MAX_KEYBOARD_STATE];
@@ -332,14 +251,14 @@ YU_INTERNAL void ProcessInput(const InputSource& source, InputResult& output)
 void InputWorkFunc(WorkItem* item)
 {
 	WorkData inputWorkData = GetWorkData(item);
-	const InputSource* source = (const InputSource*) inputWorkData.inputData;
-	InputResult* result = (InputResult*) inputWorkData.outputData;
+	const InputSource* source = (const InputSource*) inputWorkData.userData;
+	InputResult* result = (InputResult*) inputWorkData.completeData;
 	ProcessInput(*source, *result);
 }
 
 WorkItem* InputWorkItem(WindowManager* winMgr,Allocator* allocator)
 {
-	WorkItem* item = GetWorkItem(NewWorkItem());
+	WorkItem* item = NewWorkItem();
 	SetWorkFunc(item, InputWorkFunc, nullptr);
 	InputSource* source = New<InputSource>(allocator);
 	source->eventQueue = CreateEventQueue(winMgr, allocator);
@@ -351,17 +270,17 @@ WorkItem* InputWorkItem(WindowManager* winMgr,Allocator* allocator)
 	return item;
 }
 
-struct CameraControllerInput : public InputData
+struct CameraControllerInput
 {
-	InputResult* inputResult;
-	RenderQueue* queue;
+	CompleteDataRef<InputResult> inputResult;
 	CameraHandle camera;
+	FenceHandle	controlFence;
 	float		moveSpeed;
 	float		turnSpeed;
 };
 
 
-struct CameraControllerOutput : public OutputData
+struct CameraControllerOutput : public CompleteData
 {
 	CameraData		updatedCamera;
 };
@@ -373,7 +292,9 @@ void CameraControl(const CameraControllerInput& input, CameraControllerOutput& o
 
 	//float eyeHeight = GetHmdEyeHeight();
 
-	CameraData data = GetCameraData(input.queue, input.camera);
+	RenderQueue* queue = GetThreadLocalRenderQueue();
+	
+	CameraData data = GetCameraData(queue, input.camera);
 
 	Vector3 lookAt = data.lookAt;
 	Vector3 aheadDir = _Vector3(lookAt.x, lookAt.y, 0);
@@ -432,10 +353,15 @@ void CameraControl(const CameraControllerInput& input, CameraControllerOutput& o
 
 		position += aheadDir * input.moveSpeed * input.inputResult->joyState[0].leftY;
 		position += right * input.moveSpeed * input.inputResult->joyState[0].leftX;
-	}
+	 }
 
 	data.position = position;
-	UpdateCamera(input.queue, input.camera, data);
+	UpdateCamera(queue, input.camera, data);
+
+	InsertFence(queue, input.controlFence);
+	WaitFence(queue, input.controlFence);
+	ResetFence(queue, input.controlFence);
+	
 	output.updatedCamera = data;
 
 }
@@ -443,22 +369,22 @@ void CameraControl(const CameraControllerInput& input, CameraControllerOutput& o
 void CameraControlWorkItem(WorkItem* item)
 {
 	WorkData cameraControlWorkData = GetWorkData(item);
-	const CameraControllerInput* input = (const CameraControllerInput*)cameraControlWorkData.inputData;
-	CameraControllerOutput* output = (CameraControllerOutput*)cameraControlWorkData.outputData;
+	const CameraControllerInput* input = (const CameraControllerInput*)cameraControlWorkData.userData;
+	CameraControllerOutput* output = (CameraControllerOutput*)cameraControlWorkData.completeData;
 	CameraControl(*input, *output);
 }
 
-WorkItem* CameraControlItem(WorkItem* inputWorkItem, RenderQueue* queue, CameraHandle camHandle, Allocator* allocator)
+WorkItem* CameraControlItem(WorkItem* inputWorkItem, CameraHandle camHandle, FenceHandle controlFence, Allocator* allocator)
 {
 	WorkData inputWorkData = GetWorkData(inputWorkItem);
-	InputResult* result = (InputResult*)inputWorkData.outputData;
+	InputResult* result = (InputResult*)inputWorkData.completeData;
 
-	WorkItem* item =  GetWorkItem(NewWorkItem());
+	WorkItem* item =  NewWorkItem();
 
 	CameraControllerInput* input = New<CameraControllerInput>(allocator);
 	input->inputResult = result;
-	input->queue = queue;
 	input->camera = camHandle;
+	input->controlFence = controlFence;
 	input->moveSpeed = 0.1f;
 	input->turnSpeed = 0.01f;
 	CameraControllerOutput* output = New<CameraControllerOutput>(allocator);
@@ -472,7 +398,7 @@ WorkItem* CameraControlItem(WorkItem* inputWorkItem, RenderQueue* queue, CameraH
 }
 
 
-struct TestRenderData : public OutputData
+struct TestRenderData : public CompleteData
 {
 	CameraHandle camera;
 	CameraHandle vrCamera[2];
@@ -504,13 +430,14 @@ struct TestRenderData : public OutputData
 	RenderTextureHandle									fractalVisRenderTexture;
 
 	FenceHandle											createResourceFence;
+	FenceHandle											renderFence;
 	
 	bool initialized = false;
 
 	Allocator* allocator;
 };
 
-struct ReloadData : public InputData
+struct ReloadData
 {
 	VertexShaderHandle	blitVs;
 	VertexShaderHandle	flatVs;
@@ -523,23 +450,24 @@ void Reload(ReloadData* reloadData)
 	
 }
 
-char* BuildDataPath(const  char* relPath, char* buffer,size_t bufferLen)
-{
-	const char* dataPath = DataPath();
-	StringBuilder pathBuilder(buffer, bufferLen);
-	pathBuilder.Cat(dataPath);
-	pathBuilder.Cat(relPath);
-	return buffer;
-}
 	
 void Render(TestRenderData* renderData)
 {
+	u64 frameCount = FrameCount();
 	if(!renderData->initialized)
 	{
-	
-		RenderQueue* queue = GetThreadLocalRenderQueue();;
-		renderData->createResourceFence = CreateFence(queue);
 
+		
+		//RenderQueue* queue = GetRenderQueue(0);
+		RenderQueue* queue = GetThreadLocalRenderQueue();
+
+		CameraData camData = DefaultCamera();
+		camData.position = _Vector3(50, 0, 0.f);
+
+		UpdateCamera(queue, gStarGazer->camera, camData);
+		
+		renderData->createResourceFence = CreateFence(queue);
+		renderData->renderFence = CreateFence(queue);
 		
 		renderData->triangle = CreateMesh(queue, 3, 3, MeshData::POSITION | MeshData::COLOR| MeshData::TEXCOORD);
 
@@ -608,9 +536,9 @@ void Render(TestRenderData* renderData)
 		CreateShaderCache(BuildDataPath("data/shaders/flat_vs.hlsl", dataPath, 1024), "main", "vs_5_0");
 		CreateShaderCache(BuildDataPath("data/shaders/flat_ps.hlsl", dataPath, 1024), "main", "ps_5_0");
 
-		blitVsData = ReadDataBlob("data/shaders/blit_vs.hlsl.cache");
-		flatVsData = ReadDataBlob("data/shaders/flat_vs.hlsl.cache");
-		flatPsData = ReadDataBlob("data/shaders/flat_ps.hlsl.cache");
+		blitVsData = ReadDataBlob(BuildDataPath("data/shaders/blit_vs.hlsl.cache", dataPath, 1024), renderData->allocator);
+		flatVsData = ReadDataBlob(BuildDataPath("data/shaders/flat_vs.hlsl.cache", dataPath, 1024), renderData->allocator);
+		flatPsData = ReadDataBlob(BuildDataPath("data/shaders/flat_ps.hlsl.cache", dataPath, 1024), renderData->allocator);
 	#elif defined YU_GL
 		blitVsData = ReadDataBlob(BuildDataPath("data/shaders/blit_vs.glsl", dataPath, 1024), renderData->allocator);
 		flatVsData = ReadDataBlob(BuildDataPath("data/shaders/flat_vs.glsl", dataPath, 1024), renderData->allocator);
@@ -710,6 +638,8 @@ void Render(TestRenderData* renderData)
 		}
 		*/
 		WaitFence(queue, renderData->createResourceFence);
+
+		CameraData testCamraData = GetCameraData(queue, gStarGazer->camera);
 		
 		FreeDataBlob(blitVsData, renderData->allocator);
 		FreeDataBlob(flatVsData, renderData->allocator);
@@ -718,8 +648,10 @@ void Render(TestRenderData* renderData)
 		renderData->initialized = true;
 	}
 	Renderer* renderer = GetRenderer();
+	//RenderQueue* queue = GetRenderQueue(0);
 	RenderQueue* queue = GetThreadLocalRenderQueue();
 
+	
 	RenderResource flatRenderResource = {};
 	flatRenderResource.numPsTexture = 1;
 	flatRenderResource.psTextures = &renderData->flatTextureSlot;
@@ -764,30 +696,38 @@ void Render(TestRenderData* renderData)
 	Render(queue, frameBuffer, renderData->camera, renderData->screenQuad, renderData->flatRenderPipeline, flatRenderResource);
 
 	Flush(queue);
-	Swap(queue, true);
+
+#if defined YU_DEBUG
+	int queueIndex = GetRenderQueueIndex(queue);
+	int workerIndex = GetWorkerThreadIndex();
+	
+	FilterLog(LOG_MESSAGE, "stargazer frame:%d update ended, queue idx: %d , worker idx: %d\n", frameCount, queueIndex, workerIndex);
+#endif
 }
 
 void TestRender(WorkItem* item)
 {
 	WorkData renderData = GetWorkData(item);
-	TestRenderData* data = (TestRenderData*)renderData.outputData;
+	TestRenderData* data = (TestRenderData*)renderData.completeData;
 	Render(data);
 }
 
 void FreeTestRender(WorkItem* item)
 {
-	TestRenderData* data = (TestRenderData*)GetWorkData(item).outputData;
+	TestRenderData* data = (TestRenderData*)GetWorkData(item).completeData;
 	Delete(data->allocator, data);
 }
 
 WorkItem* TestRenderItem(Renderer* renderer, CameraHandle camera, Allocator* allocator)
 {
-	WorkItem* item =  GetWorkItem(NewWorkItem());
+	WorkItem* item =  NewWorkItem();
 	SetWorkFunc(item, TestRender, FreeTestRender);
 
 	TestRenderData* data = New<TestRenderData>(allocator);
 	data->allocator = allocator;
 
+  	data->camera = gStarGazer->camera = CreateCamera(GetThreadLocalRenderQueue());
+	
 	WorkData renderWorkData = {0, data};
 	
 	SetWorkData(item, renderWorkData);

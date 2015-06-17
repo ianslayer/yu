@@ -1,16 +1,21 @@
-#include "../container/dequeue.h"
+#include "../container/queue.h"
 #include "../container/array.h"
 
-#include "timer.h"
+#include "free_list.h"
+#include "log_impl.h"
+#include "timer_impl.h"
+#include "string_impl.h"
 #include "system_impl.h"
+#include "allocator_impl.h"
 #include "thread_impl.h"
 #include "worker_impl.h"
-#include "log_impl.h"
-#include "allocator_impl.h"
-#include "string_impl.h"
 #include "file_impl.h"
 
 #include "../renderer/renderer.h"
+
+#define YU_LIB_IMPL
+#include "yu_lib.h"
+
 #include <Mmsystem.h>
 #pragma comment(lib, "Winmm.lib")
 
@@ -27,8 +32,8 @@ XInputGetStateFuncPtr* dllXInputGetState = XInputGetStateStub;
 
 namespace yu
 {
+	
 void SetYuExit();
-bool YuRunning();
 void ResizeBackBuffer(unsigned int width, unsigned int height, TextureFormat fmt);
 
 YU_INTERNAL void InitXInput()
@@ -91,13 +96,7 @@ YU_INTERNAL void DecaptureMouse()
 		;
 }
 
-YU_INTERNAL void EnqueueEvent(InputEvent& ev)
-{
-	ev.timeStamp = SampleTime().time;
-	gWindowManager->mgrImpl->inputQueue.Enqueue(ev);
-}
-
-YU_INTERNAL void GetMousePos(const Window& win)
+YU_INTERNAL void GetMousePos(WindowManager* winMgr, const Window& win)
 {
 	POINT	currentPos;
 	GetCursorPos(&currentPos);
@@ -133,13 +132,16 @@ YU_INTERNAL void GetMousePos(const Window& win)
 	ev.mouseEvent.x = float(dx);
 	ev.mouseEvent.y = float(dy);
 	
-	EnqueueEvent(ev);
+	EnqueueEvent(winMgr, ev);
 }
 
+//TODO: process WM_CAPTURECHANGED: see http://www.drdobbs.com/avoiding-trouble-with-mouse-capture/184416474	
+YU_GLOBAL WindowManager* gWindowManager = nullptr;
 #define GETX(l) (int(l & 0xFFFF))
 #define GETY(l) (int(l) >> 16)
 YU_INTERNAL LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+	WindowManager* winMgr = gWindowManager;
 	InputEvent ev = {};
 
 	RECT clientRect;
@@ -182,10 +184,10 @@ YU_INTERNAL LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 	case WM_MOUSEMOVE:
 		x = GETX(lParam);
 		y = GETY(lParam);
-
+/*
 		if (x < 0 || x >(clientRect.right - clientRect.left)) break;
 		if (y < 0 || y >(clientRect.bottom - clientRect.top)) break;
-
+*/
 		if (win->mode == Window::MOUSE_CAPTURE) break;
 		//if (!win->focused) break;
 		ev.type = InputEvent::MOUSE;
@@ -200,8 +202,9 @@ YU_INTERNAL LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 		x = GETX(lParam);
 		y = GETY(lParam);
 
-		if (x < 0 || x >(clientRect.right - clientRect.left)) break;
-		if (y < 0 || y >(clientRect.bottom - clientRect.top)) break;
+
+		if(win->mode == Window::MOUSE_FREE)
+			SetCapture(hWnd);
 
 		ev.type = InputEvent::MOUSE;
 
@@ -214,9 +217,9 @@ YU_INTERNAL LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 		x = GETX(lParam);
 		y = GETY(lParam);
 
-		if (x < 0 || x >(clientRect.right - clientRect.left)) break;
-		if (y < 0 || y >(clientRect.bottom - clientRect.top)) break;
-
+		if(win->mode == Window::MOUSE_FREE)
+			ReleaseCapture();
+		
 		ev.type = InputEvent::MOUSE;
 
 		ev.mouseEvent.type = InputEvent::MouseEvent::L_BUTTON_UP;
@@ -228,8 +231,8 @@ YU_INTERNAL LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 		x = GETX(lParam);
 		y = GETY(lParam);
 
-		if (x < 0 || x >(clientRect.right - clientRect.left)) break;
-		if (y < 0 || y >(clientRect.bottom - clientRect.top)) break;
+		if(win->mode == Window::MOUSE_FREE)
+			SetCapture(hWnd);
 
 		ev.type = InputEvent::MOUSE;
 
@@ -242,9 +245,9 @@ YU_INTERNAL LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 		x = GETX(lParam);
 		y = GETY(lParam);
 
-		if (x < 0 || x >(clientRect.right - clientRect.left)) break;
-		if (y < 0 || y >(clientRect.bottom - clientRect.top)) break;
-
+		if(win->mode == Window::MOUSE_FREE)
+			ReleaseCapture();
+		
 		ev.type = InputEvent::MOUSE;
 
 		ev.mouseEvent.type = InputEvent::MouseEvent::R_BUTTON_UP;
@@ -308,11 +311,11 @@ YU_INTERNAL LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 	}
 
 	if (ev.type != InputEvent::UNKNOWN)
-		EnqueueEvent(ev);
+		EnqueueEvent(winMgr, ev);
 	return 0;
 }
 
-YU_INTERNAL void ExecWindowCommand(WindowThreadCmd& cmd)
+YU_INTERNAL void ExecWindowCommand(WindowManager* winMgr, WindowThreadCmd& cmd)
 {
 	switch (cmd.type)
 	{
@@ -334,6 +337,7 @@ YU_INTERNAL void ExecWindowCommand(WindowThreadCmd& cmd)
 			AdjustWindowRect(&rc, windowStyle, FALSE);
 			MoveWindow(window.hwnd, (int)rect.x, (int)rect.y, (int)(rc.right - rc.left), (int)(rc.bottom - rc.top), TRUE);
 
+			window.hdc = GetDC(window.hwnd);
 			ShowWindow(window.hwnd, SW_SHOW);
 
 			if (window.mode == Window::MOUSE_CAPTURE)
@@ -343,7 +347,7 @@ YU_INTERNAL void ExecWindowCommand(WindowThreadCmd& cmd)
 				CaptureMouse(window);
 			}
 
-			gWindowManager->mgrImpl->windowList.PushBack(window);
+			winMgr->mgrImpl->windowList.PushBack(window);
 			param->win = window;
 			param->winCreationCS.Unlock();
 
@@ -355,11 +359,11 @@ YU_INTERNAL void ExecWindowCommand(WindowThreadCmd& cmd)
 		{
 			CloseWinParam* param = cmd.closeWinParam;
 			param->winCloseCS.Lock();
-			for (int i = 0; i < gWindowManager->mgrImpl->windowList.Size(); i++)
+			for (int i = 0; i < winMgr->mgrImpl->windowList.Size(); i++)
 			{
-				if (gWindowManager->mgrImpl->windowList[i].hwnd == param->win.hwnd)
+				if (winMgr->mgrImpl->windowList[i].hwnd == param->win.hwnd)
 				{
-					gWindowManager->mgrImpl->windowList.EraseSwapBack(&gWindowManager->mgrImpl->windowList[i]);
+					winMgr->mgrImpl->windowList.EraseSwapBack(&winMgr->mgrImpl->windowList[i]);
 					break;
 				}
 			}
@@ -395,7 +399,7 @@ YU_INTERNAL float TranslateAxis(SHORT rawValue, float deadZone)
 	return value;
 }
 
-YU_INTERNAL void ProcessXInput(int controllerIdx, const XINPUT_STATE& state, const XINPUT_STATE& oldState)
+YU_INTERNAL void ProcessXInput(WindowManager* winMgr, int controllerIdx, const XINPUT_STATE& state, const XINPUT_STATE& oldState)
 {
 	InputEvent ev = {};
 	ev.type = InputEvent::JOY;
@@ -433,28 +437,31 @@ YU_INTERNAL void ProcessXInput(int controllerIdx, const XINPUT_STATE& state, con
 		ev.joyEvent.buttonState = button;
 	}
 
-	EnqueueEvent(ev);
+	EnqueueEvent(winMgr, ev);
 }
 
 YU_INTERNAL ThreadReturn ThreadCall WindowThreadFunc(ThreadContext context)
 {
-	WindowManagerImpl* mgrImpl = (WindowManagerImpl*)context;
+	WindowManager* winMgr = (WindowManager*)context;
 
+	//NOTE: this is hack to make WndProc work
+	gWindowManager = winMgr;
+	
 	MSG msg = { 0 };
 
 	timeBeginPeriod(1);
 	DWORD xInputPacket = 0;
 	XINPUT_STATE oldState = {};
-	while (YuRunning())
+	while (YuState() != YU_STOPPED && YuState() != YU_EXITING)
 	{
 		while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
 			//while (GetMessage(&msg, NULL, 0, 0))
 		{
 
 			WindowThreadCmd cmd;
-			while (mgrImpl->winThreadCmdQueue.Dequeue(cmd))
+			while (winMgr->mgrImpl->winThreadCmdQueue.Dequeue(cmd))
 			{
-				ExecWindowCommand(cmd);
+				ExecWindowCommand(winMgr, cmd);
 			}
 
 			TranslateMessage(&msg);
@@ -462,12 +469,12 @@ YU_INTERNAL ThreadReturn ThreadCall WindowThreadFunc(ThreadContext context)
 
 		}
 
-		for (int i = 0; i < mgrImpl->windowList.Size(); i++)
+		for (int i = 0; i <winMgr-> mgrImpl->windowList.Size(); i++)
 		{
-			if (mgrImpl->windowList[i].mode == Window::MOUSE_CAPTURE && mgrImpl->windowList[i].focused)
+			if (winMgr->mgrImpl->windowList[i].mode == Window::MOUSE_CAPTURE && winMgr->mgrImpl->windowList[i].focused)
 			{
-				CaptureMouse(mgrImpl->windowList[i]);
-				GetMousePos(mgrImpl->windowList[i]);
+				CaptureMouse(winMgr->mgrImpl->windowList[i]);
+				GetMousePos(winMgr, winMgr->mgrImpl->windowList[i]);
 			}
 		}
 
@@ -484,7 +491,7 @@ YU_INTERNAL ThreadReturn ThreadCall WindowThreadFunc(ThreadContext context)
 				{
 					xInputPacket = state.dwPacketNumber;
 					//Log(" xinput input packet: %d\n", xInputPacket);
-					ProcessXInput(i, state, oldState);
+					ProcessXInput(winMgr, i, state, oldState);
 					oldState = state;
 				}
 			}
@@ -552,7 +559,7 @@ void WindowManager::CloseWin(Window& win)
 	param.winCloseCS.Unlock();
 }
 
-bool PlatformInitSystem()
+void InitPlatformWindowMgr(WindowManager* winMgr)
 {
 	WNDCLASSEX wcex;
 	wcex.cbSize = sizeof(WNDCLASSEX);
@@ -572,14 +579,11 @@ bool PlatformInitSystem()
 
 	RegisterClassEx(&wcex);
 
-	WindowManagerImpl* mgrImpl = New<WindowManagerImpl>(gSysArena);
-	gWindowManager->mgrImpl = mgrImpl;
-	mgrImpl->windowThread = CreateThread(WindowThreadFunc, mgrImpl);
-	SetThreadName(mgrImpl->windowThread.handle, "Window Thread");
+
+	winMgr->mgrImpl->windowThread = CreateThread(WindowThreadFunc, winMgr);
+	SetThreadName(winMgr->mgrImpl->windowThread.handle, "Window Thread");
 
 	InitXInput();
-
-	return true;
 }
 
 YU_INTERNAL BOOL CALLBACK MyMonitorEnumProc(
@@ -968,76 +972,6 @@ void SetThreadName(ThreadHandle threadHandle, const char* name)
 	}
 }
 
-Mutex::Mutex()
-{
-	InitializeCriticalSectionAndSpinCount(&m, 1000);
-}
-
-Mutex::~Mutex()
-{
-	DeleteCriticalSection(&m);
-}
-
-void Mutex::Lock()
-{
-	EnterCriticalSection(&m);
-}
-
-void Mutex::Unlock()
-{
-	LeaveCriticalSection(&m);
-}
-
-CondVar::CondVar()
-{
-	InitializeConditionVariable(&cv);
-}
-
-CondVar::~CondVar()
-{
-	WakeConditionVariable(&cv);
-}
-
-void WaitForCondVar(CondVar& cv, Mutex& m)
-{
-	SleepConditionVariableCS(&cv.cv, &m.m, INFINITE);
-}
-
-void NotifyCondVar(CondVar& cv)
-{
-	WakeConditionVariable(&cv.cv);
-}
-
-void NotifyAllCondVar(CondVar& cv)
-{
-	WakeAllConditionVariable(&cv.cv);
-}
-
-Semaphore::Semaphore(int initCount, int maxCount)
-{
-	sem = CreateSemaphore(nullptr, initCount, maxCount, nullptr);
-}
-
-Semaphore::~Semaphore()
-{
-	CloseHandle(sem);
-}
-
-void WaitForSem(Semaphore& sem)
-{
-	WaitForSingleObject(sem.sem, INFINITE);
-}
-
-void SignalSem(Semaphore& sem)
-{
-	LONG prevCount;
-	BOOL result = ReleaseSemaphore(sem.sem, 1, &prevCount);
-	if (!result)
-	{
-		Log("error, sem signal failed");
-	}
-
-}
 
 size_t FileSize(const char* path)
 {
@@ -1082,7 +1016,10 @@ const char* WorkingDir()
 	memset(path, 0, sizeof(path));
 	DWORD dirNameLength  = GetCurrentDirectoryA(sizeof(path), path);
 
-	if(dirNameLength == 0)
+	StringBuilder pathBuilder(path, 1024, dirNameLength);
+	bool buildPathSuccess = pathBuilder.Cat("\\");
+	
+	if(dirNameLength == 0  || !buildPathSuccess)
 	{
 		Log("error, WorkingDir: failed\n");
 	}
@@ -1094,11 +1031,30 @@ const char* ExePath()
 {
 	YU_LOCAL_PERSIST char path[1024];
 	memset(path, 0, sizeof(path));
-	DWORD pathLength = GetModuleFileNameA(0, path, sizeof(path));
 
+	DWORD pathLength = GetModuleFileNameA(0, path, sizeof(path));
+	
 	if(pathLength == 0)
 	{
 		Log("error, ExePath: failed\n");
+	}
+	
+	return path;
+}
+
+const char* DataPath()
+{
+	YU_LOCAL_PERSIST char path[1024];
+	memset(path, 0, sizeof(path));
+	const char* workingDir = WorkingDir();
+
+	StringBuilder pathBuilder(path, 1024);
+	bool buildPathSuccess = pathBuilder.Cat(workingDir);
+	buildPathSuccess = pathBuilder.Cat("\\");
+
+	if(!buildPathSuccess)
+	{
+		Log("error, DataPath: data path execceed buffer length\n");
 	}
 	
 	return path;
@@ -1122,22 +1078,6 @@ size_t GetDirFromPath(const char* path, char* outDirPath, size_t bufLength)
 	return resultPathLength;
 }
 
-YU_GLOBAL CycleCount initCycle;
-YU_GLOBAL u64        cpuFrequency;
-
-YU_GLOBAL Time initTime;
-YU_GLOBAL Time frameStartTime;
-YU_GLOBAL u64 timerFrequency;
-
-const CycleCount& PerfTimer::Duration() const
-{
-	return cycleCounter;
-}
-
-f64 PerfTimer::DurationInMs() const
-{
-	return ConvertToMs(cycleCounter);
-}
 
 Time SampleTime()
 {
@@ -1145,35 +1085,10 @@ Time SampleTime()
 	LARGE_INTEGER perfCount;
 	QueryPerformanceCounter(&perfCount);
 	time.time = perfCount.QuadPart;
-
 	return time;
+
 }
 
-Time SysStartTime()
-{
-	return initTime;
-}
-
-void Timer::Start()
-{
-	time = SampleTime();
-}
-
-void Timer::Stop()
-{
-	Time finishTime = SampleTime();
-	time.time = finishTime.time - time.time;
-}
-
-const Time& Timer::Duration() const
-{
-	return time;
-}
-
-f64 Timer::DurationInMs() const
-{
-	return ConvertToMs(time);
-}
 
 void InitSysTime()
 {
@@ -1190,35 +1105,6 @@ void InitSysTime()
 	Log("timer freq: %llu\n", timerFrequency);
 }
 
-u64 EstimateCPUFrequency()
-{
-	ThreadHandle currentThreadHandle = GetCurrentThreadHandle();
-	u64 originAffinity = GetThreadAffinity(currentThreadHandle);
-	SetThreadAffinity(currentThreadHandle, 1);
-
-	Time startCount = SampleTime();
-	Time duration = {};
-
-	PerfTimer timer;
-	timer.Start();
-	while (ConvertToMs(duration) < 1000)
-	{
-		Time curTime = SampleTime();
-		duration = curTime - startCount;
-	}
-	timer.Stop();
-	SetThreadAffinity(currentThreadHandle, originAffinity);
-
-	return timer.Duration().cycle;
-}
-
-f64 ConvertToMs(const CycleCount& cycles)
-{
-	i64 time = (i64)(cycles.cycle / cpuFrequency);  // unsigned->sign conversion should be safe here
-	i64 timeFract = (i64)(cycles.cycle % cpuFrequency);  // unsigned->sign conversion should be safe here
-	f64 ret = (time)+(f64)timeFract / (f64)((i64)cpuFrequency);
-	return ret * 1000.0;
-}
 
 f64 ConvertToMs(const Time& time)
 {
@@ -1226,18 +1112,5 @@ f64 ConvertToMs(const Time& time)
 	return (f64)timeInMs / (f64)timerFrequency;
 }
 
-void DummyWorkLoad(double timeInMs)
-{
-	Time startTime = SampleTime();
-	double deltaT = 0;
-	while (1)
-	{
-		if (deltaT >= timeInMs)
-			break;
-		Time endTime = SampleTime();
-
-		deltaT = ConvertToMs(endTime - startTime);
-	}
-}
 
 }

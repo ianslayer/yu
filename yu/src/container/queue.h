@@ -1,5 +1,5 @@
-#ifndef YU_DEQUEUE_H
-#define YU_DEQUEUE_H
+#ifndef YU_QUEUE_H
+#define YU_QUEUE_H
 
 #include "../core/thread.h"
 #include "../core/bit.h"
@@ -10,15 +10,16 @@ namespace yu
 {
 
 template<class T, int numElem>
-class LockedFifo
+struct LockedFifo
 {
-public:
 	LockedFifo();
 	bool			Enqueue(const T& elem);
-	bool			Dequeue(T& data) const;
+	bool			Dequeue(T& data);
 
-private:
-	mutable unsigned int	readPos;
+	bool			IsEmpty();
+	bool			IsFull();
+	
+   	unsigned int	readPos;
 	T				elems[numElem];
 	unsigned int	writePos;
 	Mutex			mutex;
@@ -45,7 +46,7 @@ bool LockedFifo<T, numElem>::Enqueue(const T& elem)
 }
 
 template<class T, int numElem>
-bool LockedFifo<T, numElem>::Dequeue(T& data) const
+bool LockedFifo<T, numElem>::Dequeue(T& data)
 {
 	ScopedLock lock(mutex);
 	assert(IsPowerOfTwo(numElem));
@@ -58,14 +59,36 @@ bool LockedFifo<T, numElem>::Dequeue(T& data) const
 }
 
 template<class T, int numElem>
-class LocklessSpscFifo
+bool LockedFifo<T, numElem>::IsEmpty()
 {
-public:
+	ScopedLock lock(mutex);
+	if(writePos == readPos)
+		return true;
+
+	return false;
+}
+
+template<class T, int numElem>
+bool LockedFifo<T, numElem>::IsFull()
+{
+	ScopedLock lock(mutex);
+	if((writePos - readPos) == numElem)
+		return true;
+
+	return false;
+}
+	
+template<class T, int numElem>
+struct LocklessSpscFifo
+{
 	LocklessSpscFifo();
 	bool			Enqueue(const T& elem);
-	bool			Dequeue(T& data) const;
-private:
-	mutable std::atomic<unsigned int>	readPos;
+	bool			Dequeue(T& data);
+
+	bool			IsEmpty();
+	bool			IsFull();
+	
+   	std::atomic<unsigned int>	readPos;
 	T							elems[numElem];
 	std::atomic<unsigned int>	writePos;
 };
@@ -94,7 +117,7 @@ bool LocklessSpscFifo<T, numElem>::Enqueue(const T& elem)
 }
 
 template<class T, int numElem>
-bool LocklessSpscFifo<T, numElem>::Dequeue(T& data) const
+bool LocklessSpscFifo<T, numElem>::Dequeue(T& data)
 {
 	assert(IsPowerOfTwo(numElem));
 
@@ -107,6 +130,29 @@ bool LocklessSpscFifo<T, numElem>::Dequeue(T& data) const
 	data = elems[localReadPos & (numElem - 1)];
 	readPos.fetch_add(1, std::memory_order_release);
 	return true;
+}
+
+template<class T, int numElem>
+bool LocklessSpscFifo<T, numElem>::IsEmpty()
+{
+	unsigned int localReadPos = readPos.load(std::memory_order_acquire);
+	unsigned int localWritePos = writePos.load(std::memory_order_acquire);
+
+	if(localReadPos == localWritePos)
+		return true;
+	return false;
+}
+
+template<class T, int numElem>
+bool LocklessSpscFifo<T, numElem>::IsFull()
+{
+	unsigned int localWritePos = writePos.load(std::memory_order_acquire);
+	unsigned int localReadPos = readPos.load(std::memory_order_acquire);
+
+	if( (localWritePos - localReadPos) == numElem)
+		return true;
+
+	return false;
 }
 
 #define LOCKLESS_SPSC_FIFO

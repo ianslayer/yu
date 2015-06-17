@@ -1,50 +1,94 @@
 #ifndef YU_WORKER
 #define YU_WORKER
-
+#include "platform.h"
+#include "handle.h"
+#include <atomic>
 namespace yu
 {
 
-struct WorkItemHandle{ i32 id; };
-
-struct InputData
+struct WorkHandle
 {
-
+	i32 id;
+	i32 seq;
+};
+	
+struct CompleteData //after process, the data is not mutable anymore, so can be accessed by any threads
+{
+	DEBUG_ONLY(std::atomic<bool> dataValid);
 };
 
-struct OutputData
+template<class T>
+struct CompleteDataRef
 {
+	CompleteDataRef() : p(nullptr) {};
+	~CompleteDataRef() {};
+	CompleteDataRef(T* _p) : p(_p) {};
+
+	CompleteDataRef& operator=(T* _p)
+	{
+		p = _p;
+		return *this;
+	}
+	
+	T* operator->()
+	{
+		DEBUG_ONLY(assert(p->dataValid));
+		return p;
+	}
+	
+	const T* operator->() const
+	{
+		DEBUG_ONLY(assert(p->dataValid));
+		return p;
+	}
+	
+	T* p;
 };
 
 struct WorkData
 {
-	const InputData*	inputData;
-	OutputData*			outputData;
+	void*				userData;
+	CompleteData*		completeData;
 };
 
-struct WorkItem;
+enum WorkLifeTime
+{
+	WORK_LIFE_TIME_FIRE_FORGET,
+	WORK_LIFE_TIME_FRAME_FIRE_FORGET,
+	WORK_LIFE_TIME_MANUAL_CONTROL,
+};
 
-WorkItemHandle	NewWorkItem();
-void			FreeWorkItem(WorkItemHandle item);
-WorkItem*		GetWorkItem(WorkItemHandle handle);
+WorkHandle		NewWorkItem(WorkLifeTime lifeTime);
+WorkHandle		NewWorkItem();
+void			FreeWorkItem(WorkHandle work);
 
-WorkData	GetWorkData(WorkItem* item);
-void		SetWorkData(WorkItem* item, WorkData data);
+WorkData	GetWorkData(WorkHandle work);
+void		SetWorkData(WorkHandle work, WorkData data);
 
-typedef void WorkFunc(WorkItem* item);
-typedef void Finalizer(WorkItem* item);
+typedef void WorkFunc(WorkHandle work);
+typedef void Finalizer(WorkHandle work);
 
-void		SetWorkFunc(WorkItem* item, WorkFunc* func, Finalizer* finalizer);
+void		SetWorkFunc(WorkHandle work, WorkFunc* func, Finalizer* finalizer);
 
-void		SubmitWorkItem(WorkItem* item, WorkItem* dep[], int numDep);
-bool		IsDone(WorkItem*);
-void		ResetWorkItem(WorkItem* item);
+void		SubmitWorkItem(WorkHandle work, WorkHandle dep[], int numDep);
+bool		IsDone(WorkHandle work);
+
+void		ResetWorkItem(WorkHandle work);
 
 struct WorkerThread* GetWorkerThread();
-int					GetWorkerThreadIdx();
+int					GetWorkerThreadIndex();
+
+void  AddEndFrameDependency(WorkHandle work);
+	
+//TODO:
+//batch start
+void	   SubmitWorkItems(WorkHandle items[], int numItems, WorkHandle* dep[], int numDep[]);
+//yield, this must capture stack...
+void	   YieldWork(WorkHandle self, WorkHandle* dep[], int numDep);
 
 void MainThreadWorker();
-void InitWorkerSystem(Allocator* allocator);
-void FreeWorkerSystem(Allocator* allocator);
+void InitWorkerSystem();
+void FreeWorkerSystem();
 void SubmitTerminateWork();
 }
 

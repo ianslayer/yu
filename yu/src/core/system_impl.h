@@ -1,6 +1,7 @@
 #include "system.h"
 #include "thread.h"
 #include "log.h"
+#include "free_list.h"
 
 #if defined YU_OS_WIN32
 	#include <intrin.h>
@@ -54,7 +55,7 @@ struct EventQueue
 
 struct WindowManagerImpl
 {
-	WindowManagerImpl(Allocator* allocator) : windowList(allocator)
+	WindowManagerImpl()
 	{
 		for(int i = 0; i < 16; i++)
 		{
@@ -80,15 +81,16 @@ void EnqueueEvent(WindowManager* mgr, InputEvent& ev)
 	}
 }
 
-EventQueue* CreateEventQueue(WindowManager* winMgr, Allocator* allocator)
+EventQueue* CreateEventQueue(WindowManager* winMgr)
 {
 	int newQueueId = winMgr->mgrImpl->eventQueueFreeIdList.Alloc();
 	if(newQueueId < 0)
 		return nullptr;
 
-	if(winMgr->mgrImpl->eventQueueList[newQueueId] == nullptr)
+	EventQueue* allocQueue = winMgr->mgrImpl->eventQueueList[newQueueId];
+	if(allocQueue == nullptr)
 	{
-		EventQueue* queue = New<EventQueue>(allocator);
+		EventQueue* queue = new EventQueue();
 		winMgr->mgrImpl->eventQueueList[newQueueId].store(queue, std::memory_order_release);
 	}
 
@@ -105,10 +107,10 @@ bool DequeueEvent(EventQueue* queue, InputEvent& ev)
 
 void InitPlatformWindowMgr(WindowManager* mgr);
 
-WindowManager* InitWindowManager(Allocator* allocator)
+WindowManager* InitWindowManager()
 {
-	WindowManager* windowManager = New<WindowManager>(allocator);
-	windowManager->mgrImpl = DeepNew<WindowManagerImpl>(allocator);
+	WindowManager* windowManager = new WindowManager;
+	windowManager->mgrImpl = new WindowManagerImpl;
 	
 	InitPlatformWindowMgr(windowManager);
 	
@@ -141,10 +143,10 @@ WindowManager* InitWindowManager(Allocator* allocator)
 	return windowManager;
 }
 
-void FreeWindowManager(WindowManager* mgr, Allocator* allocator)
+void FreeWindowManager(WindowManager* mgr)
 {
-	Delete(allocator, mgr->mgrImpl);
-	Delete(allocator, mgr);
+	delete mgr->mgrImpl;
+	delete mgr;
 }
 
 #if defined (YU_CPU_X86) || defined (YU_CPU_X86_64)

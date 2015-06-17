@@ -2,7 +2,9 @@
 
 #include "platform.h"
 #if defined YU_OS_WIN32
-	#define WIN32_LEAN_AND_MEAN
+	#if !defined WIN32_LEAN_AND_MEAN
+		#define WIN32_LEAN_AND_MEAN
+	#endif
 	#define NOMINMAX
 	#include <windows.h>
 #elif defined YU_OS_MAC
@@ -12,6 +14,12 @@
 #endif
 #include <atomic>
 #include <assert.h>
+
+namespace yum
+{
+	void Log(const char* fmt, ...);
+}
+
 
 namespace yu
 {
@@ -310,7 +318,80 @@ void ResetEvent(Event& ev)
 	ev.signaled = false;
 }
 
-#if defined YU_OS_MAC
+#if defined YU_OS_WIN32
+
+Mutex::Mutex()
+{
+	InitializeCriticalSectionAndSpinCount(&m, 1000);
+}
+
+Mutex::~Mutex()
+{
+	DeleteCriticalSection(&m);
+}
+
+void Mutex::Lock()
+{
+	EnterCriticalSection(&m);
+}
+
+void Mutex::Unlock()
+{
+	LeaveCriticalSection(&m);
+}
+
+CondVar::CondVar()
+{
+	InitializeConditionVariable(&cv);
+}
+
+CondVar::~CondVar()
+{
+	WakeConditionVariable(&cv);
+}
+
+void WaitForCondVar(CondVar& cv, Mutex& m)
+{
+	SleepConditionVariableCS(&cv.cv, &m.m, INFINITE);
+}
+
+void NotifyCondVar(CondVar& cv)
+{
+	WakeConditionVariable(&cv.cv);
+}
+
+void NotifyAllCondVar(CondVar& cv)
+{
+	WakeAllConditionVariable(&cv.cv);
+}
+
+Semaphore::Semaphore(int initCount, int maxCount)
+{
+	sem = CreateSemaphore(nullptr, initCount, maxCount, nullptr);
+}
+
+Semaphore::~Semaphore()
+{
+	CloseHandle(sem);
+}
+
+void WaitForSem(Semaphore& sem)
+{
+	WaitForSingleObject(sem.sem, INFINITE);
+}
+
+void SignalSem(Semaphore& sem)
+{
+	LONG prevCount;
+	BOOL result = ReleaseSemaphore(sem.sem, 1, &prevCount);
+	if (!result)
+	{	
+		Log("error, sem signal failed\n");	
+	}
+
+}	
+
+#elif defined YU_OS_MAC
 
 Mutex::Mutex()
 {
@@ -382,11 +463,14 @@ void SignalSem(Semaphore& sem)
 {
 	sem_post(sem.sem);
 }
+#endif //YU_OS_MAC
+
 
 }
 
 #define YU_LIB_IMPLED
 #endif
-#endif
+
+
 
 #endif

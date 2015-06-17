@@ -4,6 +4,11 @@ cbuffer CameraConstant : register(b0)
 	float4x4 projectionMatrix;
 };
 
+cbuffer TransformConstant : register(b1)
+{
+	float4x4 modelMatrix;
+};
+
 struct VertexInput 
 {
 	float3 position : POSITION;

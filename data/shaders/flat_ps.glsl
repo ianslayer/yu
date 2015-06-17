@@ -3,6 +3,7 @@
 in VS_OUTPUT
 {
 	vec4 position;
+	vec4 color;
 	vec2 texcoord;
 } In;
 

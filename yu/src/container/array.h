@@ -1,6 +1,6 @@
 #ifndef YU_ARRAY_H
 #define YU_ARRAY_H
-#include "../core/yu_lib.h"
+#include "../core/string.h"
 #include "../core/type.h"
 #include "../core/bit.h"
 #include "../core/allocator.h"
@@ -16,6 +16,7 @@ YU_GLOBAL const int DEFAULT_CAPACITY = 16;
 YU_GLOBAL const int DEFAULT_GRANULARITY = 16; //we assume granularity is multiple of power of 2
 
 public:
+	Array ();
 	Array (Allocator* _allocator);
 	Array (int capacity, Allocator* _allocator);
 	Array (int capacity, const T* pData, int size, Allocator* _allocator );
@@ -76,6 +77,12 @@ private:
    int              mSize;
    int              mGranularity;
 };
+
+template<class T>
+Array<T>::Array() : pArray(0), mCapacity(0), mSize(0), mGranularity(Array::DEFAULT_GRANULARITY)
+{
+	allocator = GetCurrentAllocator();
+}
 
 template<class T> 
 Array<T>::Array(Allocator* _allocator) : pArray(0), mCapacity(0), mSize(0), mGranularity(Array::DEFAULT_GRANULARITY), allocator(_allocator)

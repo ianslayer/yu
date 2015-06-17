@@ -25,6 +25,11 @@
 (set-background-color "#161616")
 (set-cursor-color "#40FF40")
 
+;yank overwrite
+(delete-selection-mode 1)
+;copy
+(define-key global-map "\ec" 'kill-ring-save)
+
 ;insert tab directly
 (global-set-key (kbd "TAB") 'self-insert-command)
 
@@ -48,6 +53,10 @@
 
 ;switch window
 (define-key global-map "\ew" 'other-window)
+
+;edit
+(define-key c++-mode-map "\ea" 'yank)
+(define-key c++-mode-map "\ez" 'kill-region)
 
 ;switch buffer
 (global-set-key (read-kbd-macro "\eb") 'ido-switch-buffer)

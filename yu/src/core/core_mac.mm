@@ -5,7 +5,7 @@
 #include "../yu.h"
 
 #include "../container/array.h"
-#include "../container/dequeue.h"
+#include "../container/queue.h"
 
 #include "free_list.h"
 #include "log_impl.h"

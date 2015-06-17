@@ -28,9 +28,6 @@
     <Filter Include="Source Files\sound">
       <UniqueIdentifier>{3ab16efc-e3bf-4fff-94aa-93dceb50d471}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\stargazer">
-      <UniqueIdentifier>{9efb9b68-85f4-4ce8-a85f-7fdefc54041b}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\core\crc32.cpp">
@@ -44,9 +41,6 @@
     </ClCompile>
     <ClCompile Include="..\src\renderer\shader_compiler_dx11.cpp">
       <Filter>Source Files\renderer</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\sound\sound_wasapi.cpp">
-      <Filter>Source Files\sound</Filter>
     </ClCompile>
     <ClCompile Include="..\src\core\core_win32.cpp">
       <Filter>Source Files\core</Filter>
@@ -62,9 +56,6 @@
     </ClCompile>
     <ClCompile Include="..\src\renderer\gl3w.cpp">
       <Filter>Source Files\renderer</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\stargazer\stargazer.cpp">
-      <Filter>Source Files\stargazer</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -175,9 +166,6 @@
     </ClInclude>
     <ClInclude Include="..\src\renderer\wglext.h">
       <Filter>Source Files\renderer</Filter>
-    </ClInclude>
-    <ClInclude Include="..\src\stargazer\stargazer.h">
-      <Filter>Source Files\stargazer</Filter>
     </ClInclude>
     <ClInclude Include="..\src\math\quaternion.h">
       <Filter>Source Files\math</Filter>

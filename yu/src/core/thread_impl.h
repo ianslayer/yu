@@ -4,7 +4,6 @@ namespace yu
 {
 #define MAX_THREAD 32
 
-
 YU_PRE_ALIGN(CACHE_LINE)
 struct FrameLock
 {
@@ -16,37 +15,113 @@ struct FrameLock
 } YU_POST_ALIGN(CACHE_LINE);
 
 
+
+struct ThreadContextStack
+{
+	ThreadContextStackEntry entry[128];
+	int top;
+};
+
+enum ThreadState
+{
+	THREAD_RUNNING = 0,
+	THREAD_EXIT,
+};
+	
+YU_PRE_ALIGN(CACHE_LINE)
+struct ThreadEntry
+{
+	ThreadEntry() : threadState(THREAD_RUNNING){}
+	std::atomic<int>	threadState;
+	ThreadHandle		threadHandle;
+	ThreadContextStack	stack;
+} YU_POST_ALIGN(CACHE_LINE);
+YU_THREAD_LOCAL unsigned int threadIndex;
+	
 struct ThreadTable
 {
-	ThreadTable() : numThreads(0), numLocks(0), frameCount(0){}
-	enum ThreadState
-	{
-		THREAD_RUNNING = 0,
-		THREAD_EXIT,
-	};
+	ThreadTable() : numThreads(), numLocks(0), frameCount(0){}
 
-	YU_PRE_ALIGN(CACHE_LINE)
-	struct ThreadEntry
-	{
-		ThreadEntry() : threadState(THREAD_RUNNING){}
-		std::atomic<int>	threadState;
-		ThreadHandle		threadHandle;
-	} YU_POST_ALIGN(CACHE_LINE);
 
 	FrameLock					frameLockList[MAX_THREAD];
 	ThreadEntry					threadList[MAX_THREAD];
 	std::atomic<unsigned int>	numThreads ;
 	std::atomic<unsigned int>	numLocks ;
 	std::atomic<u64>			frameCount;
-};
 
+	Allocator*					defaultAllocator;
+};
+	
 YU_GLOBAL ThreadTable* gThreadTable;
 YU_GLOBAL Event* gFrameSync;
-
-void InitThreadRuntime(Allocator* allocator)
+	
+ThreadEntry* GetThreadEntry()
 {
-	gThreadTable = NewAligned<ThreadTable>(allocator, CACHE_LINE);
-	gFrameSync = New<Event>(allocator);
+	return gThreadTable->threadList + threadIndex;		
+}
+
+ThreadContextStack* GetThreadContextStack()
+{
+	return &GetThreadEntry()->stack;	
+}
+
+const ThreadContextStackEntry* GetCurrentThreadStackEntry()
+{
+	ThreadContextStack* stack = GetThreadContextStack();
+	assert(stack->top >= 1);
+	return &stack->entry[stack->top-1];
+}
+	
+void PushThreadContext(const ThreadContextStackEntry& entry)
+{
+	ThreadContextStack* stack = GetThreadContextStack();
+	assert(stack->top < ARRAY_SIZE(stack->entry));
+	if(stack->top >= ARRAY_SIZE(stack->entry))
+	{
+		Log("error, PushThreadContext: thread stack full\n");
+		return ;
+	}
+
+	stack->entry[stack->top] = entry;
+	stack->top++;
+}
+
+ThreadContextStackEntry PopThreadContext()
+{
+	ThreadContextStack* stack = GetThreadContextStack();	
+	assert(stack->top >= 2);
+	ThreadContextStackEntry entry {};
+	if(stack->top == 1)
+	{
+		Log("error, PopThreadContext: try to pop default context\n");
+		return entry;
+	}
+	stack->top--;
+	entry = stack->entry[stack->top];
+	stack->entry[stack->top] = {};
+	return entry;
+}
+
+void InitThreadContextStack( Allocator* defaultAllocator)
+{
+	ThreadContextStack* stack = GetThreadContextStack();
+	memset(stack, 0, sizeof(*stack));
+	
+	ThreadContextStackEntry defaultEntry;
+	defaultEntry.allocator = defaultAllocator;
+	PushThreadContext(defaultEntry);
+}
+	
+void RegisterThread(ThreadHandle thread);
+void InitThreadRuntime(Allocator* defaultAllocator)
+{	
+	gThreadTable = NewAligned<ThreadTable>(defaultAllocator, CACHE_LINE);
+	gFrameSync = New<Event>(defaultAllocator);
+
+	gThreadTable->defaultAllocator = defaultAllocator;
+	//register main thread;
+	ThreadHandle mainThreadHandle = GetCurrentThreadHandle();
+	RegisterThread(mainThreadHandle);	
 }
 
 void FreeThreadRuntime(Allocator* allocator)
@@ -55,7 +130,7 @@ void FreeThreadRuntime(Allocator* allocator)
 	DeleteAligned(allocator, gThreadTable);
 }
 
-void FakeKickStart() //for clear thread;
+void FinalKickStart() //for clear thread;
 {
 	//gThreadTable->frameCount.fetch_add(1);
 	SignalEvent(*gFrameSync);
@@ -109,10 +184,18 @@ void FrameComplete(FrameLock* lock)
 	SignalEvent(lock->event);
 }
 
+u64 FrameCount()
+{
+	return gThreadTable->frameCount;	
+}
+
 void RegisterThread(ThreadHandle handle)
 {
 	unsigned int slot = gThreadTable->numThreads.fetch_add(1);
+	threadIndex = slot;
 	gThreadTable->threadList[slot].threadHandle = handle;
+
+	InitThreadContextStack(gThreadTable->defaultAllocator);
 }
 
 FrameLock*	AddFrameLock()
@@ -123,11 +206,11 @@ FrameLock*	AddFrameLock()
 
 void ThreadExit(ThreadHandle handle)
 {
-	for (unsigned int i = 0; i < gThreadTable->numThreads; i++)
+	for (unsigned int i = 1; i < gThreadTable->numThreads; i++)
 	{
 		if (gThreadTable->threadList[i].threadHandle == handle)
 		{
-			gThreadTable->threadList[i].threadState.exchange(ThreadTable::THREAD_EXIT);
+			gThreadTable->threadList[i].threadState.exchange(THREAD_EXIT);
 			break;
 		}
 	}
@@ -140,9 +223,9 @@ unsigned int NumThreads()
 
 bool AllThreadsExited()
 {
-	for (unsigned int i = 0; i < gThreadTable->numThreads; i++)
+	for (unsigned int i = 1; i < gThreadTable->numThreads; i++) // thread 0 is main thread
 	{
-		if (gThreadTable->threadList[i].threadState == ThreadTable::THREAD_RUNNING)
+		if (gThreadTable->threadList[i].threadState == THREAD_RUNNING)
 		{
 			return false;
 		}

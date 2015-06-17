@@ -4,7 +4,14 @@
 namespace yu
 {
 
+//interface to avoid include explosion
+void *memcpy(void *dest, const void *src, size_t n);
+void memset(void* dst, int val, size_t size);
 
+int strcmp ( const char * str1, const char * str2 );
+size_t strlen ( const char * str );
+char * strncpy(char * destination, const char * source, size_t num);
+	
 #define SID(s) InternStr(s)
 #define CSID(s) //TODO: should be transformed to #define CSID(s, id) id
 
@@ -20,10 +27,10 @@ struct StringRef
 
 struct StrTable;
 class ArenaAllocator;
-StrTable*		NewStrTable(bool threadSafe, bool stripString, ArenaAllocator* strBufferAllocator, ArenaAllocator* nodeAllocator);
+StrTable*		NewStrTable(bool threadSafe, bool stripString);
 StringRef		InternStr(const char*, StrTable* table);
 
-void			InitSysStrTable(class Allocator* allocator);
+void			InitSysStrTable();
 void			FreeSysStrTable();
 StringRef		InternStr(const char*);
 StringRef		CompiledStr(StringId id, const char* str);

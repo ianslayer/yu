@@ -8,6 +8,8 @@
 #pragma comment(lib,"opengl32.lib")
 PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB;
 PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB;
+PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT;
+
 
 void open_libgl(void);
 void close_libgl(void);
@@ -18,6 +20,7 @@ void GetWGLExt()
 	open_libgl();
 	wglChoosePixelFormatARB = (PFNWGLCHOOSEPIXELFORMATARBPROC)get_proc("wglChoosePixelFormatARB");
 	wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)get_proc("wglCreateContextAttribsARB");
+	wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC) get_proc("wglSwapIntervalEXT");
 	close_libgl();
 }
 
@@ -169,9 +172,11 @@ void InitGLContext(const yu::Window& win, const yu::RendererDesc& desc)
 
 void SwapBuffer(yu::Window& win)
 {
-	HDC hdc = GetDC(win.hwnd);
-	SwapBuffers(hdc);
-	ReleaseDC(win.hwnd, hdc);
+//	HDC hdc = GetDC(win.hwnd);
+	wglSwapIntervalEXT(1);	
+	SwapBuffers(win.hdc);
+
+//	ReleaseDC(win.hwnd, hdc);
 }
 
 #endif

@@ -2,7 +2,7 @@
 #if defined YU_DX11
 
 #include "../math/vector.h"
-#include "../container/dequeue.h"
+#include "../container/queue.h"
 #include "../core/allocator.h"
 #include "../core/system.h"
 #include "../core/log.h"
@@ -47,9 +47,9 @@ struct MeshDataDx11
 	DxResourcePtr<ID3D11InputLayout>	inputLayout;
 };
 
-struct CameraDataDx11
+struct ConstBufferDx11
 {
-	DxResourcePtr<ID3D11Buffer> constantBuffer;
+	DxResourcePtr<ID3D11Buffer> constBuffer;
 };
 
 struct VertexShaderDx11
@@ -106,18 +106,24 @@ struct RenderDeviceDx11
 };
 
 YU_GLOBAL RenderDeviceDx11* gDx11Device;
-YU_GLOBAL int gRenderThreadRunning;
 
 struct RendererDx11 : public Renderer
 {
+	RendererDx11()
+	{		
+	}
+	
 	MeshDataDx11		dx11MeshList[MAX_MESH];
-	CameraDataDx11		dx11CameraList[MAX_CAMERA];
+	ConstBufferDx11		dx11ConstBufferList[MAX_CONST_BUFFER];
 	VertexShaderDx11	dx11VertexShaderList[MAX_SHADER];
 	PixelShaderDx11		dx11PixelShaderList[MAX_SHADER];
 	PipelineDx11		dx11PipelineList[MAX_PIPELINE];
 	Texture2DDx11		dx11TextureList[MAX_TEXTURE];
 	RenderTextureDx11	dx11RenderTextureList[MAX_TEXTURE];
 	SamplerDx11			dx11SamplerList[MAX_SAMPLER];
+
+	ID3D11RasterizerState* defaultRasterState;
+	
 	UINT prevNumPSSRV = 0;
 
 };
@@ -179,6 +185,7 @@ struct InitDX11Param
 	RendererDesc	desc;
 	CondVar			initDx11CV;
 	Mutex			initDx11CS;
+	Allocator*		allocator;
 };
 
 YU_INTERNAL bool SetFullScreen(const RendererDesc& desc)
@@ -458,6 +465,10 @@ YU_INTERNAL void ExecResizeBackBufferCmd(unsigned int width, unsigned int height
 
 YU_INTERNAL void ExecSwapFrameBufferCmd(bool vsync)
 {
+#if defined YU_DEBUG	
+	u64 frameCount = FrameCount();
+	yu::FilterLog(LOG_MESSAGE, "swap frame: %d\n", frameCount);
+#endif
 	gDx11Device->dxgiSwapChain->Present(vsync ? 1 : 0, 0);
 }
 
@@ -545,24 +556,24 @@ YU_INTERNAL void ExecCreateMeshCmd(RendererDx11* renderer, MeshHandle mesh, u32 
 	if (meshData)
 	{
 		initVertexDataPtr = &initVertexData;
-		vertexbuffer = gDefaultAllocator->Alloc(vbSize);
+		vertexbuffer = renderer->allocator->Alloc(vbSize);
 
 		u8* vertex = (u8*)vertexbuffer;
 		for (u32 i = 0; i < numVertices; i++)
 		{
 			if (HasPos(vertChannelMask))
 			{
-				*((Vector3*)vertex) = meshData->posList[i];
+				*((Vector3*)vertex) = meshData->position[i];
 				vertex += sizeof(Vector3);
 			}
 			if (HasTexcoord(vertChannelMask))
 			{
-				*((Vector2*)vertex) = meshData->texcoordList[i];
+				*((Vector2*)vertex) = meshData->texcoord[i];
 				vertex += sizeof(Vector2);
 			}
 			if (HasColor(vertChannelMask))
 			{
-				*((Color*)vertex) = meshData->colorList[i];
+				*((Color*)vertex) = meshData->color[i];
 				vertex += sizeof(Color);
 			}
 		}
@@ -578,7 +589,7 @@ YU_INTERNAL void ExecCreateMeshCmd(RendererDx11* renderer, MeshHandle mesh, u32 
 
 	ID3D11Buffer* dx11VertexBuffer;
 	HRESULT hr = gDx11Device->d3d11Device->CreateBuffer(&vbDesc, initVertexDataPtr, &dx11VertexBuffer);
-	gDefaultAllocator->Free(vertexbuffer);
+	renderer->allocator->Free(vertexbuffer);
 	if (SUCCEEDED(hr))
 	{
 		dx11MeshData->vertexBuffer = dx11VertexBuffer;
@@ -637,17 +648,17 @@ YU_INTERNAL void ExecUpdateMeshCmd(RendererDx11* renderer, MeshHandle mesh, u32 
 	{
 		if (HasPos(meshData->channelMask))
 		{
-			*((Vector3*)vertex) = meshData->posList[i];
+			*((Vector3*)vertex) = meshData->position[i];
 			vertex += sizeof(Vector3);
 		}
 		if (HasTexcoord(meshData->channelMask))
 		{
-			*((Vector2*)vertex) = meshData->texcoordList[i];
+			*((Vector2*)vertex) = meshData->texcoord[i];
 			vertex += sizeof(Vector2);
 		}
 		if (HasColor(meshData->channelMask))
 		{
-			*((Color*)vertex) = meshData->colorList[i];
+			*((Color*)vertex) = meshData->color[i];
 			vertex += sizeof(Color);
 		}
 	}
@@ -659,53 +670,64 @@ YU_INTERNAL void ExecUpdateMeshCmd(RendererDx11* renderer, MeshHandle mesh, u32 
 	gDx11Device->d3d11DeviceContext->Unmap(dx11IndexBuffer, 0);
 }
 
-YU_INTERNAL void ExecUpdateCameraCmd(RendererDx11* renderer, CameraHandle camera, const CameraData& updateData)
+YU_INTERNAL void ExecCreateConstBufferCmd(RendererDx11* renderer, ConstBufferHandle constBuffer, size_t bufferSize, void* initData)
 {
-	(renderer->cameraDataList + camera.id)->UpdateData(updateData);
-	CameraData* data = &(renderer->cameraDataList + camera.id)->GetMutable();
-	CameraDataDx11* dx11Data = &renderer->dx11CameraList[camera.id];
-	CameraConstant camConstant;
-	camConstant.viewMatrix = ViewMatrix(data->position, data->lookAt, data->right);
-	camConstant.projectionMatrix = PerspectiveMatrixDX(data->upTan, data->downTan, data->leftTan, data->rightTan, data->n, data->f);
+	ConstBufferDx11& dx11ConstBuffer = renderer->dx11ConstBufferList[constBuffer.id];
+	D3D11_BUFFER_DESC cbDesc = {};
+	cbDesc.ByteWidth = (UINT) bufferSize;
+	cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	cbDesc.Usage = D3D11_USAGE_DYNAMIC;
+	cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
-	if (!dx11Data->constantBuffer)
-	{
-		D3D11_BUFFER_DESC cbDesc = {};
-		cbDesc.ByteWidth = sizeof(CameraConstant);
-		cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-		cbDesc.Usage = D3D11_USAGE_DYNAMIC;
-		cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-
-		ID3D11Buffer* constantBuffer;
-		HRESULT hr = gDx11Device->d3d11Device->CreateBuffer(&cbDesc, nullptr, &constantBuffer);
-		if (SUCCEEDED(hr))
-		{
-			dx11Data->constantBuffer = constantBuffer;
-			Log("successfully created camera constant buffer\n");
-		}
-	}
-	if (!dx11Data->constantBuffer)
-	{
-		Log("error: failed to create camera constant buffer\n");
-		return;
-	}
-	D3D11_MAPPED_SUBRESOURCE mappedBuf;
-	HRESULT hr = gDx11Device->d3d11DeviceContext->Map(dx11Data->constantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedBuf);
 	
+	D3D11_SUBRESOURCE_DATA d3d11InitData= {};
+	D3D11_SUBRESOURCE_DATA* pD3d11InitData = nullptr;
+	if(initData)
+	{
+		pD3d11InitData = &d3d11InitData;
+		d3d11InitData.pSysMem = initData;
+		d3d11InitData.SysMemPitch = (UINT)bufferSize;
+		d3d11InitData.SysMemSlicePitch = 0;
+	}
+	ID3D11Buffer* constantBuffer;
+	HRESULT hr = gDx11Device->d3d11Device->CreateBuffer(&cbDesc, pD3d11InitData, &constantBuffer);
 	if (SUCCEEDED(hr))
 	{
-		*((CameraConstant*)mappedBuf.pData) = camConstant;
+		dx11ConstBuffer.constBuffer = constantBuffer;
+		FilterLog(LOG_INFO,"successfully created constant buffer\n");
 	}
 	else
 	{
-		Log("error: failed to map camera constant buffer\n");
+		dx11ConstBuffer.constBuffer = nullptr;
+		FilterLog(LOG_ERROR, "error, ExecCreateConstBufferCmd: d3d11 create const buffer failed\n");
 	}
-
-	gDx11Device->d3d11DeviceContext->Unmap(dx11Data->constantBuffer, 0);
-	ID3D11Buffer* constantBuffer = dx11Data->constantBuffer;
-	gDx11Device->d3d11DeviceContext->VSSetConstantBuffers(0, 1, &constantBuffer);
 }
 
+YU_INTERNAL void ExecUpdateConstBufferCmd(RendererDx11* renderer, ConstBufferHandle constBuffer, size_t startOffset, size_t updateSize, void* updateData)
+{
+	ConstBufferDx11& dx11ConstBuffer = renderer->dx11ConstBufferList[constBuffer.id];
+	if(dx11ConstBuffer.constBuffer)
+	{
+		D3D11_MAPPED_SUBRESOURCE mappedBuf;
+		HRESULT hr = gDx11Device->d3d11DeviceContext->Map(dx11ConstBuffer.constBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedBuf );
+
+		if(SUCCEEDED(hr))
+		{
+			memcpy((u8*)mappedBuf.pData + startOffset, updateData, updateSize);
+		}
+		else
+		{
+			FilterLog(LOG_ERROR, "error, ExecUpdateConstBufferCmd: d3d11 map buffer failed\n\n");
+		}
+		
+		gDx11Device->d3d11DeviceContext->Unmap(dx11ConstBuffer.constBuffer, 0);
+	}
+	else
+	{
+		FilterLog(LOG_ERROR, "error, ExecUpdateConstBufferCmd: const buffer is null\n");
+	}
+}
+	
 //TODO: remove shader blob delete from this, memory should be managed by caller
 YU_INTERNAL void ExecCreateVertexShaderCmd(RendererDx11* renderer, VertexShaderHandle vs, DataBlob& data)
 {
@@ -915,28 +937,31 @@ YU_INTERNAL void ExecInsertFenceCmd(RendererDx11* renderer, FenceHandle fenceHan
 	fence->cpuExecuted = true;
 }
 
+YU_GLOBAL int gTotalFrameRender = 0;
+
 YU_INTERNAL void ExecRenderCmd(RendererDx11* renderer, RenderQueue* queue, int renderListIdx)
 {
 	RenderCmdList* list = &(queue->renderList[renderListIdx]);
-	assert(list->renderInProgress.load(std::memory_order_acquire));
+	gTotalFrameRender += list->cmdCount;
+	assert(list->renderInProgress.load());
 	
 	for (int i = 0; i < list->cmdCount; i++)
 	{
 		RenderCmd& cmd = list->cmd[i];
 		RenderTextureHandle& renderTexture = cmd.renderTexture;
 		MeshHandle& mesh = cmd.mesh;
-		CameraHandle& camera = cmd.cam;
+
+		
+		
 		PipelineHandle& pipeline = cmd.pipeline;
 		RenderResource& resources = cmd.resources;
-
-		//CameraData* data = &renderer->cameraList.Get(camHandle.id)->GetMutable();
 
 		gDx11Device->d3d11DeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 		RenderTextureDx11* dx11RenderTexture = &renderer->dx11RenderTextureList[renderTexture.id];
 		MeshDataDx11* dx11Mesh = &renderer->dx11MeshList[mesh.id];
 		MeshRenderData* meshData = &renderer->meshList[mesh.id];
-		CameraDataDx11* dx11Camera = &renderer->dx11CameraList[camera.id];
+		
 		PipelineDx11* dx11Pipeline = &renderer->dx11PipelineList[pipeline.id];
 
 		ID3D11RenderTargetView* d3d11RenderTargetView = dx11RenderTexture->renderTargetView;
@@ -945,8 +970,8 @@ YU_INTERNAL void ExecRenderCmd(RendererDx11* renderer, RenderQueue* queue, int r
 		gDx11Device->d3d11DeviceContext->VSSetShader(dx11Pipeline->vs, nullptr, 0);
 		gDx11Device->d3d11DeviceContext->PSSetShader(dx11Pipeline->ps, nullptr, 0);
 
-		ID3D11Buffer* constantBuffer = dx11Camera->constantBuffer;
-		gDx11Device->d3d11DeviceContext->VSSetConstantBuffers(0, 1, &constantBuffer);
+		ID3D11Buffer* cameraConstBuffer = renderer->dx11ConstBufferList[cmd.cameraConstBuffer.id].constBuffer;
+		gDx11Device->d3d11DeviceContext->VSSetConstantBuffers(0, 1, &cameraConstBuffer);
 
 		if (renderer->prevNumPSSRV > resources.numPsTexture)
 		{
@@ -1006,15 +1031,26 @@ YU_INTERNAL void ExecThreadCmd()
 	}
 }*/
 
-YU_INTERNAL bool ExecThreadCmd(RendererDx11* renderer)
+#if defined YU_DEBUG
+int frameCmdCount;
+int frameFlushCount;
+RenderThreadCmd frameCmdHistory[1024];
+#endif
+
+YU_INTERNAL void ExecThreadCmd(RendererDx11* renderer)
 {
-	bool frameEnd = false;
+	u64 frameCount = FrameCount();
+
 	for (int i = 0; i < renderer->numQueue; i++)
 	{
 		RenderQueue* queue = &renderer->renderQueue[i];
+
 		RenderThreadCmd cmd;
 		while (queue->cmdList.Dequeue(cmd))
 		{
+			DEBUG_ONLY(frameCmdHistory[frameCmdCount] = cmd);
+			DEBUG_ONLY(frameCmdCount++);
+			
 			switch (cmd.type)
 			{
 				case(RenderThreadCmd::RESIZE_BUFFER) :
@@ -1032,7 +1068,7 @@ YU_INTERNAL bool ExecThreadCmd(RendererDx11* renderer)
 				}break;
 				case(RenderThreadCmd::STOP_RENDER_THREAD) :
 				{
-					gRenderThreadRunning = 0;
+					gRenderThreadRunningState = 2;
 				}break;
 				case (RenderThreadCmd::CREATE_MESH) :
 				{
@@ -1043,18 +1079,25 @@ YU_INTERNAL bool ExecThreadCmd(RendererDx11* renderer)
 				{
 					ExecUpdateMeshCmd(renderer, cmd.updateMeshCmd.mesh, cmd.updateMeshCmd.startVertex, cmd.updateMeshCmd.startIndex, cmd.updateMeshCmd.meshData);
 				}break;
-				case (RenderThreadCmd::UPDATE_CAMERA) :
+				case (RenderThreadCmd::CREATE_CONST_BUFFER):
 				{
-					ExecUpdateCameraCmd(renderer, cmd.updateCameraCmd.camera, cmd.updateCameraCmd.camData);
+					ExecCreateConstBufferCmd(renderer, cmd.createConstBufferCmd.constBuffer, cmd.createConstBufferCmd.bufferSize, cmd.createConstBufferCmd.initData);
+				}break;
+				case (RenderThreadCmd::UPDATE_CONST_BUFFER):
+				{
+					ExecUpdateConstBufferCmd(renderer, cmd.updateConstBufferCmd.constBuffer, cmd.updateConstBufferCmd.startOffset, cmd.updateConstBufferCmd.updateSize, cmd.updateConstBufferCmd.updateData);
 				}break;
 				case(RenderThreadCmd::RENDER) :
+				case(RenderThreadCmd::FLUSH_RENDER):
 				{
+					#if defined YU_DEBUG
+						if(cmd.type == RenderThreadCmd::FLUSH_RENDER)
+						{
+							frameFlushCount++;
+							yu::FilterLog(LOG_MESSAGE, "flush frame: %d\n", frameCount);
+						}
+					#endif
 					ExecRenderCmd(renderer, queue, cmd.renderCmd.renderListIndex);
-				}break;
-				case (RenderThreadCmd::SWAP) :
-				{
-					frameEnd = true;
-					ExecSwapFrameBufferCmd(cmd.swapCmd.vsync);
 				}break;
 				case (RenderThreadCmd::CREATE_VERTEX_SHADER) :
 				{
@@ -1095,15 +1138,16 @@ YU_INTERNAL bool ExecThreadCmd(RendererDx11* renderer)
 				}
 			}
 		}
+
 	}
 
-	return frameEnd;
 }
 
 void WaitForKick(FrameLock* lock);
 ThreadReturn ThreadCall RenderThread(ThreadContext context)
 {
 	InitDX11Param* param = (InitDX11Param*)context;
+	
 	param->initDx11CS.Lock();
 
 	OvrDevice* ovrDevice = gOvrDevice = new OvrDevice;
@@ -1183,7 +1227,7 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 
 	}
 
-	RendererDx11* renderer = new RendererDx11;
+	RendererDx11* renderer = DeepNew<RendererDx11>(param->allocator);
 	renderer->rendererDesc = gDx11Device->rendererDesc;
 
 	//set frame buffer to render texture id 0
@@ -1191,6 +1235,23 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 		renderer->frameBuffer.id = renderer->renderTextureIdList.Alloc();
 		ULONG refCount = backBufferRenderTarget->AddRef(); //hack to prevent crash when exit
 		renderer->dx11RenderTextureList[renderer->frameBuffer.id].renderTargetView = backBufferRenderTarget;
+	}
+
+	{
+		CD3D11_RASTERIZER_DESC defaultRasterStateDesc = {};
+	   	defaultRasterStateDesc.FillMode = D3D11_FILL_SOLID;
+		defaultRasterStateDesc.CullMode = D3D11_CULL_NONE;
+		defaultRasterStateDesc.FrontCounterClockwise = TRUE;
+		HRESULT hr = gDx11Device->d3d11Device->CreateRasterizerState(&defaultRasterStateDesc, &renderer->defaultRasterState);
+		if(SUCCEEDED(hr))
+		{
+			gDx11Device->d3d11DeviceContext->RSSetState(renderer->defaultRasterState);
+		}
+		else
+		{
+			FilterLog(LOG_ERROR, "error: RenderThread: d3d11 create default rasterizer state failed\n");
+		}
+		  
 	}
 
 	gRenderer = renderer;
@@ -1203,13 +1264,13 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 		Log("error, RenderThread: InitDx11 failed\n");
 		return 1;
 	}
-	gRenderThreadRunning = 1;
+	gRenderThreadRunningState = RENDER_THREAD_RUNNING;
 
 	FrameLock* frameLock = AddFrameLock(); //TODO: seperate render thread kick from others, shoot and forget	
 	u64 frameCount = 0;
 	unsigned int laps = 100;
 	unsigned int f = 0;
-	while (gRenderThreadRunning)
+	while (gRenderThreadRunningState == RENDER_THREAD_RUNNING)
 	{
 		PerfTimer innerTimer;
 		PerfTimer kTimer;
@@ -1222,6 +1283,9 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 		kTimer.Stop();
 		waitKickTime = kTimer.DurationInMs();
 
+		gTotalFrameRender = 0;
+		while(gRenderer->renderStage == Renderer::RENDERER_WAIT && gRenderThreadRunningState == RENDER_THREAD_RUNNING)
+			;
 
 		innerTimer.Start();
 
@@ -1238,14 +1302,22 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 		viewport.MaxDepth = 1;
 		gDx11Device->d3d11DeviceContext->RSSetViewports(1, &viewport);
 
-
+		
 		//ExecThreadCmd();
+#if defined YU_DEBUG		
+		frameCmdCount = 0;
+		frameFlushCount = 0;
+		memset(frameCmdHistory, 0, sizeof(frameCmdHistory));
+#endif		
+		while ( gRenderer->renderStage == Renderer::RENDERER_RENDER_FRAME && gRenderThreadRunningState == RENDER_THREAD_RUNNING)
+			ExecThreadCmd(gRenderer);
 
-		bool frameEnd = false;
-		while (!frameEnd && gRenderThreadRunning)
-			frameEnd =ExecThreadCmd(gRenderer);
+		//execute all pending commands
+		ExecThreadCmd(gRenderer);
 
-		BaseDoubleBufferData::SwapDirty();
+		ExecSwapFrameBufferCmd(true);
+		
+		gRenderer->renderStage = Renderer::RENDERER_WAIT;
 
 		innerTimer.Stop();
 		FrameComplete(frameLock);
@@ -1266,22 +1338,27 @@ ThreadReturn ThreadCall RenderThread(ThreadContext context)
 		frameCount++;
 
 	}
-	
+
+	SAFE_RELEASE(renderer->defaultRasterState);
 	SAFE_RELEASE(backBufferTexture);
 	SAFE_RELEASE(backBufferRenderTarget);
 
 	delete renderer;
 
 	FreeDX11();
+
+	gRenderThreadRunningState = RENDER_THREAD_STOPPED;
+	
 	return 0;
 }
 
-void InitRenderThread(const Window& win, const RendererDesc& desc)
+void InitRenderThread(const Window& win, const RendererDesc& desc, Allocator* allocator)
 {
 	InitDX11Param param;
 	param.initDx11CS.Lock();
 	param.win = win;
 	param.desc = desc;
+	param.allocator = allocator;
 	renderThread = CreateThread(RenderThread, &param);
 	SetThreadName(renderThread.handle, "Render Thread");
 	SetThreadAffinity(renderThread.handle, 1 << 7);

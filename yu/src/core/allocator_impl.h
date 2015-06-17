@@ -7,6 +7,7 @@
 
 #include "bit.h"
 #include "allocator.h"
+#include "thread.h"
 
 namespace yu
 {
@@ -71,12 +72,9 @@ void DefaultAllocator::Free(void* ptr)
 }
 
 
-SysAllocator InitSysAllocator()
+Allocator* InitSysAllocator()
 {
-	SysAllocator sysAllocator;
-	sysAllocator.sysAllocator = &_gDefaultAllocator;
-	sysAllocator.sysArena = new ArenaAllocator(4 * 1024 * 1024, sysAllocator.sysAllocator);
-	return sysAllocator;
+	return &_gDefaultAllocator;
 }
 
 void FreeSysAllocator()
@@ -123,12 +121,19 @@ ArenaAllocator::~ArenaAllocator()
 	baseAllocator->Free(arenaImpl);
 }
 
-ArenaAllocator* CreateArena(size_t blockSize, Allocator* baseAllocator)
+ArenaAllocator* CreateArenaAllocator(size_t blockSize, Allocator* baseAllocator)
 {
 	ArenaAllocator* arena = new(baseAllocator->Alloc(sizeof(ArenaAllocator))) ArenaAllocator(blockSize, baseAllocator);
 	return arena;
 }
-	
+
+void FreeArenaAllocator(ArenaAllocator* arena)
+{
+	Allocator* baseAllocator = arena->arenaImpl->allocator;
+	arena->~ArenaAllocator();
+	baseAllocator->Free(arena);
+}
+
 void* ArenaAllocator::Alloc(size_t size)
 {
 	size_t allocSize = RoundUp(size + MIN_ALLOC_ALIGN - 1, MIN_ALLOC_ALIGN);
@@ -191,6 +196,18 @@ StackAllocator::StackAllocator(size_t _bufferSize, Allocator* baseAllocator)
 StackAllocator::~StackAllocator()
 {
 	allocator->Free(buffer);
+}
+
+StackAllocator* CreateStackAllocator(size_t bufferSize, Allocator* baseAllocator)
+{
+	return new(baseAllocator->Alloc(sizeof(StackAllocator))) StackAllocator(bufferSize, baseAllocator);
+}
+
+void FreeStackAllocator(StackAllocator* stackAllocator)
+{
+	Allocator* baseAllocator = stackAllocator->allocator;
+	stackAllocator->~StackAllocator();
+	baseAllocator->Free(stackAllocator);
 }
 
 void StackAllocator::Rewind()
@@ -259,12 +276,31 @@ size_t StackAllocator::Available()
 {
 	return bufferSize - waterMark;
 }
-	
+
+Allocator* GetCurrentAllocator()
+{
+	const yu::ThreadContextStackEntry* currentStackEntry = yu::GetCurrentThreadStackEntry();
+	return currentStackEntry->allocator;
+}
+
+void PushAllocator(Allocator* allocator)
+{
+	ThreadContextStackEntry entry = {allocator};
+	PushThreadContext(entry);
+}
+
+Allocator* PopAllocator()
+{
+	ThreadContextStackEntry entry = PopThreadContext();
+	return entry.allocator;
+}
+
 }
 
 void * operator new(size_t n) throw()
 {
-	void* p = yu::_gDefaultAllocator.Alloc(n);
+	const yu::ThreadContextStackEntry* currentStackEntry = yu::GetCurrentThreadStackEntry();
+	void* p = currentStackEntry->allocator->Alloc(n);
 
 	if(!p)
 	{
@@ -295,7 +331,8 @@ void * operator new(size_t n) throw(std::bad_alloc)
 
 void * operator new[] (size_t n) throw()
 {
-	void* p = yu::_gDefaultAllocator.Alloc(n);
+	const yu::ThreadContextStackEntry* currentStackEntry = yu::GetCurrentThreadStackEntry();	
+	void* p = currentStackEntry->allocator->Alloc(n);
 
 	if(!p)
 	{
@@ -326,11 +363,13 @@ void * operator new[](size_t n) throw(std::bad_alloc)
 
 void operator delete(void * p) throw()
 {
-	yu::_gDefaultAllocator.Free(p);
+	const yu::ThreadContextStackEntry* currentStackEntry = yu::GetCurrentThreadStackEntry();
+	currentStackEntry->allocator->Free(p);
 }
 
 void operator delete[](void * p) throw()
 {
-	yu::_gDefaultAllocator.Free(p);
+	const yu::ThreadContextStackEntry* currentStackEntry = yu::GetCurrentThreadStackEntry();
+	currentStackEntry->allocator->Free(p);
 }
 

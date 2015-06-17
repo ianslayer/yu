@@ -7,7 +7,6 @@
 
 #include "renderer/renderer.h"
 #include "sound/sound.h"
-#include "stargazer/stargazer.h"
 
 #include "yu.h"
 
@@ -19,11 +18,12 @@ YU_GLOBAL YuCore gYuCore;
 
 #define FR(func, proto) extern "C" proto(func) { return yu::func proto##_PARAM; }
 #define F(func, proto) extern "C" proto(func) { yu::func proto##_PARAM; }
-#define FV(func, proto) extern "C" proto(func) {va_list args; va_start(args, fmt); yu::V##func (fmt, args); va_end(args);}
+#define FV(func, proto) extern "C" proto(func) {va_list args; va_start(args, fmt); yu::V##func V##proto##_PARAM; va_end(args);}
 	#include "module/module_interface.h"
 #undef FV
 #undef FR
 #undef F
+
 
 #if defined YU_OS_MAC
 	#include <dlfcn.h>
@@ -38,10 +38,9 @@ YU_GLOBAL YuCore gYuCore;
 namespace yu
 {
 
-bool YuRunning();
 void KickStart();
 void WaitFrameComplete();
-void FakeKickStart();
+void FinalKickStart();
 
 YU_GLOBAL std::atomic<int> gYuRunningState; //0: stop, 1: running, 2: exit
 
@@ -52,12 +51,6 @@ int YuState()
 
 YU_GLOBAL RenderQueue*	gRenderQueue; //for shutdown render thread
 
-struct LoadModuleResult
-{
-	Module* module;
-	ModuleUpdateFunc* updateFunc;
-};
-
 #if defined YU_OS_MAC
 
 bool TimeEqual(struct timespec time0, struct timespec time1)
@@ -66,24 +59,94 @@ bool TimeEqual(struct timespec time0, struct timespec time1)
 }
 
 #endif
-
-void LoadModule(LoadModuleResult* result, WindowManager* winMgr, SysAllocator* sysAllocator)
+	
+void StartFrameLock(FrameLock* lock)
 {
+	WaitForKick(lock);
+	RenderFrameStart(GetRenderer());
+}
+
+void EndFrameLock(FrameLock* lock)
+{
+	RenderFrameEnd(GetRenderer());
+	FrameComplete(lock);
+}
+
+ void StartFrameLockWorkFunc(WorkHandle work)
+ {
+	 WorkData data = GetWorkData(work);
+	 FrameLockData* lockData = (FrameLockData*) data.completeData;
+	 StartFrameLock(lockData->frameLock);
+ }
+
+void EndFrameLockWorkFunc(WorkHandle work)
+{	
+	WorkData data = GetWorkData(work);
+	FrameLockData* lock = (FrameLockData*)data.completeData;
+	EndFrameLock(lock->frameLock);
+}
+
+bool WorkerFrameComplete()
+{
+	return IsDone(gYuCore.endFrameLock);
+}
+
+void CreateWorkerFrameLock(YuCore* core)
+{
+	core->frameLockData.frameLock = AddFrameLock();
+
+	core->startFrameLock = NewWorkItem();
+	core->endFrameLock = NewWorkItem();
+
+	WorkData workData = {};
+	workData.userData = nullptr;
+	workData.completeData = &core->frameLockData;
+	
+	SetWorkFunc(core->startFrameLock, StartFrameLockWorkFunc, nullptr);
+	SetWorkData(core->startFrameLock, workData);
+	
+	SetWorkFunc(core->endFrameLock, EndFrameLockWorkFunc, nullptr);
+	SetWorkData(core->endFrameLock, workData);
+}
+
+
+void AddEndFrameDependency(YuCore* core, WorkHandle work)
+{
+	int allocItemIndex = core->numEndWorkDependency.fetch_add(1, std::memory_order_acquire);
+	if(allocItemIndex >= MAX_END_WORK_DEPENDENCY)
+	{
+		Log("error: AddEndRameDependency: exceeded max dependency\n");
+		assert(0);
+	}
+	core->endWorkDependency[allocItemIndex] = work;
+}
+	
+//temp hack to allow stargazer junk to work
+void AddEndFrameDependency(WorkHandle work)
+{
+	AddEndFrameDependency(&gYuCore, work);	
+}
+	
+void LoadModule(Module* module, WindowManager* winMgr, Allocator* sysAllocator)
+{
+	module->reloaded = false;
 	gYuCore.windowManager = winMgr;
 	gYuCore.sysAllocator = sysAllocator;
 
 #define F(func, proto) gYuCore.func = func;	
-#include "module/module_interface.h"
+	#include "module/module_interface.h"
 #undef F
 	
-	const char* workingDir = WorkingDir();
 	const char* exePath = ExePath();
 
 	char modulePath[1024];
+	char lockFilePath[1024];
 	size_t exeDirLength = GetDirFromPath(exePath, modulePath, sizeof(modulePath));
-
-#if defined YU_OS_MAC
 	StringBuilder modulePathBuilder(modulePath, 1024, exeDirLength);
+	StringBuilder lockFilePathBuilder(lockFilePath, 1024);
+	lockFilePathBuilder.Cat(modulePath);
+	lockFilePathBuilder.Cat("lock.tmp");
+#if defined YU_OS_MAC
 	modulePathBuilder.Cat("test_module.dylib");
 
 	struct stat fileState;
@@ -94,25 +157,26 @@ void LoadModule(LoadModuleResult* result, WindowManager* winMgr, SysAllocator* s
 	{
 		if(!TimeEqual(fileState.st_mtimespec, moduleLastModifiedTime))
 		{
-		   	if(result->module->moduleCode)
+		   	if(module->moduleCode)
 		   	{
-				dlclose(result->module->moduleCode);
+				dlclose(module->moduleCode);
 			}
-			void* module = dlopen(modulePath, RTLD_NOW);
+			void* moduleHandle = dlopen(modulePath, RTLD_NOW);
 			moduleLastModifiedTime = fileState.st_mtimespec;
-			if(module && result->module)
+			if(moduleHandle && module)
 			{
-				result->module->moduleCode = module;
+			   	module->moduleHandle = moduleHandle;
 				
-				ModuleUpdateFunc* updateFunc = *(ModuleUpdateFunc*) dlsym(module, "ModuleUpdate");
+				ModuleUpdateFunc* updateFunc = *(ModuleUpdateFunc*) dlsym(moduleHandle, "ModuleUpdate");
 				if(updateFunc)
 				{
-					result->updateFunc = updateFunc;
+					module->updateFunc = updateFunc;
+					module->reloaded = true;
 					Log("module reloaded\n");
 				}
 				else
 				{
-					result->updateFunc = nullptr;
+					module->updateFunc = nullptr;
 				}
 			}
 			else
@@ -129,17 +193,61 @@ void LoadModule(LoadModuleResult* result, WindowManager* winMgr, SysAllocator* s
 	
 #endif
 	
-#if defined YU_OS_WIN32	
-	
-	HMODULE module = LoadLibraryA("yu/build/test_module.dll");
-	
-	ModuleUpdateFunc* updateFunc = (ModuleUpdateFunc*) GetProcAddress(module, "ModuleUpdate");
-	updateFunc();
-	if(!updateFunc)
-	{
-		Log("error, failed to load module\n");
-	}
+#if defined YU_OS_WIN32
+	char tempModulePath[1024];
+	StringBuilder tempModulePathBuilder(tempModulePath, 1024);
+	tempModulePathBuilder.Cat(modulePath);
+	tempModulePathBuilder.Cat("temp_test_module.dll");
+	modulePathBuilder.Cat("test_module.dll");
 
+	WIN32_FILE_ATTRIBUTE_DATA lockFileData;
+	WIN32_FILE_ATTRIBUTE_DATA moduleFileData;
+
+	if(!GetFileAttributesEx(lockFilePath, GetFileExInfoStandard, &lockFileData))
+	{
+		if(GetFileAttributesEx(modulePath, GetFileExInfoStandard, &moduleFileData))
+		{
+			if(CompareFileTime(&module->lastWriteTime, &moduleFileData.ftLastWriteTime) != 0)
+			{
+				module->lastWriteTime = moduleFileData.ftLastWriteTime;
+			
+				if(module->moduleHandle)
+				{
+					FreeLibrary(module->moduleHandle);
+				}
+								
+				CopyFile(modulePath, tempModulePath, FALSE);
+
+				HMODULE moduleHandle = LoadLibraryA(tempModulePath);
+
+				if(moduleHandle && module)
+				{
+					module->moduleHandle = moduleHandle;
+					ModuleUpdateFunc* updateFunc = (ModuleUpdateFunc*) GetProcAddress(moduleHandle, "ModuleUpdate");
+		
+					if(updateFunc)
+					{
+						module->updateFunc = updateFunc;
+						module->reloaded = true;
+						Log("module reloaded\n");
+					}
+					else
+					{
+						module->updateFunc = nullptr;
+					}
+				}
+				else
+				{
+					Log("LoadModule: error, failed to open dynamic library\n");
+				}
+
+			}
+		}
+		else
+		{
+			Log("LoadModule: error, unable to determined module file status\n");
+		}
+	}
  #endif
 }
 
@@ -153,16 +261,11 @@ int YuMain()
 	InitSysLog();
 	
 	InitSysTime();
-	SysAllocator sysAllocator = InitSysAllocator();
-	InitSysStrTable(sysAllocator.sysAllocator);
-	InitThreadRuntime(sysAllocator.sysAllocator);
-
-	WindowManager* windowManager = InitWindowManager(sysAllocator.sysAllocator);
-
-	LoadModuleResult loadedModule;
-	loadedModule.module = New<Module>(sysAllocator.sysArena);
-	loadedModule.module->initialized = false;
-	loadedModule.module->moduleCode = nullptr;
+	Allocator* sysAllocator = InitSysAllocator();
+	InitThreadRuntime(sysAllocator);
+	
+	InitSysStrTable();
+	WindowManager* windowManager = InitWindowManager();
 	
 	gYuRunningState = YU_RUNNING;
 	
@@ -183,11 +286,12 @@ int YuMain()
 	rendererDesc.sampleCount = 1;
 	rendererDesc.initOvrRendering = true;
 	//InitSound();
-	InitRenderThread(windowManager->mainWindow, rendererDesc, sysAllocator.sysAllocator);
+	InitRenderThread(windowManager->mainWindow, rendererDesc, sysAllocator);
 
-	InitWorkerSystem(sysAllocator.sysAllocator);
+	InitWorkerSystem();
 
-	InitStarGazer(windowManager, sysAllocator.sysAllocator);
+	Module loadedModule = {};
+	CreateWorkerFrameLock(&gYuCore);
 
 	Renderer* renderer = GetRenderer();
 	gRenderQueue = GetThreadLocalRenderQueue();;
@@ -197,9 +301,9 @@ int YuMain()
 	unsigned int f = 0;
 	double kickStartTime = 0;
 	double waitFrameTime = 0;
-
-
-	while( gYuRunningState == 1 )
+	
+	
+	while( gYuRunningState == YU_RUNNING )
 	{
 		yu::PerfTimer frameTimer;
 		yu::PerfTimer timer;
@@ -208,17 +312,24 @@ int YuMain()
 		
 		timer.Start();
 
+		RendererFrameCleanup(renderer);
+		
 		yu::KickStart();
 		timer.Stop();
 		kickStartTime = timer.DurationInMs();
-
-		LoadModule(&loadedModule, windowManager, &sysAllocator);
-		if(loadedModule.updateFunc)
-			loadedModule.updateFunc(&gYuCore, loadedModule.module);
 		
-		Clear(gStarGazer);
-		SubmitWork(gStarGazer);
+		LoadModule(&loadedModule, windowManager, sysAllocator);
 
+		gYuCore.numEndWorkDependency = 0;
+		ResetWorkItem(gYuCore.startFrameLock);
+		ResetWorkItem(gYuCore.endFrameLock);
+		SubmitWorkItem(gYuCore.startFrameLock, nullptr, 0);
+		
+		if(loadedModule.updateFunc)
+			loadedModule.updateFunc(&gYuCore, &loadedModule);
+
+		SubmitWorkItem(gYuCore.endFrameLock, gYuCore.endWorkDependency, gYuCore.numEndWorkDependency);
+		
 		MainThreadWorker();
 
 		timer.Start();
@@ -249,26 +360,25 @@ int YuMain()
 
 	//gWindowManager->CloseWin(gWindowManager->mainWindow);
 
-	FreeStarGazer(sysAllocator.sysAllocator);
 
 	StopRenderThread(gRenderQueue);
 
 	while (!AllThreadsExited() || RenderThreadRunning())
 	{
 		SubmitTerminateWork();
-		FakeKickStart();//make sure all thread proceed to exit
+		FinalKickStart();//make sure all thread proceed to exit
 	}
 
 
-	FreeWindowManager(windowManager, sysAllocator.sysAllocator);
-	FreeWorkerSystem(sysAllocator.sysAllocator);
+	FreeWindowManager(windowManager);
+	FreeWorkerSystem();
 
-	FreeThreadRuntime(sysAllocator.sysAllocator);
+	FreeThreadRuntime(sysAllocator);
 	FreeSysStrTable();
 	FreeSysAllocator();
 	FreeSysLog();
 
-	gYuRunningState = 0;
+	gYuRunningState = YU_STOPPED;
 
 	return 0;
 }

@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdarg.h>
+#include "log.h"
 
 namespace yu
 {
@@ -11,22 +12,34 @@ struct Logger
 	size_t	endChar;
 	Mutex	m;
 	FILE*	logFile;
+	int		 filter;
 };
 
-Logger* gLogger;
+Logger gLogger;
 
 void InitSysLog()
 {
-	gLogger = new Logger;
+	gLogger.filter = LOG_ERROR;
 }
 
 void FreeSysLog()
 {
 	//flush here
-	delete gLogger;
+	//delete gLogger;
 }
 
-void Log(Logger* logger, char const *fmt,  va_list args)
+void SetLogFilter(Logger* logger, int filter)
+{
+   	ScopedLock lock(logger->m);
+	logger->filter = filter;
+}
+
+void SetLogFilter(int filter)
+{
+	SetLogFilter(&gLogger, filter);
+}
+	
+void Log(Logger* logger, int filter, char const *fmt,  va_list args)
 {
 	ScopedLock lock(logger->m);
 	char buf[1024] = {};
@@ -40,12 +53,14 @@ void Log(Logger* logger, char const *fmt,  va_list args)
 
 	size_t logLength = strlen(buf);
 
-	//#if defined YU_OS_WIN32
-	//OutputDebugStringA(buf);
-	//#else
-	printf(buf);
-	//#endif
-
+	if(filter <= logger->filter)
+	{
+		//#if defined YU_OS_WIN32
+		//OutputDebugStringA(buf);
+		//#else
+		printf(buf);
+		//#endif
+	}
 	if (BUF_LEN < logger->endChar + logLength)
 	{
 		//flush buffer here
@@ -60,13 +75,26 @@ void Log(char const *fmt, ...)
 {
 	va_list args;
 	va_start(args, fmt);
-	Log(gLogger, fmt, args);
+	Log(&gLogger, LOG_ERROR, fmt, args);
+	va_end(args);
+}
+
+void FilterLog(int filter, const char* fmt, ...)
+{
+	va_list args;
+	va_start(args, fmt);
+	Log(&gLogger, filter, fmt, args);
 	va_end(args);
 }
 	
 void VLog(const char* fmt, va_list args)
 {
-	Log(gLogger, fmt, args);
+	Log(&gLogger, LOG_ERROR, fmt, args);
+}
+
+void VFilterLog(int filter, const char* fmt, va_list args)
+{
+	Log(&gLogger, filter, fmt, args);
 }
 
 }

@@ -55,9 +55,9 @@ struct Thread
 	ThreadHandle handle;
 };
 
-
-void			InitThreadRuntime(Allocator* allocator);
-void			FreeThreadRuntime(Allocator* allocator);
+class Allocator;
+void			InitThreadRuntime(Allocator* defaultAllocator);
+void			FreeThreadRuntime(Allocator* defaultAllocator);
 Thread			CreateThread(ThreadFunc func, ThreadContext context, ThreadPriority priority = NormalPriority, u64 affinityMask = 0);
 ThreadHandle	GetCurrentThreadHandle();
 u64				GetThreadAffinity(ThreadHandle thread);
@@ -71,6 +71,17 @@ struct			FrameLock;
 FrameLock*		AddFrameLock();
 void			WaitForKick(FrameLock* lock);
 void			FrameComplete(FrameLock* lock);
+u64				FrameCount();
+
+class Allocator;
+struct ThreadContextStackEntry
+{
+	 Allocator* allocator;	
+};
+
+const ThreadContextStackEntry* GetCurrentThreadStackEntry();
+void PushThreadContext(const ThreadContextStackEntry& entry);
+ThreadContextStackEntry PopThreadContext();
 
 }
 

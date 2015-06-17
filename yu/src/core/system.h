@@ -5,7 +5,7 @@
 #if defined YU_OS_WIN32
 	#define WIN32_LEAN_AND_MEAN
 	#define NOMINMAX
-	#include <Windows.h>
+	#include <windows.h>
 #elif defined YU_OS_MAC //ugly hack to put NS object into C struct
 	#if defined __OBJC__
 		@class NSScreen;
@@ -30,6 +30,7 @@ struct Window
 {
 #if defined YU_OS_WIN32
     HWND		hwnd;
+	HDC			hdc;
 #elif defined YU_OS_MAC
 	NSWindow*	win;
 #endif
@@ -203,11 +204,12 @@ struct WindowManager
 };
 
 struct EventQueue;
-EventQueue* CreateEventQueue(WindowManager* winMgr, class Allocator* allocator);
+class Allocator;
+EventQueue* CreateEventQueue(WindowManager* winMgr);
 bool DequeueEvent(EventQueue* queue, InputEvent& ev);
 
-WindowManager*	InitWindowManager(class Allocator* allocator);
-void	FreeWindowManager(WindowManager* mgr, class Allocator* allocator);
+WindowManager*	InitWindowManager();
+void	FreeWindowManager(WindowManager* mgr);
 
 
 }

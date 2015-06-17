@@ -24,7 +24,6 @@ public:
 	virtual void	Free(void* ptr);
 
 };
-//extern DefaultAllocator* gDefaultAllocator;
 
 struct ArenaImpl;
 class ArenaAllocator : public Allocator
@@ -39,14 +38,12 @@ public:
 
 	void			RecycleBlocks();
 
-private:
 	ArenaImpl* arenaImpl;
 };
 
-ArenaAllocator* CreateArena(size_t blockSize, Allocator* baseAllocator);
-
-//extern ArenaAllocator* gSysArena;
-
+ArenaAllocator* CreateArenaAllocator(size_t blockSize, Allocator* baseAllocator);
+void			FreeArenaAllocator(ArenaAllocator* arena);
+	
 class StackAllocator : public Allocator
 {
 public:
@@ -66,8 +63,10 @@ public:
 	size_t			waterBase;
 	size_t			waterMark;
 };
-	
 
+StackAllocator* CreateStackAllocator(size_t bufferSize, Allocator* baseAllocator);	
+void			FreeStackAllocator(StackAllocator* stack);
+	
 template<class T>
 T* New(Allocator* a) 
 {
@@ -75,13 +74,28 @@ T* New(Allocator* a)
 	return new(mem)T();
 }
 
+	/*
 template<class T>
 T* DeepNew(Allocator* a)
 {
 	void* mem = a->Alloc(sizeof(T));
 	return new(mem)T(a);	
 }
+	*/
+	
+template<class T>
+T* NewArray(Allocator* a, size_t num)
+{
+	void* mem = a->Alloc(sizeof(T) * num);
+	for(size_t i = 0; i < num; i++)
+	{
+		new (( (T*)mem)+i) T();
+	}
 
+	return (T*) mem;
+}
+
+	/*
 template<class T>
 T* DeepNewArray(Allocator* a, size_t num)
 {
@@ -93,7 +107,8 @@ T* DeepNewArray(Allocator* a, size_t num)
 
 	return (T*) mem;
 }
-
+	*/
+	
 template<class T>
 T* NewAligned(Allocator* a, size_t align)
 {
@@ -101,13 +116,15 @@ T* NewAligned(Allocator* a, size_t align)
 	return new(mem) T();
 }
 
+	/*
 template<class T>
 T* DeepNewAligned(Allocator* a, size_t align)
 {
 	void* mem = a->AllocAligned(sizeof(T), align);
 	return new(mem) T(a);	
 }
-
+	*/
+	
 template<class T>
 void Delete(Allocator* a, T* p)
 {
@@ -122,13 +139,11 @@ void DeleteAligned(Allocator* a, T* p)
 	a->FreeAligned(p);
 }
 
-struct SysAllocator
-{
-	Allocator* sysAllocator;
-	Allocator* sysArena;
-};
-
-SysAllocator InitSysAllocator();
+Allocator* GetCurrentAllocator();
+void PushAllocator(Allocator*);
+Allocator* PopAllocator();
+	
+Allocator* InitSysAllocator();
 void FreeSysAllocator();
 
 }

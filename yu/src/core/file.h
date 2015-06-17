@@ -19,10 +19,10 @@ struct			DataBlob
 	size_t		dataLen;
 };
 
-DataBlob ReadDataBlob(const char* path, Allocator* allocator);
-void FreeDataBlob(DataBlob blob, Allocator* allocator);
+DataBlob ReadDataBlob(const char* path);
+void FreeDataBlob(DataBlob blob);
 
-
+char* BuildDataPath(const  char* relPath, char* buffer,size_t bufferLen);
 
 }
 #endif

@@ -21,10 +21,12 @@ const YU_GLOBAL int HASH_TABLE_SIZE = 1024;
 const YU_GLOBAL int  HASH_MASK = HASH_TABLE_SIZE - 1;
 struct StrTable
 {
-	StrTable(bool _threadSafe, bool _stripString, ArenaAllocator* _strBufferAllocator, ArenaAllocator* _nodeAllocator)
-		: threadSafe(_threadSafe), stripString(_stripString), strBuffer(_strBufferAllocator), nodeAllocator(_nodeAllocator)
+	StrTable(bool _threadSafe, bool _stripString)
+		: threadSafe(_threadSafe), stripString(_stripString)
 	{
 		memset(head, 0, sizeof(head));
+		strBuffer = new ArenaAllocator(4 * 1024 * 1024, GetCurrentAllocator());
+		nodeAllocator = GetCurrentAllocator();
 	}
 	~StrTable()
 	{
@@ -42,7 +44,7 @@ struct StrTable
 	const bool		threadSafe;
 	const bool		stripString;
 	ArenaAllocator* strBuffer;
-	ArenaAllocator* nodeAllocator;
+	Allocator*		nodeAllocator;
 
 };
 
@@ -85,7 +87,9 @@ StringRef InternStr(const char* str, StrTable* table)
 			return ref;
 		}
 	}
-	StrTable::Node* newNode = (StrTable::Node*) table->nodeAllocator->Alloc(sizeof(StrTable::Node));
+	PushAllocator(table->nodeAllocator);	
+	StrTable::Node* newNode = new StrTable::Node;
+	PopAllocator();
 	char* strBuffer = (char*) table->strBuffer->Alloc(strLen + 1);
 	strncpy(strBuffer, str, strLen);
 
@@ -118,9 +122,9 @@ const char* GetString(StringId id, const StrTable* table)
 	return nullptr;
 }
 
-StrTable* NewStrTable(bool threadSafe, bool stripString, ArenaAllocator* strBufferAllocator, ArenaAllocator* nodeAllocator)
+StrTable* NewStrTable(bool threadSafe, bool stripString)
 {
-	StrTable* strTable = new(nodeAllocator->Alloc(sizeof(*strTable))) StrTable(threadSafe, stripString, strBufferAllocator, nodeAllocator);
+	StrTable* strTable = new StrTable(threadSafe, stripString);
 	return strTable;
 }
 
@@ -130,20 +134,15 @@ void FreeStrTable(StrTable* table)
 }
 
 StrTable* gStrTable;
-ArenaAllocator* gStrArenaAllocator;
-ArenaAllocator* gStrNodeAllocator;
 
-void InitSysStrTable(Allocator* allocator)
+void InitSysStrTable()
 {
-	gStrArenaAllocator = CreateArena(64 * 1024, allocator);
-	gStrNodeAllocator = CreateArena(64 * 1024, allocator);
-	gStrTable = NewStrTable(true, false, gStrArenaAllocator, gStrNodeAllocator);
+	gStrTable = NewStrTable(true, false);
 }
 
 void FreeSysStrTable()
 {
-	delete gStrNodeAllocator;
-	delete gStrArenaAllocator;
+
 }
 
 StringRef InternStr(const char* str)

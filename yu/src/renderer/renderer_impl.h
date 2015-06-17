@@ -1,6 +1,6 @@
 #include "../core/platform.h"
 #include "../core/allocator.h"
-#include "../container/dequeue.h"
+#include "../container/queue.h"
 #include "../core/free_list.h"
 #include "renderer.h"
 
@@ -18,8 +18,8 @@
 namespace yu
 {
 
-#define MAX_CAMERA 256
 #define MAX_MESH 4096
+#define MAX_CONST_BUFFER 4096
 #define MAX_PIPELINE 4096
 #define MAX_SHADER 4096
 #define MAX_TEXTURE 4096
@@ -45,23 +45,22 @@ struct RenderThreadCmd
 		STOP_VR_MODE,
 
 		CREATE_MESH,
-		//	CREATE_CAMERA,
 
 		UPDATE_MESH,
-		UPDATE_CAMERA,
 
+		CREATE_CONST_BUFFER,
+		UPDATE_CONST_BUFFER,
+		
 		RENDER,
+		FLUSH_RENDER,
 		SWAP,
 
 		CREATE_VERTEX_SHADER,
+		FREE_VERTEX_SHADER,
 		CREATE_PIXEL_SHADER,
+		FREE_PIXEL_SHADER,
 		CREATE_PIPELINE,
-		
-#if defined YU_DEBUG || defined YU_TOOL
-		RELOAD_VERTEX_SHADER,
-		RELOAD_PIXEL_SHADER,
-		RELOAD_PIPELINE,
-#endif
+		FREE_PIPELINE,
 
 		CREATE_TEXTURE,
 		CREATE_RENDER_TEXTURE,
@@ -69,10 +68,16 @@ struct RenderThreadCmd
 
 		CREATE_FENCE,
 		INSERT_FENCE,
+
+		FRAME_START,
+		FRAME_END,
 	};
 
 	CommandType type;
 
+	DEBUG_ONLY(u64 frameCount);
+	DEBUG_ONLY(int queueIndex);
+	
 	struct ResizeBufferCmd
 	{
 		unsigned int	width;
@@ -98,22 +103,41 @@ struct RenderThreadCmd
 		MeshData*	meshData;
 	};
 
-	struct UpdateCameraCmd
+	struct CreateConstBufferCmd
 	{
-		CameraHandle camera;
-		CameraData	 camData;
+		ConstBufferHandle	constBuffer;
+		size_t				bufferSize;
+		void*				initData;
 	};
 
+	struct UpdateConstBufferCmd
+	{
+		ConstBufferHandle constBuffer;
+		size_t			  startOffset;
+		size_t			  updateSize;
+		void*			  updateData;
+	};
+	
 	struct CreateVertexShaderCmd
 	{
 		VertexShaderHandle	vertexShader;
 		DataBlob			data;
 	};
 
+	struct FreeVertexShaderCmd
+	{
+		VertexShaderHandle vertexShader;
+	};
+	
 	struct CreatePixelShaderCmd
 	{
 		PixelShaderHandle	pixelShader;
 		DataBlob			data;
+	};
+
+	struct FreePixelShaderCmd
+	{
+		PixelShaderHandle pixelShader;
 	};
 
 	struct CreatePipelineCmd
@@ -121,13 +145,11 @@ struct RenderThreadCmd
 		PipelineHandle	pipeline;
 		PipelineData	data;
 	};
-	
-#if defined (YU_DEBUG) || defined (YU_TOOL)
-	struct ReloadPipelineCmd
+
+	struct FreePipelineCmd
 	{
 		PipelineHandle pipeline;
 	};
-#endif
 
 	struct CreateTextureCmd
 	{
@@ -154,6 +176,11 @@ struct RenderThreadCmd
 		bool				createGpuFence;
 	};
 
+	struct FreeFenceCmd
+	{
+		FenceHandle			fence;
+	};
+	
 	struct InsertFenceCmd
 	{
 		FenceHandle			fence;
@@ -162,6 +189,7 @@ struct RenderThreadCmd
 	struct RenderCmd
 	{
 		int renderListIndex;
+		int magicNum;
 	};
 
 	struct SwapCmd
@@ -173,14 +201,18 @@ struct RenderThreadCmd
 	{
 		ResizeBufferCmd			resizeBuffCmd;
 		CreateMeshCmd			createMeshCmd;
-		UpdateCameraCmd			updateCameraCmd;
+		CreateConstBufferCmd	createConstBufferCmd;
+		UpdateConstBufferCmd	updateConstBufferCmd;
 		UpdateMeshCmd			updateMeshCmd;
 		RenderCmd				renderCmd;
 		SwapCmd					swapCmd;
 
 		CreateVertexShaderCmd	createVSCmd;
+		FreeVertexShaderCmd		freeVSCmd;
 		CreatePixelShaderCmd	createPSCmd;
+		FreePixelShaderCmd		freePSCmd;
 		CreatePipelineCmd		createPipelineCmd;
+		FreePipelineCmd			freePipelineCmd;
 		CreateTextureCmd		createTextureCmd;
 		CreateRenderTextureCmd	createRenderTextureCmd;
 		CreateSamplerCmd		createSamplerCmd;
@@ -192,112 +224,39 @@ struct RenderThreadCmd
 
 struct RenderCmd
 {
-	CameraHandle	cam;
+	ConstBufferHandle	cameraConstBuffer;
 	RenderTextureHandle	renderTexture;
-	MeshHandle		mesh;
-	PipelineHandle	pipeline;
-	RenderResource	resources;
-	u32				startIndex = 0;
-	u32				numIndex = 0;
+	MeshHandle			mesh;
+	ConstBufferHandle	transformConstBuffer;
+	PipelineHandle		pipeline;
+	RenderResource		resources;
+	u32					startIndex = 0;
+	u32					numIndex = 0;
 };
 
 #define MAX_RENDER_CMD 256
 struct RenderCmdList
-{
-	RenderCmdList(Allocator* allocator) : cmdCount(0), renderInProgress(false), scratchBuffer(1024*1024, allocator) {}
+{	
+	RenderCmdList() : cmdCount(0), renderInProgress(false), scratchBuffer(1024*1024, GetCurrentAllocator()) {}
 	RenderCmd			cmd[MAX_RENDER_CMD];
 	int					cmdCount;
 	std::atomic<bool>	renderInProgress;
 	StackAllocator		scratchBuffer;
 };
-
+	
 #define MAX_RENDER_LIST 2
 struct RenderQueue
-{
-	RenderQueue(Allocator* allocator)
+{	
+	RenderQueue()
 	{
-		renderList = DeepNewArray<RenderCmdList>(allocator, MAX_RENDER_LIST);
+		renderList = new RenderCmdList[MAX_RENDER_LIST];
 	}
 	
 	Renderer* renderer;
 	SpscFifo<RenderThreadCmd, 256> cmdList;
-
 	RenderCmdList*			renderList;
+	DEBUG_ONLY(int threadIndex);
 };
-
-
-struct BaseDoubleBufferData
-{
-	BaseDoubleBufferData* nextDirty;
-	YU_GLOBAL BaseDoubleBufferData* dirtyLink;
-
-	u32 updateCount = 0;
-	bool dirty;
-
-	YU_CLASS_FUNCTION void SwapDirty()
-	{
-		for (BaseDoubleBufferData* data = dirtyLink; data != nullptr; data = data->nextDirty)
-		{
-			if (data->dirty)
-			{
-				data->updateCount++;
-				data->dirty = false;
-			}
-		}
-
-		dirtyLink = nullptr;
-	}
-};
-
-template<class T>
-struct DoubleBufferData : public BaseDoubleBufferData
-{
-	void InitData(T& _data)
-	{
-		data[0] = data[1] = _data;
-		dirty = false;
-		nextDirty = nullptr;
-	}
-
-	const T& GetConst() const
-	{
-		return data[updateCount & 1];
-	}
-
-	T& GetMutable()
-	{
-		return data[1 - updateCount & 1];
-	}
-
-	void UpdateData(const T& _data)
-	{
-		GetMutable() = _data;
-
-		if (!dirty)
-		{
-			dirty = true;
-			nextDirty = dirtyLink;
-			dirtyLink = this;
-		}
-	}
-
-	T	data[2];
-
-};
-
-struct DoubleBufferCameraData : public DoubleBufferData < CameraData >
-{
-
-};
-
-BaseDoubleBufferData* BaseDoubleBufferData::dirtyLink;
-
-YU_PRE_ALIGN(16)
-struct CameraConstant
-{
-	Matrix4x4 viewMatrix;
-	Matrix4x4 projectionMatrix;
-} YU_POST_ALIGN(16);
 
 struct MeshRenderData
 {
@@ -306,18 +265,68 @@ struct MeshRenderData
 	u32			channelMask = 0;
 };
 
+struct ConstBufferData
+{
+	size_t		bufferSize;
+};
+	
+enum RenderThreadState
+{
+	RENDER_THREAD_INIT = 0,
+	RENDER_THREAD_RUNNING = 1,
+	RENDER_THREAD_EXITING = 2,
+	RENDER_THREAD_STOPPED = 3,
+};
+
+YU_GLOBAL int gRenderThreadRunningState;
+
+bool RenderThreadRunning()
+{
+	return gRenderThreadRunningState != RENDER_THREAD_STOPPED;
+}
+	
 struct Renderer
 {
-	Renderer(Allocator* _allocator)
+
+	enum RenderStage
 	{
-		allocator = _allocator;
+		RENDERER_WAIT,
+		RENDERER_RENDER_FRAME,
+		RENDERER_END_FRAME,
+	};
+	
+	Renderer() : renderStage(RENDERER_WAIT)
+	{
+		CPUInfo cpuInfo = SystemInfo::GetCPUInfo();
+		int numWorkerThread =  yu::max((i32)cpuInfo.numLogicalProcessors - (i32)2, (i32)0) + 1;
+		numQueue = numWorkerThread;
+		renderQueue = new RenderQueue[numQueue];
+
+		for(int i = 0; i < numQueue; i++)
+		{
+			renderQueue[i].renderer = this;
+			DEBUG_ONLY(renderQueue[i].threadIndex = i);
+		}
+	}
+
+	void RecycleResourceIdList()
+	{
+		meshIdList.Free();
+		constBufferIdList.Free();
+		vertexShaderIdList.Free();
+		pixelShaderIdList.Free();
+		pipelineIdList.Free();
+		textureIdList.Free();
+		renderTextureIdList.Free();
+		samplerIdList.Free();
+		fenceIdList.Free();
 	}
 	
-	IndexFreeList<MAX_CAMERA>							cameraIdList;
-	DoubleBufferCameraData								cameraDataList[MAX_CAMERA];
-
 	IndexFreeList<MAX_MESH>								meshIdList;
 	MeshRenderData										meshList[MAX_MESH];
+
+	IndexFreeList<MAX_CONST_BUFFER>						constBufferIdList;
+	ConstBufferData										constBufferList[MAX_CONST_BUFFER];
 	
 	IndexFreeList<MAX_SHADER>							vertexShaderIdList;
 	IndexFreeList<MAX_SHADER>							pixelShaderIdList;
@@ -337,8 +346,8 @@ struct Renderer
 	IndexFreeList<MAX_FENCE>							fenceIdList;
 	Fence												fenceList[MAX_FENCE];
 	
-	RenderQueue*										renderQueue[MAX_RENDER_QUEUE];
-	std::atomic<int>									numQueue;
+	RenderQueue*										renderQueue;
+	int				   									numQueue;
 
 	RenderTextureHandle									frameBuffer;
 
@@ -347,8 +356,42 @@ struct Renderer
 
 	bool												vrRendering = false;
 	RenderTextureHandle									eyeRenderTexture[2];
-	Allocator*											allocator;
+
+	std::atomic<int>									renderStage;
+
+	u64													frameCount;
 };
+
+void RendererFrameCleanup(Renderer* renderer)
+{
+	renderer->RecycleResourceIdList();
+}
+
+void RenderFrameStart(Renderer* renderer)
+{
+	assert(renderer->renderStage == Renderer::RENDERER_WAIT);
+	renderer->renderStage.store(Renderer::RENDERER_RENDER_FRAME, std::memory_order_release);
+	renderer->frameCount = FrameCount();
+#if defined YU_DEBUG
+	yu::FilterLog(LOG_MESSAGE, "frame: %d started\n", renderer->frameCount);
+#endif
+}
+
+void FinalFrameStart(Renderer* renderer)
+{
+	renderer->renderStage.store(Renderer::RENDERER_RENDER_FRAME, std::memory_order_release);	
+}
+
+void RenderFrameEnd(Renderer* renderer)
+{
+	assert(renderer->renderStage == Renderer::RENDERER_RENDER_FRAME);
+	renderer->renderStage.store(Renderer::RENDERER_END_FRAME, std::memory_order_release);
+
+#if defined YU_DEBUG
+	renderer->frameCount = FrameCount();	
+	yu::FilterLog(LOG_MESSAGE, "frame: %d ended\n", renderer->frameCount);
+#endif
+}
 
 RenderTextureHandle	GetFrameBufferRenderTexture(Renderer* renderer)
 {
@@ -360,17 +403,36 @@ const RendererDesc& GetRendererDesc(Renderer* renderer)
 	return renderer->rendererDesc;
 }
 
-RenderQueue* CreateRenderQueue(Renderer* renderer)
+int GetWorkerThreadIndex();
+RenderQueue* GetThreadLocalRenderQueue()
 {
-	int queueIdx = renderer->numQueue.fetch_add(1);
-	RenderQueue* queue = renderer->renderQueue[queueIdx] = DeepNew<RenderQueue>(renderer->allocator);
-	queue->renderer = renderer;
+	Renderer* renderer = GetRenderer();
+	int workerThreadIdx = GetWorkerThreadIndex();
+	return &renderer->renderQueue[workerThreadIdx];;
+}
+
+RenderQueue* GetRenderQueue(int index)
+{
+	Renderer* renderer = GetRenderer();
+	return &renderer->renderQueue[index];
+}
+
+#if defined YU_DEBUG
+int GetRenderQueueIndex(RenderQueue* queue)
+{
+	return queue->threadIndex;
+}
+#endif
 	
-	return queue;
+bool RenderQueueEmpty(RenderQueue* queue)
+{
+	return queue->cmdList.IsEmpty();
 }
 
 YU_INTERNAL void BlockEnqueueCmd(RenderQueue* queue, RenderThreadCmd cmd)
 {
+	DEBUG_ONLY(cmd.frameCount = FrameCount());
+	DEBUG_ONLY(cmd.queueIndex = queue->threadIndex);
 	while (!queue->cmdList.Enqueue(cmd))
 		;
 }
@@ -416,29 +478,32 @@ YU_INTERNAL void InterleaveVertexBuffer(void* vertexBuffer, MeshData* meshData, 
 	{
 		if (HasPos(channelMask) && HasPos(meshData->channelMask) )
 		{
-			*((Vector3*)vertex) = meshData->posList[i];
+			*((Vector3*)vertex) = meshData->position[i];
 				vertex += sizeof(Vector3);
 		}
 		if (HasTexcoord(channelMask) && HasTexcoord(meshData->channelMask))
 		{
-			*((Vector2*)vertex) = meshData->texcoordList[i];
+			*((Vector2*)vertex) = meshData->texcoord[i];
 			vertex += sizeof(Vector2);
 		}
 		if (HasColor(channelMask) && HasColor(meshData->channelMask))
 		{
-			*((Color*)vertex) = meshData->colorList[i];
+			*((Color*)vertex) = meshData->color[i];
 			vertex += sizeof(Color);
 		}
 	}
 	
 }
 
+//extern 
 void StopRenderThread(RenderQueue* queue)
 {
-	//gRenderThreadRunning = false;
+//	gRenderThreadRunningState = 2;
 	RenderThreadCmd cmd;
 	cmd.type = RenderThreadCmd::STOP_RENDER_THREAD;
 	BlockEnqueueCmd(queue, cmd);
+
+	FinalFrameStart(GetRenderer());
 }
 
 struct OvrDevice
@@ -529,6 +594,35 @@ void FreeMesh(RenderQueue* queue, MeshHandle mesh) //TODO : cleanup render threa
 	queue->renderer->meshIdList.DeferredFree(mesh.id);
 }
 
+ConstBufferHandle CreateConstBuffer(RenderQueue* queue, size_t bufferSize, void* initData)
+{
+	ConstBufferHandle constBuffer;
+	constBuffer.id = queue->renderer->constBufferIdList.Alloc();
+	ConstBufferData* constBufferData = queue->renderer->constBufferList + constBuffer.id;
+	constBufferData->bufferSize = bufferSize;
+	
+	RenderThreadCmd cmd;
+	cmd.type = RenderThreadCmd::CREATE_CONST_BUFFER;
+	cmd.createConstBufferCmd.constBuffer = constBuffer;
+	cmd.createConstBufferCmd.bufferSize = bufferSize;
+	cmd.createConstBufferCmd.initData = initData;
+	BlockEnqueueCmd(queue, cmd);
+
+	return constBuffer;
+}
+
+void UpdateConstBuffer(RenderQueue*queue, ConstBufferHandle constBuffer, size_t startOffset, size_t updateSize, void* updateData)
+{
+	RenderThreadCmd cmd;
+	cmd.type = RenderThreadCmd::UPDATE_CONST_BUFFER;
+	cmd.updateConstBufferCmd.constBuffer = constBuffer;
+	cmd.updateConstBufferCmd.startOffset = startOffset;
+	cmd.updateConstBufferCmd.updateSize = updateSize;
+	cmd.updateConstBufferCmd.updateData = updateData;
+
+	BlockEnqueueCmd(queue, cmd);
+}
+	
 /*
 YU_INTERNAL MeshData* CopyMesh(MeshData* originMesh, Allocator* allocator)
 {
@@ -584,7 +678,15 @@ VertexShaderHandle CreateVertexShader(RenderQueue* queue, const DataBlob& data)
 	return vertexShader;
 }
 
-
+void FreeVertexShader(RenderQueue* queue, VertexShaderHandle vs)
+{
+	queue->renderer->vertexShaderIdList.DeferredFree(vs.id);
+	RenderThreadCmd cmd;
+	cmd.type = RenderThreadCmd::FREE_VERTEX_SHADER;
+	cmd.freeVSCmd.vertexShader = vs;
+	BlockEnqueueCmd(queue, cmd);
+}
+	
 PixelShaderHandle CreatePixelShader(RenderQueue* queue, const DataBlob& data)
 {
 	PixelShaderHandle pixelShader;
@@ -600,6 +702,15 @@ PixelShaderHandle CreatePixelShader(RenderQueue* queue, const DataBlob& data)
 	return pixelShader;
 }
 
+void FreePixelShader(RenderQueue* queue, PixelShaderHandle ps)
+{
+	queue->renderer->pixelShaderIdList.DeferredFree(ps.id);	
+	RenderThreadCmd cmd;
+	cmd.type = RenderThreadCmd::FREE_PIXEL_SHADER;
+	cmd.freePSCmd.pixelShader = ps;
+	BlockEnqueueCmd(queue, cmd);
+}
+	
 PipelineHandle CreatePipeline(RenderQueue* queue, const PipelineData& data)
 {
 	PipelineHandle pipeline;
@@ -614,36 +725,13 @@ PipelineHandle CreatePipeline(RenderQueue* queue, const PipelineData& data)
 	return pipeline;
 }
 
-#if defined (YU_DEBUG) || defined (YU_TOOL)
-
-void ReloadVertexShader(RenderQueue* queue, VertexShaderHandle vertexShader, const DataBlob& data)
+void FreePipeline(RenderQueue* queue, PipelineHandle pipeline)
 {
 	RenderThreadCmd cmd;
-	cmd.type = RenderThreadCmd::RELOAD_VERTEX_SHADER;
-	cmd.createVSCmd.vertexShader = vertexShader;
-	cmd.createVSCmd.data = data;
-
+	cmd.type = RenderThreadCmd::FREE_PIPELINE;
+	cmd.freePipelineCmd.pipeline = pipeline;
 	BlockEnqueueCmd(queue, cmd);
 }
-
-void ReloadPixelShader(RenderQueue* queue, PixelShaderHandle pixelShader, const DataBlob& data)
-{
-	RenderThreadCmd cmd;
-	cmd.type = RenderThreadCmd::RELOAD_PIXEL_SHADER;
-	cmd.createPSCmd.pixelShader = pixelShader;
-	cmd.createPSCmd.data = data;
-
-	BlockEnqueueCmd(queue, cmd);
-}
-
-void ReloadPipeline(RenderQueue* queue, PipelineHandle pipeline, const PipelineData& pipelineData)
-{
-	RenderThreadCmd cmd;
-	cmd.type = RenderThreadCmd::RELOAD_PIPELINE;
-	cmd.createPipelineCmd.pipeline = pipeline;
-	cmd.createPipelineCmd.data = pipelineData;
-}
-#endif
 
 int TexelSize(TextureFormat format)
 {
@@ -807,47 +895,26 @@ void WaitFence(RenderQueue* queue, FenceHandle fence) //TODO: consider proper wa
 		;
 }
 
-void Reset(RenderQueue* queue, FenceHandle fence)
+void WaitAndResetFence(RenderQueue* queue, FenceHandle fence)
+{
+	WaitFence(queue, fence);
+	ResetFence(queue, fence);
+}
+
+void ResetFence(RenderQueue* queue, FenceHandle fence)
 {
 	assert(queue->renderer->fenceList[fence.id].cpuExecuted == true);
 	queue->renderer->fenceList[fence.id].cpuExecuted = false;
 }
 
-CameraHandle CreateCamera(RenderQueue* queue)
-{
-	CameraHandle camera;
-	camera.id = queue->renderer->cameraIdList.Alloc();
-	DoubleBufferCameraData* camData = queue->renderer->cameraDataList + camera.id;
-	CameraData defaultCamera = DefaultCamera();
-	camData->InitData(defaultCamera);
-	UpdateCamera(queue, camera, defaultCamera);
-	return camera;
-}
-
-CameraData GetCameraData(RenderQueue* queue, CameraHandle handle)
-{
-	return (queue->renderer->cameraDataList + handle.id)->GetConst();
-}
-
-void UpdateCamera(RenderQueue* queue, CameraHandle camera, const CameraData& cameraData)
-{
-	Renderer* renderer = queue->renderer;
-
-	RenderThreadCmd cmd;
-	cmd.type = RenderThreadCmd::UPDATE_CAMERA;
-	cmd.updateCameraCmd.camera = camera;
-	cmd.updateCameraCmd.camData = cameraData;
-	BlockEnqueueCmd(queue, cmd);
-}
-
-void Render(RenderQueue* queue, RenderTextureHandle renderTexture, CameraHandle cam, MeshHandle mesh, PipelineHandle pipeline, const RenderResource& resources)
+	void Render(RenderQueue* queue, RenderTextureHandle renderTexture, ConstBufferHandle cameraConstBuffer, MeshHandle mesh, ConstBufferHandle transformConstBuffer, PipelineHandle pipeline, const RenderResource& resources)
 {
 	RenderCmdList* list;
 	int listIndex;
 
 	size_t resourceSize = 0;
 	{
-		resourceSize = sizeof(RenderResource::TextureSlot) * resources.numPsTexture;
+		resourceSize = sizeof(TextureSlot) * resources.numPsTexture;
 	}
 	
 	for (;;)
@@ -868,16 +935,17 @@ ListFound:
 	MeshRenderData* meshRenderData = queue->renderer->meshList + mesh.id;
 	RenderCmd& cmd = list->cmd[list->cmdCount];
 	cmd.renderTexture = renderTexture;
-	cmd.cam = cam;
+	cmd.cameraConstBuffer = cameraConstBuffer;
 	cmd.mesh = mesh;
+	cmd.transformConstBuffer = transformConstBuffer;
 	cmd.pipeline = pipeline;
 	cmd.startIndex = 0;
 	cmd.numIndex = meshRenderData->numIndices;
 
 	{
 		cmd.resources.numPsTexture = resources.numPsTexture;
-		cmd.resources.psTextures = (RenderResource::TextureSlot*)list->scratchBuffer.Alloc(sizeof(RenderResource::TextureSlot) * resources.numPsTexture);
-		memcpy(cmd.resources.psTextures, resources.psTextures, sizeof(RenderResource::TextureSlot) * resources.numPsTexture);
+		cmd.resources.psTextures = (TextureSlot*)list->scratchBuffer.Alloc(sizeof(TextureSlot) * resources.numPsTexture);
+		memcpy(cmd.resources.psTextures, resources.psTextures, sizeof(TextureSlot) * resources.numPsTexture);
 	}
 
 	list->cmdCount++;
@@ -887,7 +955,8 @@ ListFound:
 		RenderThreadCmd cmd;
 		cmd.type = RenderThreadCmd::RENDER;
 		cmd.renderCmd.renderListIndex = listIndex;
-		queue->renderList[listIndex].renderInProgress.store(true, std::memory_order_release);
+		cmd.renderCmd.magicNum = 0xabcd;
+		queue->renderList[listIndex].renderInProgress.store(true, std::memory_order_seq_cst);
 		BlockEnqueueCmd(queue, cmd);
 	}
 }
@@ -899,9 +968,10 @@ void Flush(RenderQueue* queue)
 		if (!queue->renderList[i].renderInProgress.load(std::memory_order_acquire) && queue->renderList[i].cmdCount > 0)
 		{
 			RenderThreadCmd cmd;
-			cmd.type = RenderThreadCmd::RENDER;
+			cmd.type = RenderThreadCmd::FLUSH_RENDER;
 			cmd.renderCmd.renderListIndex = i;
-			queue->renderList[i].renderInProgress.store(true, std::memory_order_release);
+			cmd.renderCmd.magicNum = 0xabcd;
+			queue->renderList[i].renderInProgress.store(true, std::memory_order_seq_cst);
 			BlockEnqueueCmd(queue, cmd);
 		}
 	}
@@ -915,7 +985,6 @@ void Swap(RenderQueue* queue, bool vsync)
 	BlockEnqueueCmd(queue, cmd);
 }
 
-void CopyMesh(Renderer* renderer, MeshHandle handle, MeshData* outData, u32 channel);
 
 }
 

@@ -120,6 +120,8 @@
 #define YU_LOCAL_PERSIST static
 #define YU_CLASS_FUNCTION static
 
+#define ARRAY_SIZE(array) (sizeof(array) /  sizeof((array)[0]))
+
 #include <stdint.h>
 
 namespace yu
